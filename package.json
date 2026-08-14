@@ -1,0 +1,33 @@
+{
+  "name": "valuuttaloki",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Self-hosted Path of Exile wealth tracker: scheduled stash snapshots valued against poe.ninja.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "dev": "concurrently -n server,web -c cyan,magenta \"pnpm dev:server\" \"pnpm dev:web\"",
+    "dev:server": "pnpm --filter @valuuttaloki/server dev",
+    "dev:web": "pnpm --filter @valuuttaloki/web dev",
+    "db:migrate": "pnpm --filter @valuuttaloki/server db:migrate",
+    "db:studio": "pnpm --filter @valuuttaloki/server db:studio",
+    "build": "pnpm --filter @valuuttaloki/web build && pnpm --filter @valuuttaloki/server build",
+    "start": "pnpm --filter @valuuttaloki/server start",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "esbuild",
+      "prisma"
+    ]
+  }
+}

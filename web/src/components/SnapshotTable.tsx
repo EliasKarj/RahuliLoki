@@ -1,0 +1,88 @@
+/**
+ * The raw snapshots behind the charts, newest first, with the change from the one before it.
+ *
+ * This is the table you read when a chart looks wrong: it shows the divine rate at the time,
+ * how old the prices were when the snapshot was valued, and whether the interval counted as
+ * active — the three things that explain most surprising-looking movements.
+ */
+
+import type { SeriesInterval, SnapshotWithTabs } from '../lib/api.ts';
+import { formatAgo, formatChaos, formatDateTime, formatDivine, formatCount, formatSignedChaos } from '../lib/format.ts';
+import { Empty } from './ui.tsx';
+
+interface Props {
+  snapshots: SnapshotWithTabs[];
+  intervals: SeriesInterval[];
+  limit?: number;
+}
+
+export function SnapshotTable({ snapshots, intervals, limit = 25 }: Props) {
+  if (snapshots.length === 0) {
+    return <Empty>No snapshots in this range.</Empty>;
+  }
+
+  const byToId = new Map(intervals.map((interval) => [interval.toId, interval]));
+  const rows = [...snapshots].reverse().slice(0, limit);
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-ink-800 text-xs uppercase tracking-wider text-ink-400">
+            <th scope="col" className="py-2 text-left font-medium">Taken</th>
+            <th scope="col" className="py-2 text-right font-medium">Chaos</th>
+            <th scope="col" className="py-2 text-right font-medium">Change</th>
+            <th scope="col" className="py-2 text-right font-medium">Divine</th>
+            <th scope="col" className="py-2 text-right font-medium">Rate</th>
+            <th scope="col" className="py-2 text-right font-medium">Items</th>
+            <th scope="col" className="py-2 text-right font-medium">Prices</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((snapshot) => {
+            const interval = byToId.get(snapshot.id);
+            const changeColour =
+              interval === undefined
+                ? 'text-ink-600'
+                : interval.idle
+                  ? 'text-ink-400'
+                  : interval.deltaChaos >= 0
+                    ? 'text-accent-500'
+                    : 'text-ink-300';
+
+            return (
+              <tr key={snapshot.id} className="border-b border-ink-850 last:border-0">
+                <td className="py-1.5 pr-3 text-ink-200">
+                  {formatDateTime(snapshot.takenAt)}
+                  {interval?.annotated ? (
+                    <span className="ml-2 text-xs text-cool-500" title="More than 3× the trailing median">
+                      spike
+                    </span>
+                  ) : null}
+                </td>
+                <td className="num py-1.5 pr-3 text-ink-100">{formatChaos(snapshot.totalChaos)}</td>
+                <td className={`num py-1.5 pr-3 ${changeColour}`}>
+                  {interval === undefined ? '—' : formatSignedChaos(interval.deltaChaos)}
+                </td>
+                <td className="num py-1.5 pr-3 text-cool-500">{formatDivine(snapshot.totalDivine)}</td>
+                <td className="num py-1.5 pr-3 text-ink-400">{formatChaos(snapshot.divineRate)}</td>
+                <td className="num py-1.5 pr-3 text-ink-400">{formatCount(snapshot.itemCount)}</td>
+                <td
+                  className="num py-1.5 text-ink-400"
+                  title={`Price set fetched ${formatDateTime(snapshot.priceSetAt)}`}
+                >
+                  {formatAgo(snapshot.priceSetAt, new Date(snapshot.takenAt).getTime())}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {snapshots.length > rows.length ? (
+        <p className="mt-2 text-xs text-ink-400">
+          Showing the {rows.length} most recent of {snapshots.length} snapshots in this range.
+        </p>
+      ) : null}
+    </div>
+  );
+}
