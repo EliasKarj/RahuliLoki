@@ -1,0 +1,19 @@
+node_modules/
+dist/
+build/
+coverage/
+
+# POESESSID lives here. Never commit.
+.env
+.env.*
+!.env.example
+
+# SQLite database + backups
+/data/
+*.db
+*.db-journal
+*.sqlite
+
+.DS_Store
+*.log
+.vite/

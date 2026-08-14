@@ -1,0 +1,390 @@
+import { afterEach, describe, expect, it } from 'vitest';
+import type { FastifyInstance } from 'fastify';
+import { buildApp } from '../src/app.ts';
+import { loadConfig } from '../src/lib/config.ts';
+import { clearSecrets, registerSecret } from '../src/lib/logger.ts';
+import { QueryError, parseQuery } from '../src/routes/snapshots.ts';
+import { PollerBusyError, PollerHaltedError, type PollOutcome, type PollerHealth } from '../src/jobs/pollJob.ts';
+import type { ApiDeps, PollerLike } from '../src/routes/deps.ts';
+import { MemorySnapshotStore } from './helpers/memoryStore.ts';
+import type { RateLimitView } from '../src/lib/rateLimiter.ts';
+
+const SESSION = 'deadbeef'.repeat(4);
+const START = Date.parse('2026-01-01T00:00:00Z');
+
+const idleHealth: PollerHealth = {
+  running: false,
+  halted: false,
+  haltReason: null,
+  disabledReason: null,
+  consecutiveFailures: 0,
+  lastSuccessAt: '2026-01-01T02:00:00.000Z',
+  lastAttemptAt: '2026-01-01T02:00:00.000Z',
+  lastError: null,
+  nextAttemptAfter: null,
+  totalPolls: 12,
+  totalFailures: 0,
+  lastOutcome: null,
+};
+
+const rateLimitView: RateLimitView = {
+  buckets: [
+    { limit: { hits: 45, periodSeconds: 60, restrictedSeconds: 120 }, state: { hits: 3, periodSeconds: 60, restrictedSeconds: 0 }, remaining: 42 },
+  ],
+  observedAt: '2026-01-01T02:00:00.000Z',
+  restrictedUntil: null,
+  consecutive429: 0,
+  nextRequestAt: '2026-01-01T02:00:01.000Z',
+  totalRequests: 36,
+  total429: 0,
+};
+
+class FakePoller implements PollerLike {
+  health: PollerHealth = { ...idleHealth };
+  outcome: PollOutcome | Error = new Error('not configured');
+
+  async runNow(): Promise<PollOutcome> {
+    if (this.outcome instanceof Error) throw this.outcome;
+    return this.outcome;
+  }
+}
+
+function seeded(store: MemorySnapshotStore): MemorySnapshotStore {
+  store.seed({
+    takenAt: new Date(START),
+    totalChaos: 1000,
+    itemCount: 500,
+    breakdown: { Currency: { 'Chaos Orb': { qty: 1000, chaosEach: 1, chaosTotal: 1000 } }, Dump: {} },
+  });
+  store.seed({
+    takenAt: new Date(START + 3_600_000),
+    totalChaos: 1600,
+    itemCount: 520,
+    breakdown: {
+      Currency: { 'Chaos Orb': { qty: 1000, chaosEach: 1, chaosTotal: 1000 } },
+      Dump: { 'The Doctor': { qty: 1, chaosEach: 600, chaosTotal: 600 } },
+    },
+  });
+  store.seed({ takenAt: new Date(START + 7_200_000), totalChaos: 1600.2, itemCount: 520 });
+  store.seed({ league: 'Standard', takenAt: new Date(START), totalChaos: 42 });
+  return store;
+}
+
+async function makeApp(overrides: Partial<ApiDeps> = {}): Promise<{
+  app: FastifyInstance;
+  store: MemorySnapshotStore;
+  poller: FakePoller;
+}> {
+  const { config, missing } = loadConfig({
+    POESESSID: SESSION,
+    POE_ACCOUNT_NAME: 'Exile#1234',
+    POE_LEAGUE: 'Settlers',
+  } as NodeJS.ProcessEnv);
+
+  const store = seeded(new MemorySnapshotStore());
+  const poller = new FakePoller();
+
+  const app = await buildApp(
+    {
+      config,
+      missing,
+      store,
+      poller,
+      prices: {
+        cached: {
+          league: 'Settlers',
+          fetchedAt: new Date(START),
+          prices: { 'Chaos Orb': 1, 'Divine Orb': 218.4 },
+          divineRate: 218.4,
+        },
+        isStale: () => false,
+      },
+      rateLimit: () => rateLimitView,
+      startedAt: new Date(START),
+      ...overrides,
+    },
+    { logger: false },
+  );
+
+  return { app, store, poller };
+}
+
+afterEach(() => clearSecrets());
+
+describe('parseQuery', () => {
+  it('falls back to the configured league', () => {
+    expect(parseQuery({}, 'Settlers').league).toBe('Settlers');
+  });
+
+  it('takes an explicit league, so a past league stays readable after a rollover', () => {
+    expect(parseQuery({ league: 'Standard' }, 'Settlers').league).toBe('Standard');
+  });
+
+  it('parses the range', () => {
+    const query = parseQuery({ from: '2026-01-01T00:00:00Z', to: '2026-01-02T00:00:00Z' }, 'Settlers');
+    expect(query.from?.toISOString()).toBe('2026-01-01T00:00:00.000Z');
+  });
+
+  it('rejects a range that runs backwards', () => {
+    expect(() => parseQuery({ from: '2026-01-02', to: '2026-01-01' }, 'Settlers')).toThrow(QueryError);
+  });
+
+  it('rejects an unparseable date instead of silently ignoring it', () => {
+    expect(() => parseQuery({ from: 'last tuesday' }, 'Settlers')).toThrow(QueryError);
+  });
+
+  it('rejects a nonsense limit', () => {
+    expect(() => parseQuery({ limit: '-5' }, 'Settlers')).toThrow(QueryError);
+    expect(() => parseQuery({ limit: '2.5' }, 'Settlers')).toThrow(QueryError);
+  });
+
+  it('caps a heavy request harder than a light one', () => {
+    expect(parseQuery({ limit: '999999' }, 'Settlers').limit).toBe(10_000);
+    expect(parseQuery({ limit: '999999', full: '1' }, 'Settlers').limit).toBe(2_000);
+  });
+});
+
+describe('GET /api/snapshots', () => {
+  it('returns the series without the breakdown', async () => {
+    const { app } = await makeApp();
+    const response = await app.inject({ method: 'GET', url: '/api/snapshots' });
+    const body = response.json();
+
+    expect(response.statusCode).toBe(200);
+    expect(body.count).toBe(3);
+    expect(body.snapshots[0]).not.toHaveProperty('breakdown');
+    expect(body.snapshots[0].totalChaos).toBe(1000);
+  });
+
+  it('returns oldest first, which is what a chart wants', async () => {
+    const { app } = await makeApp();
+    const body = (await app.inject({ method: 'GET', url: '/api/snapshots' })).json();
+    expect(body.snapshots.map((row: { totalChaos: number }) => row.totalChaos)).toEqual([1000, 1600, 1600.2]);
+  });
+
+  it('includes the breakdown only when asked', async () => {
+    const { app } = await makeApp();
+    const body = (await app.inject({ method: 'GET', url: '/api/snapshots?full=1' })).json();
+    expect(body.snapshots[1].breakdown.Dump['The Doctor'].chaosTotal).toBe(600);
+  });
+
+  it('reduces to per-tab totals for the stacked area chart', async () => {
+    const { app } = await makeApp();
+    const body = (await app.inject({ method: 'GET', url: '/api/snapshots?tabs=1' })).json();
+
+    expect(body.snapshots[1].tabs).toEqual({ Currency: 1000, Dump: 600 });
+    expect(body.snapshots[1]).not.toHaveProperty('breakdown');
+  });
+
+  it('filters by range', async () => {
+    const { app } = await makeApp();
+    const url = `/api/snapshots?from=${new Date(START + 3_600_000).toISOString()}`;
+    expect((await app.inject({ method: 'GET', url })).json().count).toBe(2);
+  });
+
+  it('keeps leagues apart', async () => {
+    const { app } = await makeApp();
+    const body = (await app.inject({ method: 'GET', url: '/api/snapshots?league=Standard' })).json();
+    expect(body.count).toBe(1);
+    expect(body.snapshots[0].totalChaos).toBe(42);
+  });
+
+  it('answers 400 with a reason for a bad query', async () => {
+    const { app } = await makeApp();
+    const response = await app.inject({ method: 'GET', url: '/api/snapshots?from=whenever' });
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toMatch(/from is not a date/);
+  });
+});
+
+describe('GET /api/snapshots/latest', () => {
+  it('returns the newest snapshot with its breakdown, tab totals and top items', async () => {
+    const { app } = await makeApp();
+    const body = (await app.inject({ method: 'GET', url: '/api/snapshots/latest' })).json();
+
+    expect(body.snapshot.totalChaos).toBe(1600.2);
+    expect(body.tabs).toEqual({});
+    expect(body.topItems).toEqual([]);
+  });
+
+  it('ranks the top items of a snapshot that has holdings', async () => {
+    const { app, store } = await makeApp();
+    // Drop the trailing idle snapshot, whose breakdown the seed leaves empty.
+    const index = store.rows.findIndex((row) => row.totalChaos === 1600.2);
+    store.rows.splice(index, 1);
+
+    const body = (await app.inject({ method: 'GET', url: '/api/snapshots/latest' })).json();
+
+    expect(body.topItems[0]).toMatchObject({ name: 'Chaos Orb', tab: 'Currency', chaosTotal: 1000 });
+  });
+
+  it('answers 404 before the first poll rather than an empty object', async () => {
+    const { app } = await makeApp();
+    const response = await app.inject({ method: 'GET', url: '/api/snapshots/latest?league=Ancestor' });
+    expect(response.statusCode).toBe(404);
+  });
+});
+
+describe('GET /api/stats', () => {
+  it('reports the gain, both rates, and the best hour', async () => {
+    const { app } = await makeApp();
+    const body = (await app.inject({ method: 'GET', url: '/api/stats' })).json();
+
+    expect(body.totalGainChaos).toBe(600.2);
+    expect(body.chaosPerHourActive).toBe(600);
+    expect(body.chaosPerHourWallClock).toBe(300.1);
+    expect(body.bestHour.gainChaos).toBe(600);
+  });
+
+  it('excludes the idle interval from active hours', async () => {
+    const { app } = await makeApp();
+    const body = (await app.inject({ method: 'GET', url: '/api/stats' })).json();
+
+    expect(body.activeHours).toBe(1);
+    expect(body.wallClockHours).toBe(2);
+    expect(body.intervals[1].idle).toBe(true);
+  });
+
+  it('answers safely for a league with no snapshots', async () => {
+    const { app } = await makeApp();
+    const body = (await app.inject({ method: 'GET', url: '/api/stats?league=Ancestor' })).json();
+    expect(body).toMatchObject({ count: 0, chaosPerHourActive: 0, bestHour: null });
+  });
+});
+
+describe('GET /api/health', () => {
+  it('reports ok when the poller is healthy', async () => {
+    const { app } = await makeApp();
+    const body = (await app.inject({ method: 'GET', url: '/api/health' })).json();
+
+    expect(body.status).toBe('ok');
+    expect(body.rateLimit.buckets[0].remaining).toBe(42);
+    expect(body.prices.divineRate).toBe(218.4);
+  });
+
+  it('reports halted, and still answers 200 so a restart loop does not start', async () => {
+    const { app, poller } = await makeApp();
+    poller.health = { ...idleHealth, halted: true, haltReason: 'halted after 3 consecutive failed polls' };
+
+    const response = await app.inject({ method: 'GET', url: '/api/health' });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().status).toBe('halted');
+  });
+
+  it('reports degraded after a single failure', async () => {
+    const { app, poller } = await makeApp();
+    poller.health = { ...idleHealth, consecutiveFailures: 1, lastError: 'GGG returned HTTP 500' };
+    expect((await app.inject({ method: 'GET', url: '/api/health' })).json().status).toBe('degraded');
+  });
+
+  it('reports unconfigured when credentials are missing', async () => {
+    const { app } = await makeApp({ missing: ['POESESSID'] });
+    const body = (await app.inject({ method: 'GET', url: '/api/health' })).json();
+    expect(body.status).toBe('unconfigured');
+    expect(body.missing).toEqual(['POESESSID']);
+  });
+
+  it('never includes the session credential', async () => {
+    registerSecret(SESSION);
+    const { app } = await makeApp();
+    const response = await app.inject({ method: 'GET', url: '/api/health' });
+    expect(response.body).not.toContain(SESSION);
+  });
+});
+
+describe('POST /api/poll', () => {
+  it('returns the outcome of a manual poll', async () => {
+    const { app, poller } = await makeApp();
+    poller.outcome = {
+      snapshot: {
+        id: 9,
+        takenAt: new Date(START),
+        league: 'Settlers',
+        totalChaos: 1600,
+        totalDivine: 7.3,
+        divineRate: 218.4,
+        itemCount: 520,
+        priceSetAt: new Date(START),
+      },
+      tabsRead: 3,
+      unresolvedCount: 2,
+      skipped: 1,
+      droppedBelowThreshold: 4,
+      priceAgeMinutes: 0,
+      durationMs: 812,
+    };
+
+    const response = await app.inject({ method: 'POST', url: '/api/poll' });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ ok: true, tabsRead: 3, unresolvedCount: 2 });
+  });
+
+  it('answers 409 when a poll is already running', async () => {
+    const { app, poller } = await makeApp();
+    poller.outcome = new PollerBusyError('a poll is already running');
+    expect((await app.inject({ method: 'POST', url: '/api/poll' })).statusCode).toBe(409);
+  });
+
+  it('answers 503 when polling is disabled', async () => {
+    const { app, poller } = await makeApp();
+    poller.outcome = new PollerHaltedError('polling disabled: POESESSID not set');
+    expect((await app.inject({ method: 'POST', url: '/api/poll' })).statusCode).toBe(503);
+  });
+
+  it('answers 502 with the reason when the poll itself fails', async () => {
+    const { app, poller } = await makeApp();
+    poller.outcome = new Error('GGG returned HTTP 500 for tab 1');
+
+    const response = await app.inject({ method: 'POST', url: '/api/poll' });
+    expect(response.statusCode).toBe(502);
+    expect(response.json().error).toMatch(/HTTP 500/);
+  });
+
+  it('scrubs a credential out of a failure message', async () => {
+    registerSecret(SESSION);
+    const { app, poller } = await makeApp();
+    poller.outcome = new Error(`request failed with POESESSID=${SESSION}`);
+
+    const response = await app.inject({ method: 'POST', url: '/api/poll' });
+    expect(response.body).not.toContain(SESSION);
+    expect(response.json().error).toContain('[redacted]');
+  });
+});
+
+describe('GET /api/config', () => {
+  it('reports the settings the frontend needs to label the charts', async () => {
+    const { app } = await makeApp();
+    const body = (await app.inject({ method: 'GET', url: '/api/config' })).json();
+
+    expect(body).toMatchObject({
+      league: 'Settlers',
+      pollCron: '*/10 * * * *',
+      minItemChaos: 2,
+      configured: true,
+    });
+  });
+
+  it('lists every league with history so a rollover does not hide the old one', async () => {
+    const { app } = await makeApp();
+    const body = (await app.inject({ method: 'GET', url: '/api/config' })).json();
+    expect(body.leagues).toContain('Settlers');
+    expect(body.leagues).toContain('Standard');
+  });
+
+  it('never exposes the session credential', async () => {
+    registerSecret(SESSION);
+    const { app } = await makeApp();
+    const response = await app.inject({ method: 'GET', url: '/api/config' });
+
+    expect(response.body).not.toContain(SESSION);
+    expect(response.body.toLowerCase()).not.toContain('poesessid');
+  });
+});
+
+describe('unknown routes', () => {
+  it('answers 404 as JSON under /api when no SPA is mounted', async () => {
+    const { app } = await makeApp();
+    const response = await app.inject({ method: 'GET', url: '/api/nope' });
+    expect(response.statusCode).toBe(404);
+  });
+});

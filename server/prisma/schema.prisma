@@ -1,0 +1,39 @@
+// Snapshots are append-only: one row per successful poll. Nothing here is ever updated,
+// which makes the file trivially safe to copy while the poller is running.
+//
+// Types are kept Postgres-compatible so the provider can be swapped by editing the datasource
+// block alone. `breakdown` is stored whole rather than normalised into rows: it is what makes
+// it possible to re-slice history later (e.g. net worth excluding one lucky mirror drop)
+// without re-fetching anything from GGG.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Snapshot {
+  id          Int      @id @default(autoincrement())
+  takenAt     DateTime @default(now())
+  league      String
+  totalChaos  Float
+  totalDivine Float
+  divineRate  Float // chaos per divine at time of snapshot
+  itemCount   Int
+  breakdown   Json // { [tabName]: { [itemName]: { qty, chaosEach, chaosTotal } } }
+  priceSetAt  DateTime // when the poe.ninja price set was fetched
+
+  @@index([league, takenAt])
+}
+
+model PriceSet {
+  id        Int      @id @default(autoincrement())
+  league    String
+  fetchedAt DateTime @default(now())
+  prices    Json // { [itemName]: chaosValue }
+
+  @@index([league, fetchedAt])
+}
