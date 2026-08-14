@@ -27,9 +27,11 @@ const here = dirname(fileURLToPath(import.meta.url));
 
 /** The built SPA sits next to the built server in the container; in dev it may not exist. */
 function findWebDist(configured: string | null): string | null {
+  // `../public` is where the container copies it; `../../web/dist` is the workspace layout,
+  // which resolves the same whether this file is running from src/ or from dist/.
   const candidates = configured
     ? [resolve(configured)]
-    : [resolve(here, '../public'), resolve(here, '../../web/dist'), resolve(here, '../../../web/dist')];
+    : [resolve(here, '../public'), resolve(here, '../../web/dist')];
   return candidates.find((candidate) => existsSync(resolve(candidate, 'index.html'))) ?? null;
 }
 

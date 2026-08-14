@@ -46,10 +46,16 @@ export async function buildApp(deps: ApiDeps, options: BuildOptions = {}): Promi
     const { default: fastifyStatic } = await import('@fastify/static');
     await app.register(fastifyStatic, { root: options.webDist, wildcard: false });
 
-    // Single-page app: anything that is not an API route and not a file on disk is a client
-    // route, so hand back index.html and let the router deal with it.
+    // Single-page app: a request for a client route gets index.html and the router sorts it
+    // out. A request for a missing *asset* must not — handing back HTML for a missing .js
+    // turns a stale deploy into an inscrutable MIME-type error in the browser console
+    // instead of an honest 404.
     app.setNotFoundHandler((request, reply) => {
-      if (request.method !== 'GET' || request.url.startsWith('/api')) {
+      const path = request.url.split('?')[0] ?? '/';
+      const looksLikeFile = /\.[a-z0-9]+$/i.test(path);
+      const wantsHtml = (request.headers.accept ?? '').includes('text/html');
+
+      if (request.method !== 'GET' || path.startsWith('/api') || looksLikeFile || !wantsHtml) {
         return reply.code(404).send({ error: 'not found' });
       }
       return reply.sendFile('index.html');

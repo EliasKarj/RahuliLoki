@@ -1,0 +1,68 @@
+@import 'tailwindcss';
+
+/**
+ * Dark, two accents, everything else neutral.
+ *
+ *   accent  — chaos. The colour of the orb, and of every "wealth" quantity in the app.
+ *   cool    — divine. Used for the divine-rate overlay and divine-denominated numbers only,
+ *             so that "is this a real gain or is divine just inflating?" is answerable by eye.
+ *
+ * Losses are drawn in a neutral rather than a third hue: a red would be a new colour for a
+ * quantity that is already distinguishable by direction.
+ *
+ * JetBrains Mono is not bundled — this app ships as a single self-hosted container and should
+ * not fetch fonts from anyone. Install it locally for the intended look; the stack falls back
+ * to the platform's monospace otherwise.
+ */
+
+@theme {
+  --color-ink-950: #0a0c10;
+  --color-ink-900: #0f1216;
+  --color-ink-850: #14181e;
+  --color-ink-800: #191e26;
+  --color-ink-700: #232a34;
+  --color-ink-600: #333c49;
+  --color-ink-400: #6b7787;
+  --color-ink-300: #8d99a9;
+  --color-ink-200: #b9c2ce;
+  --color-ink-100: #e4e8ee;
+
+  --color-accent-500: #e0a458;
+  --color-accent-400: #edb974;
+  --color-accent-600: #b8823c;
+
+  --color-cool-500: #7aa2f7;
+  --color-cool-400: #9bbaf9;
+  --color-cool-600: #5b82d4;
+
+  --font-mono:
+    'JetBrains Mono', ui-monospace, 'SFMono-Regular', 'Menlo', 'Consolas', monospace;
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+}
+
+html {
+  color-scheme: dark;
+  background-color: var(--color-ink-950);
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-ink-950);
+  color: var(--color-ink-100);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/** Every number in the app: monospaced, tabular, so columns line up and digits do not jitter. */
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/** Recharts draws its own focus outline on every hover; suppress it. */
+.recharts-wrapper:focus,
+.recharts-surface:focus {
+  outline: none;
+}
