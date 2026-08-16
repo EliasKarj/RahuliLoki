@@ -625,7 +625,7 @@ Kaikki `/api`-alkuiset, kaikki JSONia.
 | `GET /api/item-history?name=&league=&from=` | Yhden esineen määrä ja arvo jokaisessa aikavälin tilannekuvassa. |
 | `GET /api/leagues` | Nykyiset liigat GGG:ltä työpöytäversion valikkoa varten. Välimuistissa 6 h; epäonnistuessa pysyvät liigat. |
 | `GET /api/account` | Kenelle tallennettu istunto GGG:n mukaan kuuluu, ja täsmääkö se `POE_ACCOUNT_NAME`iin. 502 kun GGG ei suostu vastaamaan — se itsessään on vastaus. |
-| `POST /api/poll` | Kierros käsin. Nollaa myös pysäytyksen. 409 jos kierros on kesken, 503 jos tunnukset puuttuvat, 502 jos kierros epäonnistuu. |
+| `POST /api/poll` | Käynnistää kierroksen ja vastaa **202 heti**, ei kierroksen päätyttyä. 409 jos kierros on jo kesken, 503 jos tunnukset puuttuvat. Lopputulos luetaan `/api/health`istä. |
 | `GET /api/health` | Viimeisin onnistuminen, pysäytyksen syy, nopeusrajoituksen tila, hintojen ikä. |
 | `GET /api/config` | Liiga, ajastin, kynnysarvot, liigat joilla on historiaa. **Ei POESESSIDiä.** |
 
@@ -698,7 +698,7 @@ validoimaton symlinkkien polkuhyppäys purettaessa. Korjattua versiota **ei ole 
 pnpm test
 ```
 
-**388 testiä**, ei yhtään verkkopyyntöä:
+**396 testiä**, ei yhtään verkkopyyntöä:
 
 - **Nopeusrajoitin** — otsakkeiden jäsennys, tahdistus, sarjallistuminen, `Retry-After`,
   kaksinkertaistuminen kattoon asti. Kello ja uni ovat väärennettyjä, joten 30 minuutin

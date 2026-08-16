@@ -16,7 +16,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { ApiDeps } from './deps.ts';
 import { PollerBusyError, PollerHaltedError } from '../jobs/pollJob.ts';
-import { describeError } from '../lib/logger.ts';
+import { describeError, scrub } from '../lib/logger.ts';
 
 export type HealthStatus = 'ok' | 'idle' | 'degraded' | 'halted' | 'unconfigured';
 
@@ -57,11 +57,42 @@ export async function healthRoutes(app: FastifyInstance, deps: ApiDeps): Promise
     });
   });
 
+  /**
+   * Start a poll. Answers as soon as it has started, not when it has finished.
+   *
+   * A poll paces itself against GGG's rate limit, and the tightest bucket on the stash endpoint
+   * refills slowly enough that one request every eighteen seconds is the honest rate. A stash
+   * with twenty tabs is therefore several minutes of work — and this used to hold the HTTP
+   * request open for all of it.
+   *
+   * Nothing survives that. The client gives up long before the poll does and reports a network
+   * failure, so a poll that was running perfectly well looked like a broken server: "Failed to
+   * fetch" on screen while the log quietly went on reading tabs.
+   *
+   * So the poll is started and the request returns 202. Progress and outcome live in
+   * `/api/health`, which the dashboard already reads: `poller.running` says it is going,
+   * `lastSuccessAt` and `lastError` say how it ended.
+   */
   app.post('/poll', async (_request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const outcome = await deps.poller.runNow();
-      const { snapshot, ...rest } = outcome;
-      return reply.send({ ok: true, snapshot, ...rest });
+      const health = deps.poller.health;
+      // Checked here rather than inferred from a rejection: once the poll is running, its
+      // rejection arrives minutes later and cannot be an HTTP status on this request any more.
+      if (health.disabledReason) {
+        // Scrubbed like every other string this app echoes outward. The reason is built from
+        // configuration and has no business carrying a credential, but "has no business" is not
+        // a guarantee, and this is the cheapest place to make it one.
+        return reply.code(503).send({ ok: false, error: scrub(health.disabledReason) });
+      }
+      if (health.running) {
+        return reply.code(409).send({ ok: false, error: 'a poll is already running' });
+      }
+
+      // Deliberately not awaited. A failure is recorded in the poller's own health — that is
+      // what its run loop exists to do — so there is nothing for this handler to report later.
+      void deps.poller.runNow().catch(() => undefined);
+
+      return reply.code(202).send({ ok: true, started: true });
     } catch (error) {
       if (error instanceof PollerBusyError) {
         return reply.code(409).send({ ok: false, error: error.message });

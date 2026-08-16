@@ -61,6 +61,9 @@ export function useSnapshots(
 
   // Distinguishes the first load of a league/range from a background refresh of one.
   const loadedKey = useRef<string | null>(null);
+  // Read by the refresh timer, which is created once per effect and must see the current value
+  // rather than the one captured when it was scheduled.
+  const running = useRef(false);
 
   const refresh = useCallback(() => setNonce((value) => value + 1), []);
 
@@ -87,6 +90,7 @@ export function useSnapshots(
         const latest = await api.latest(league, controller.signal).catch(() => null);
 
         if (controller.signal.aborted) return;
+        running.current = health.poller.running;
         setData({ snapshots: snapshots.snapshots, stats, changes, latest, config, health });
         setError(null);
         setUnauthorized(false);
@@ -108,11 +112,25 @@ export function useSnapshots(
     };
 
     void load();
-    const timer = window.setInterval(() => void load(), refreshMs);
+
+    // A self-rescheduling timer rather than setInterval, so the gap can depend on what the last
+    // response said. While a poll is running the page refreshes every few seconds; the rest of
+    // the time it stays at the slow cadence.
+    //
+    // A poll paces itself against GGG's rate limit and takes minutes on a full stash. At one
+    // refresh a minute the page looks idle for the whole of it, and then sits on a stale view
+    // for up to another minute after the snapshot lands.
+    let timer = 0;
+    const schedule = (): void => {
+      timer = window.setTimeout(() => {
+        void load().finally(schedule);
+      }, running.current ? 5_000 : refreshMs);
+    };
+    schedule();
 
     return () => {
       controller.abort();
-      window.clearInterval(timer);
+      window.clearTimeout(timer);
     };
   }, [league, range, refreshMs, nonce]);
 

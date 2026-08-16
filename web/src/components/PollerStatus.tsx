@@ -30,12 +30,19 @@ export function PollerStatus({ health, onPolled }: { health: HealthResponse | nu
   const label = LABELS[health.status];
   const bucket = health.rateLimit.buckets[0];
 
+  // A poll is running when this button started one *or* when the server says so — a scheduled
+  // tick counts too, and it is the server's answer that outlives a page reload.
+  const running = busy || health.poller.running;
+
   const poll = async (): Promise<void> => {
     setBusy(true);
     setMessage(null);
     try {
+      // Returns as soon as the poll has started, not when it has finished. Reading a stash is
+      // minutes of paced requests; waiting here is what made a healthy poll read as a network
+      // error on screen. The outcome arrives through /api/health instead.
       await api.poll();
-      setMessage('Snapshot written.');
+      setMessage('Polling. A full stash takes a few minutes — this page updates itself.');
       onPolled();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));
@@ -71,10 +78,10 @@ export function PollerStatus({ health, onPolled }: { health: HealthResponse | nu
       <button
         type="button"
         onClick={() => void poll()}
-        disabled={busy || health.status === 'unconfigured'}
+        disabled={running || health.status === 'unconfigured'}
         className="rounded border border-ink-700 px-2 py-1 text-ink-300 transition-colors hover:border-ink-600 hover:text-ink-100 disabled:cursor-not-allowed disabled:opacity-40"
       >
-        {busy ? 'polling…' : 'poll now'}
+        {running ? 'polling…' : 'poll now'}
       </button>
 
       {health.poller.haltReason ? (

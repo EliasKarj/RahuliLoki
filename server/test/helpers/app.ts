@@ -53,10 +53,22 @@ export class FakePoller implements PollerLike {
   /** Counts calls that actually reached the poller, which is what the auth tests assert on. */
   calls = 0;
 
+  /**
+   * Resolves on the next tick rather than immediately, matching the real poller: the route
+   * starts a poll and answers without waiting, so a double that settled synchronously would
+   * let a test pass that the real thing could not.
+   */
   async runNow(): Promise<PollOutcome> {
     this.calls += 1;
+    await Promise.resolve();
     if (this.outcome instanceof Error) throw this.outcome;
     return this.outcome;
+  }
+
+  /** Drain the started poll, so a test can assert on what it recorded. */
+  async settle(): Promise<void> {
+    await Promise.resolve();
+    await Promise.resolve();
   }
 }
 
