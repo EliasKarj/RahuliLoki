@@ -231,15 +231,40 @@ export function tabTotals(breakdown: Breakdown): Record<string, number> {
   return totals;
 }
 
-/** The latest snapshot's biggest holdings, flattened across tabs. */
+export interface TopItem {
+  tab: string;
+  name: string;
+  qty: number;
+  chaosEach: number;
+  chaosTotal: number;
+  /** poe.ninja's icon, when the current price set knows one for this name. */
+  icon?: string;
+}
+
+/**
+ * The latest snapshot's biggest holdings, flattened across tabs.
+ *
+ * `icons` is joined in here rather than stored on the snapshot: the breakdown is written once
+ * per poll and read rarely, while an icon URL is the same string every time. Looking it up at
+ * read time also means an item that only got an icon later picks one up without a rewrite.
+ */
 export function topItems(
   breakdown: Breakdown,
   limit = 100,
-): Array<{ tab: string; name: string; qty: number; chaosEach: number; chaosTotal: number }> {
-  const rows: Array<{ tab: string; name: string; qty: number; chaosEach: number; chaosTotal: number }> = [];
+  icons: Record<string, string> = {},
+): TopItem[] {
+  const rows: TopItem[] = [];
   for (const [tab, entries] of Object.entries(breakdown)) {
     for (const [name, entry] of Object.entries(entries)) {
-      rows.push({ tab, name, qty: entry.qty, chaosEach: entry.chaosEach, chaosTotal: entry.chaosTotal });
+      const icon = Object.hasOwn(icons, name) ? icons[name] : undefined;
+      rows.push({
+        tab,
+        name,
+        qty: entry.qty,
+        chaosEach: entry.chaosEach,
+        chaosTotal: entry.chaosTotal,
+        ...(icon === undefined ? {} : { icon }),
+      });
     }
   }
   rows.sort((a, b) => b.chaosTotal - a.chaosTotal || a.name.localeCompare(b.name));

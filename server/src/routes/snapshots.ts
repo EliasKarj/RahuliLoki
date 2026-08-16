@@ -106,7 +106,8 @@ export async function snapshotRoutes(app: FastifyInstance, deps: ApiDeps): Promi
     return reply.send({
       snapshot,
       tabs: tabTotals(snapshot.breakdown),
-      topItems: topItems(snapshot.breakdown, 200),
+      // Icons are joined in from the current price set, the only place they are stored.
+      topItems: topItems(snapshot.breakdown, 200, deps.prices.cached?.icons ?? {}),
     });
   });
 

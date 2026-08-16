@@ -35,6 +35,8 @@ export interface TopItem {
   qty: number;
   chaosEach: number;
   chaosTotal: number;
+  /** poe.ninja icon URL. Absent when the current price set knows none for this name. */
+  icon?: string;
 }
 
 export interface LatestResponse {

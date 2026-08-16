@@ -224,7 +224,7 @@ Kaikki `.env`-tiedostossa; `.env.example` on malli.
 | `ALLOW_UNAUTHENTICATED` | tyhjä | Kuittaus siitä, että joku muu hoitaa tunnistuksen. |
 | `ALLOWED_HOSTS` | tyhjä | Sallitut `Host`-otsakkeet tokenittomassa tilassa. |
 | `TRUST_PROXY` | tyhjä | Uskotaanko `X-Forwarded-*`. Vain oikean proxyn takana. |
-| `PRICE_SET_RETENTION` | `48` | Säilytettävät hintasetit liigaa kohti. `0` = kaikki. |
+| `PRICE_SET_RETENTION` | `48` | Säilytettävät hintasetit liigaa kohti. `0` = kaikki. Sisältää myös ikonikartan. |
 | `REQUEST_TIMEOUT_MS` | `30000` | Yhden ulkoisen pyynnön katto. |
 | `LOG_LEVEL` | `info` | pinon taso. |
 
@@ -371,7 +371,7 @@ Kaikki `/api`-alkuiset, kaikki JSONia.
 | Reitti | Mitä |
 |--------|------|
 | `GET /api/snapshots?league=&from=&to=&limit=` | Tilannekuvat vanhin ensin. Erittely mukaan vain `?full=1`; `?tabs=1` antaa välilehtikohtaiset summat ilman esinetason dataa. |
-| `GET /api/snapshots/latest?league=` | Tuorein tilannekuva täydellä erittelyllä, välilehtisummilla ja kärkiomistuksilla. 404 ennen ensimmäistä kierrosta. |
+| `GET /api/snapshots/latest?league=` | Tuorein tilannekuva täydellä erittelyllä, välilehtisummilla ja kärkiomistuksilla ikoneineen. 404 ennen ensimmäistä kierrosta. |
 | `GET /api/stats?league=&from=&to=` | Tuotto, c/h aktiivinen ja seinäkello, aktiivitunnit, paras tunti, välikohtaiset tiedot. |
 | `POST /api/poll` | Kierros käsin. Nollaa myös pysäytyksen. 409 jos kierros on kesken, 503 jos tunnukset puuttuvat, 502 jos kierros epäonnistuu. |
 | `GET /api/health` | Viimeisin onnistuminen, pysäytyksen syy, nopeusrajoituksen tila, hintojen ikä. |

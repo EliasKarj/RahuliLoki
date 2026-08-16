@@ -30,7 +30,10 @@ const CSP = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data:",
+  // Item icons are served off GGG's own CDN, which is where poe.ninja points at them. Widened
+  // for images only — an <img> cannot execute, and the server-side icon parser already refuses
+  // any URL that is not https on a poecdn.com host, so this is the second of two checks.
+  "img-src 'self' data: https://web.poecdn.com",
   "font-src 'self'",
   "connect-src 'self'",
   "object-src 'none'",

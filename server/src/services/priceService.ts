@@ -24,6 +24,15 @@ export interface PriceSet {
   prices: Record<string, number>;
   /** Chaos per divine, straight out of the Currency set. */
   divineRate: number;
+  /**
+   * Display-name → poe.ninja icon URL, for the names it gave one.
+   *
+   * Kept on the price set rather than on each snapshot's breakdown: an icon URL is a property
+   * of the item, not of a moment in time. Copying ~40 bytes per line into every snapshot blob
+   * would grow the column that already dominates the database, 144 times a day, to store the
+   * same string over and over.
+   */
+  icons: Record<string, string>;
 }
 
 export interface PriceSetStore {
@@ -39,6 +48,27 @@ interface CurrencyLine {
 interface ItemLine {
   name?: unknown;
   chaosValue?: unknown;
+  icon?: unknown;
+}
+
+/** The two payload shapes put the icon in different places — see the merge functions. */
+interface CurrencyDetail {
+  name?: unknown;
+  icon?: unknown;
+}
+
+/** poe.ninja serves icons off GGG's CDN. Anything else in that field is not an icon. */
+function iconUrl(value: unknown): string | null {
+  if (typeof value !== 'string' || value === '') return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== 'https:') return null;
+  const host = parsed.hostname.toLowerCase();
+  return host === 'web.poecdn.com' || host.endsWith('.poecdn.com') ? value : null;
 }
 
 export interface PriceServiceOptions {
@@ -68,8 +98,18 @@ function finitePositive(value: unknown): number | null {
   return value;
 }
 
-/** Merge one currencyoverview payload into `into`. Returns how many lines were usable. */
-export function mergeCurrencyOverview(payload: unknown, into: Record<string, number>): number {
+/**
+ * Merge one currencyoverview payload into `into`. Returns how many lines were usable.
+ *
+ * Icons are not on the lines here. currencyoverview carries them in a sibling
+ * `currencyDetails` array keyed by the same display name, so they are collected separately —
+ * a line with no matching detail simply has no icon, which is not an error.
+ */
+export function mergeCurrencyOverview(
+  payload: unknown,
+  into: Record<string, number>,
+  icons: Record<string, string> = Object.create(null) as Record<string, string>,
+): number {
   const lines = (payload as { lines?: unknown })?.lines;
   if (!Array.isArray(lines)) return 0;
   let merged = 0;
@@ -80,11 +120,25 @@ export function mergeCurrencyOverview(payload: unknown, into: Record<string, num
     into[name] = value;
     merged += 1;
   }
+
+  const details = (payload as { currencyDetails?: unknown })?.currencyDetails;
+  if (Array.isArray(details)) {
+    for (const raw of details as CurrencyDetail[]) {
+      const name = typeof raw?.name === 'string' ? raw.name : null;
+      const icon = iconUrl(raw?.icon);
+      if (name === null || icon === null) continue;
+      icons[name] = icon;
+    }
+  }
   return merged;
 }
 
-/** Merge one itemoverview payload into `into`. */
-export function mergeItemOverview(payload: unknown, into: Record<string, number>): number {
+/** Merge one itemoverview payload into `into`. Here the icon is on the line itself. */
+export function mergeItemOverview(
+  payload: unknown,
+  into: Record<string, number>,
+  icons: Record<string, string> = Object.create(null) as Record<string, string>,
+): number {
   const lines = (payload as { lines?: unknown })?.lines;
   if (!Array.isArray(lines)) return 0;
   let merged = 0;
@@ -95,6 +149,8 @@ export function mergeItemOverview(payload: unknown, into: Record<string, number>
     // First category wins. Categories do not overlap in practice, and when they do the
     // earlier (more specific) list is the one the operator put first on purpose.
     if (into[name] === undefined) into[name] = value;
+    const icon = iconUrl(raw?.icon);
+    if (icon !== null && icons[name] === undefined) icons[name] = icon;
     merged += 1;
   }
   return merged;
@@ -177,16 +233,17 @@ export class PriceService {
     // "have I seen this name already" check below would silently discard a real price — and
     // `prices['__proto__'] = …` would reassign the prototype instead of storing anything.
     const prices: Record<string, number> = Object.create(null) as Record<string, number>;
+    const icons: Record<string, string> = Object.create(null) as Record<string, string>;
 
     for (const type of currencyCategories) {
       const payload = await this.#getJson(`${this.#baseUrl}/currencyoverview`, league, type);
-      const merged = mergeCurrencyOverview(payload, prices);
+      const merged = mergeCurrencyOverview(payload, prices, icons);
       this.#log.debug({ type, merged }, 'merged currency overview');
     }
 
     for (const type of itemCategories) {
       const payload = await this.#getJson(`${this.#baseUrl}/itemoverview`, league, type);
-      const merged = mergeItemOverview(payload, prices);
+      const merged = mergeItemOverview(payload, prices, icons);
       this.#log.debug({ type, merged }, 'merged item overview');
     }
 
@@ -201,9 +258,9 @@ export class PriceService {
       );
     }
 
-    const set: PriceSet = { league, fetchedAt: new Date(this.#now()), prices, divineRate };
+    const set: PriceSet = { league, fetchedAt: new Date(this.#now()), prices, divineRate, icons };
     this.#log.info(
-      { league, entries: Object.keys(prices).length, divineRate },
+      { league, entries: Object.keys(prices).length, icons: Object.keys(icons).length, divineRate },
       'fetched a fresh price set',
     );
     return set;

@@ -34,6 +34,11 @@ model PriceSet {
   league    String
   fetchedAt DateTime @default(now())
   prices    Json // { [itemName]: chaosValue }
+  // { [itemName]: iconUrl }. Lives here rather than in Snapshot.breakdown because an icon is a
+  // property of the item, not of a moment in time — repeating it in every snapshot would grow
+  // the largest column in the database 144 times a day to store the same strings.
+  // Nullable so the migration lands on existing rows with no backfill; the next fetch fills it.
+  icons     Json?
 
   @@index([league, fetchedAt])
 }

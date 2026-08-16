@@ -113,6 +113,21 @@ describe('GET /api/snapshots/latest', () => {
     expect(body.topItems[0]).toMatchObject({ name: 'Chaos Orb', tab: 'Currency', chaosTotal: 1000 });
   });
 
+  it('joins the icon in from the price set, and omits it where there is none', async () => {
+    const { app, store } = await makeApp();
+    const index = store.rows.findIndex((row) => row.totalChaos === 1600.2);
+    store.rows.splice(index, 1);
+
+    const body = (await app.inject({ method: 'GET', url: '/api/snapshots/latest' })).json();
+    const rows = body.topItems as Array<{ name: string; icon?: string }>;
+
+    // The fake price set knows an icon for The Doctor and none for Chaos Orb.
+    expect(rows.find((row) => row.name === 'The Doctor')?.icon).toBe(
+      'https://web.poecdn.com/doctor.png',
+    );
+    expect(rows.find((row) => row.name === 'Chaos Orb')).not.toHaveProperty('icon');
+  });
+
   it('answers 404 before the first poll rather than an empty object', async () => {
     const { app } = await makeApp();
     const response = await app.inject({ method: 'GET', url: '/api/snapshots/latest?league=Ancestor' });

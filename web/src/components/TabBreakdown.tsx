@@ -168,7 +168,28 @@ export function TopItemsTable({ items }: { items: TopItem[] }) {
         <tbody>
           {rows.map((row) => (
             <tr key={`${row.tab}/${row.name}`} className="border-b border-ink-850 last:border-0">
-              <td className="py-1.5 pr-3 text-ink-100">{row.name}</td>
+              <td className="py-1.5 pr-3 text-ink-100">
+                <span className="flex items-center gap-2">
+                  {/* Fixed-size box whether or not an icon exists, so the name column does not
+                      jag left and right down the table. Missing icons are the normal case, not
+                      the exception: poe.ninja has no art for some lines, and a category has
+                      none at all until the next price fetch after this upgrade. */}
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center">
+                    {row.icon ? (
+                      <img
+                        src={row.icon}
+                        alt=""
+                        aria-hidden="true"
+                        loading="lazy"
+                        decoding="async"
+                        referrerPolicy="no-referrer"
+                        className="max-h-5 max-w-5"
+                      />
+                    ) : null}
+                  </span>
+                  {row.name}
+                </span>
+              </td>
               <td className="py-1.5 pr-3 text-ink-400">{row.tab}</td>
               <td className="num py-1.5 pr-3 text-ink-200">{formatCount(row.qty)}</td>
               <td className="num py-1.5 pr-3 text-ink-400">{formatChaos(row.chaosEach)}</td>

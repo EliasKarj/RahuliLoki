@@ -79,6 +79,16 @@ function asBreakdown(value: unknown): Breakdown {
   return value as Breakdown;
 }
 
+/** Same narrowing as asPrices, for the icon map. Unknown-shaped entries are dropped. */
+function asIcons(value: unknown): Record<string, string> {
+  const out: Record<string, string> = Object.create(null) as Record<string, string>;
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return out;
+  for (const [name, icon] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof icon === 'string' && icon !== '') out[name] = icon;
+  }
+  return out;
+}
+
 function asPrices(value: unknown): Record<string, number> {
   // Null-prototype, matching how PriceService builds a fresh set: these keys came out of a
   // remote payload, and a lookup for `constructor` has to miss rather than return a function.
@@ -200,12 +210,20 @@ export class PrismaPriceSetStore implements PriceSetStore {
       fetchedAt: row.fetchedAt,
       prices,
       divineRate: prices['Divine Orb'] ?? 0,
+      // Null on rows written before the icons column existed. An empty map is the right
+      // reading: the UI falls back to no icon, and the next fetch fills it in.
+      icons: asIcons(row.icons),
     };
   }
 
   async save(set: PriceSet): Promise<void> {
     await this.#prisma.priceSet.create({
-      data: { league: set.league, fetchedAt: set.fetchedAt, prices: set.prices as object },
+      data: {
+        league: set.league,
+        fetchedAt: set.fetchedAt,
+        prices: set.prices as object,
+        icons: set.icons as object,
+      },
     });
     await this.#prune(set.league);
   }
