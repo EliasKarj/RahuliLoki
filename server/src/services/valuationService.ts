@@ -1,8 +1,13 @@
 /**
  * Items × prices → chaos total + per-tab breakdown.
  *
- * Name resolution is the hard part of this whole project. poe.ninja keys by display name;
- * a stash item carries `name`, `typeLine` and `baseType`, and which of those is the display
+ * Name resolution is the hard part of this whole project, and it got harder when poe.ninja
+ * stopped publishing display names. The price map is now keyed by poe.ninja's own identifier,
+ * so resolution runs in two steps: work out the item's display name, then turn that name into
+ * an id with `ninjaId()`. The breakdown is still keyed by the *display name*, because that is
+ * what a person reads and because the stash is a better source for it than poe.ninja ever was.
+ *
+ * A stash item carries `name`, `typeLine` and `baseType`, and which of those is the display
  * name depends on what kind of item it is:
  *
  *   currency, fragments, scarabs, essences…  baseType === typeLine === the poe.ninja name
@@ -17,6 +22,7 @@
  * caller. A silent zero is the failure mode this design exists to avoid.
  */
 
+import { ninjaId } from './ninjaId.ts';
 import { linkCount, pickCandidate, uniqueKey, type UniqueIndex } from './uniques.ts';
 
 export interface ValuedEntry {
@@ -40,6 +46,14 @@ export interface ValuationResult {
   /** Units of valued items — a stack of 500 alterations counts as 500. */
   itemCount: number;
   unresolved: UnresolvedItem[];
+  /**
+   * The poe.ninja ids that items in the stash actually matched.
+   *
+   * Fed to `unmatchedIds` by the poller. Since the price payload carries no names, an id that
+   * nothing ever matches is the only visible symptom of a missing entry in the alias table —
+   * see services/ninjaId.ts.
+   */
+  matchedIds: Set<string>;
   /** Items in a category we deliberately do not price. */
   skipped: number;
   /** Aggregated entries that fell under MIN_ITEM_CHAOS. */
@@ -125,13 +139,24 @@ export function priceKeyCandidates(item: ValuationInput['items'][number]): strin
   return candidates;
 }
 
-/** Resolve to the name poe.ninja knows, or null when nothing matches. */
-export function resolvePriceKey(
+/**
+ * Resolve an item to its display name and chaos value, or null when poe.ninja prices nothing
+ * this item could be.
+ *
+ * The returned `name` is the stash's display name and the returned `id` is what poe.ninja filed
+ * the price under. Both are handed back because they are needed in different places: the name
+ * keys the breakdown a person reads, the id feeds `unmatchedIds` so a missing alias is
+ * detectable.
+ */
+export function resolvePrice(
   item: ValuationInput['items'][number],
   prices: Record<string, number>,
-): string | null {
+): { name: string; id: string; chaos: number } | null {
   for (const candidate of priceKeyCandidates(item)) {
-    if (Object.hasOwn(prices, candidate)) return candidate;
+    const id = ninjaId(candidate);
+    if (id !== '' && Object.hasOwn(prices, id)) {
+      return { name: candidate, id, chaos: prices[id] as number };
+    }
   }
   return null;
 }
@@ -170,6 +195,7 @@ export function valueTabs(tabs: ValuationInput[], options: ValuationOptions): Va
   // pile of alterations to the player, and thresholding each stack would throw the pile away.
   const aggregated = new Map<string, Map<string, { qty: number; chaosEach: number }>>();
   const unresolved = new Map<string, number>();
+  const matchedIds = new Set<string>();
   let skipped = 0;
 
   for (const { tab, items } of tabs) {
@@ -189,14 +215,16 @@ export function valueTabs(tabs: ValuationInput[], options: ValuationOptions): Va
       // links and corruption, so the flat name map cannot answer for them.
       const unique = uniques === undefined ? null : resolveUnique(item, uniques);
 
-      const key = unique?.key ?? resolvePriceKey(item, prices);
+      const priced = unique === null ? resolvePrice(item, prices) : null;
+      const key = unique?.key ?? priced?.name ?? null;
       if (key === null) {
         const label = priceKeyCandidates(item)[0] ?? '(unnamed item)';
         unresolved.set(label, (unresolved.get(label) ?? 0) + 1);
         continue;
       }
+      if (priced !== null) matchedIds.add(priced.id);
 
-      const chaosEach = unique?.chaos ?? (prices[key] as number);
+      const chaosEach = unique?.chaos ?? (priced?.chaos as number);
       const qty =
         typeof item.stackSize === 'number' && Number.isFinite(item.stackSize) && item.stackSize > 0
           ? Math.floor(item.stackSize)
@@ -246,6 +274,7 @@ export function valueTabs(tabs: ValuationInput[], options: ValuationOptions): Va
     unresolved: [...unresolved.entries()]
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
+    matchedIds,
     skipped,
     droppedBelowThreshold,
     droppedChaos: round2(droppedChaos),

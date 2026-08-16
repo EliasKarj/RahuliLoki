@@ -1,46 +1,77 @@
 /**
- * poe.ninja prices, merged into one flat `name → chaosValue` map.
+ * poe.ninja prices, merged into one flat `id → chaosValue` map.
  *
- * Two endpoint shapes, both keyed by display name:
- *   currencyoverview — Currency, Fragment. Lines carry `currencyTypeName` + `chaosEquivalent`.
- *   itemoverview     — everything else. Lines carry `name` + `chaosValue`.
+ * ## The API this talks to, and the one it used to
  *
- * Caching is two-tier, as the architecture requires: an in-memory set that is refetched once
- * it passes the TTL, and a row per fetch in the database so a container restart does not
- * trigger an immediate refetch (and so old snapshots can be re-valued later).
+ * poe.ninja replaced its economy API. The old one lived at `/api/data/` with two endpoints,
+ * `currencyoverview` and `itemoverview`, and keyed every line by display name. It is gone: the
+ * whole path answers `not found`, because that URL predates poe.ninja serving two games and
+ * carries nothing to say which one is meant.
  *
- * If poe.ninja is unreachable but we hold an older set, the poll continues with the older
- * prices rather than losing the interval entirely — `priceSetAt` on the snapshot records
- * exactly how old they were, so the staleness is visible rather than hidden.
+ * The replacement is one endpoint per game:
+ *
+ *   https://poe.ninja/poe1/api/economy/exchange/current/overview?league=<league>&type=<type>
+ *
+ * `league` is GGG's own league name, unchanged — `Allflame`, `Hardcore Allflame`. The old
+ * worry that poe.ninja kept its own league vocabulary turned out not to apply here.
+ *
+ * ## What changed in the payload, and what it costs
+ *
+ * `lines[]` no longer carries a name, an icon, or the unique variant fields. A line is now an
+ * id and a number. Three consequences, all of them losses, all of them worth stating plainly:
+ *
+ *   Names.  Handled by mapping the *stash item's* name to an id — see services/ninjaId.ts.
+ *           That direction works; the reverse does not.
+ *
+ *   Icons.  Gone for everything except chaos and divine, the only two items the payload still
+ *           names. The website has the rest baked into its JavaScript. Nothing is fabricated to
+ *           fill the gap: an item with no icon simply shows none.
+ *
+ *   Uniques.  `links` and `corrupted` are no longer in the payload, so the per-variant index
+ *           this project built in order to stop valuing a 6-linked Bronn's Lithe as a plain one
+ *           cannot be built. Uniques are therefore left unpriced and appear in `unresolved`
+ *           rather than being valued by name — see DEFAULT_UNIQUE_CATEGORIES in lib/config.ts.
+ *
+ * ## What did not change
+ *
+ * Caching is still two-tier: an in-memory set refetched past its TTL, and a row per fetch in
+ * the database so a restart does not refetch immediately. If poe.ninja is unreachable but an
+ * older set is held, the poll continues with it rather than losing the interval — `priceSetAt`
+ * on the snapshot records how old the prices were, so the staleness is visible rather than
+ * hidden.
  */
 
 import { describeError, silentLogger, type Logger } from '../lib/logger.ts';
 import { readJsonCapped, timeoutSignal } from '../lib/http.ts';
+import { ninjaId, verifyAliases } from './ninjaId.ts';
 import { mergeUniqueOverview, uniqueKey, type UniqueIndex } from './uniques.ts';
-import { harvestLeagueNames, matchLeagueName } from './ninjaLeague.ts';
 
 export interface PriceSet {
   league: string;
   fetchedAt: Date;
-  /** Flat display-name → chaos value. Always contains "Chaos Orb": 1. */
+  /**
+   * Flat poe.ninja id → chaos value. Always contains "chaos": 1.
+   *
+   * Keyed by id rather than display name because that is what the API now returns. Callers hold
+   * a display name and go through `ninjaId()`; see services/valuationService.ts.
+   */
   prices: Record<string, number>;
-  /** Chaos per divine, straight out of the Currency set. */
+  /** Chaos per divine. */
   divineRate: number;
   /**
-   * Display-name → poe.ninja icon URL, for the names it gave one.
+   * poe.ninja id → icon URL, for the ids it gave one.
    *
-   * Kept on the price set rather than on each snapshot's breakdown: an icon URL is a property
-   * of the item, not of a moment in time. Copying ~40 bytes per line into every snapshot blob
-   * would grow the column that already dominates the database, 144 times a day, to store the
-   * same string over and over.
+   * Nearly empty against the current API, which names only chaos and divine. Kept because the
+   * shape is right and costs nothing, and because the alternative — deleting the feature — would
+   * have to be undone if poe.ninja starts sending icons again.
    */
   icons: Record<string, string>;
   /**
    * Unique lines kept per name, not flattened into `prices`.
    *
-   * They cannot be flattened: the same name has several prices depending on links and
-   * corruption, and which one applies is a property of the item in the stash, not of the
-   * price set. See services/uniques.ts.
+   * Empty against the current API, which no longer publishes the variant fields. The structure
+   * stays because the valuation path branches on it and an empty index is the correct way to
+   * say "nothing here can be priced per variant".
    */
   uniques: UniqueIndex;
 }
@@ -50,42 +81,60 @@ export interface PriceSetStore {
   save(set: PriceSet): Promise<void>;
 }
 
-interface CurrencyLine {
-  currencyTypeName?: unknown;
-  chaosEquivalent?: unknown;
+/** One priced line. `id` is poe.ninja's identifier; there is no name on it any more. */
+interface OverviewLine {
+  id?: unknown;
+  primaryValue?: unknown;
 }
 
-interface ItemLine {
+/** The pricing pair and the exchange rates between them. */
+interface CoreItem {
+  id?: unknown;
   name?: unknown;
-  chaosValue?: unknown;
-  icon?: unknown;
+  image?: unknown;
+  category?: unknown;
 }
 
-/** The two payload shapes put the icon in different places — see the merge functions. */
-interface CurrencyDetail {
-  name?: unknown;
-  icon?: unknown;
-}
-
-/** poe.ninja serves icons off GGG's CDN. Anything else in that field is not an icon. */
-export function iconUrl(value: unknown): string | null {
+/**
+ * poe.ninja serves its own images now, as paths relative to its origin.
+ *
+ * The old API pointed at GGG's CDN and this function only accepted poecdn.com hosts. That
+ * allowlist would reject every icon the new API sends, so poe.ninja's own origin is accepted
+ * too — and a relative path is resolved against it rather than passed through, because
+ * `<img src="/gen/image/…">` in the dashboard would resolve against *our* origin and 404.
+ *
+ * The check itself stays strict for the same reason it existed: this value comes from a remote
+ * payload and ends up in an `<img src>`, so a `javascript:` or `data:` URL, or any other host,
+ * is not an icon.
+ */
+export function iconUrl(value: unknown, base = 'https://poe.ninja'): string | null {
   if (typeof value !== 'string' || value === '') return null;
   let parsed: URL;
   try {
-    parsed = new URL(value);
+    parsed = new URL(value, base);
   } catch {
     return null;
   }
   if (parsed.protocol !== 'https:') return null;
   const host = parsed.hostname.toLowerCase();
-  return host === 'web.poecdn.com' || host.endsWith('.poecdn.com') ? value : null;
+  const allowed =
+    host === 'web.poecdn.com' ||
+    host.endsWith('.poecdn.com') ||
+    host === 'poe.ninja' ||
+    host.endsWith('.poe.ninja');
+  return allowed ? parsed.toString() : null;
 }
 
 export interface PriceServiceOptions {
   league: string;
+  /**
+   * poe.ninja `type=` values. One endpoint serves them all now, so the old split between
+   * currency and item categories is only kept because it is what the environment already
+   * spells; the two lists are concatenated here.
+   */
   currencyCategories: string[];
   itemCategories: string[];
-  /** poe.ninja itemoverview types whose lines are uniques. Priced per variant, not by name. */
+  /** Unique types. Left unpriced against the current API — see the module comment. */
   uniqueCategories?: string[];
   ttlMs: number;
   store: PriceSetStore;
@@ -94,11 +143,6 @@ export interface PriceServiceOptions {
   log?: Logger;
   userAgent?: string;
   baseUrl?: string;
-  /**
-   * The name poe.ninja indexes this league under, when it differs from GGG's and the automatic
-   * lookup cannot work it out. Set from POE_NINJA_LEAGUE. Null means "resolve it".
-   */
-  ninjaLeague?: string | null;
   /** Ceiling on one overview request. Without it a hung poe.ninja never releases the poll. */
   timeoutMs?: number;
   maxBytes?: number;
@@ -106,16 +150,11 @@ export interface PriceServiceOptions {
 
 export class PriceFetchError extends Error {}
 
-/**
- * poe.ninja answered 404: it does not index a league by that name.
- *
- * Its own subclass because it is the one failure with a second thing to try — see
- * services/ninjaLeague.ts. Everything else is a plain PriceFetchError and simply fails.
- */
-export class LeagueNotIndexedError extends PriceFetchError {}
+export const DEFAULT_NINJA_URL = 'https://poe.ninja/poe1/api/economy/exchange/current';
 
-const DIVINE = 'Divine Orb';
-const CHAOS = 'Chaos Orb';
+/** poe.ninja's id for chaos, which every other price on the set is quoted in. */
+export const CHAOS_ID = 'chaos';
+const DIVINE_ID = 'divine';
 
 /** poe.ninja returns numbers as numbers, but a null or a string would silently become NaN. */
 function finitePositive(value: unknown): number | null {
@@ -123,62 +162,75 @@ function finitePositive(value: unknown): number | null {
   return value;
 }
 
+/** The `core.items` entries that carry both an id and a name, narrowed. */
+export function coreItems(payload: unknown): Array<{ id: string; name: string; icon: string | null }> {
+  const items = (payload as { core?: { items?: unknown } })?.core?.items;
+  if (!Array.isArray(items)) return [];
+  const out: Array<{ id: string; name: string; icon: string | null }> = [];
+  for (const raw of items as CoreItem[]) {
+    const id = typeof raw?.id === 'string' ? raw.id : null;
+    const name = typeof raw?.name === 'string' ? raw.name : null;
+    if (id === null || name === null) continue;
+    out.push({ id, name, icon: iconUrl(raw?.image) });
+  }
+  return out;
+}
+
 /**
- * Merge one currencyoverview payload into `into`. Returns how many lines were usable.
+ * Merge one overview payload into `into`. Returns how many lines were usable.
  *
- * Icons are not on the lines here. currencyoverview carries them in a sibling
- * `currencyDetails` array keyed by the same display name, so they are collected separately —
- * a line with no matching detail simply has no icon, which is not an error.
+ * `core.primary` names the currency every `primaryValue` is quoted in. It is chaos in every
+ * response seen so far, and this refuses to merge when it is not: silently treating divine-
+ * denominated numbers as chaos would multiply the whole chart by about two hundred, and a
+ * wealth chart that is wrong by a constant factor is harder to notice than one that is empty.
  */
-export function mergeCurrencyOverview(
+export function mergeOverview(
   payload: unknown,
   into: Record<string, number>,
   icons: Record<string, string> = Object.create(null) as Record<string, string>,
 ): number {
-  const lines = (payload as { lines?: unknown })?.lines;
-  if (!Array.isArray(lines)) return 0;
-  let merged = 0;
-  for (const raw of lines as CurrencyLine[]) {
-    const name = typeof raw?.currencyTypeName === 'string' ? raw.currencyTypeName : null;
-    const value = finitePositive(raw?.chaosEquivalent);
-    if (name === null || value === null) continue;
-    into[name] = value;
-    merged += 1;
+  const primary = (payload as { core?: { primary?: unknown } })?.core?.primary;
+  if (typeof primary === 'string' && primary !== CHAOS_ID) {
+    throw new PriceFetchError(
+      `poe.ninja quoted this overview in "${primary}" rather than chaos; refusing to read the ` +
+        'values as chaos',
+    );
   }
 
-  const details = (payload as { currencyDetails?: unknown })?.currencyDetails;
-  if (Array.isArray(details)) {
-    for (const raw of details as CurrencyDetail[]) {
-      const name = typeof raw?.name === 'string' ? raw.name : null;
-      const icon = iconUrl(raw?.icon);
-      if (name === null || icon === null) continue;
-      icons[name] = icon;
-    }
+  for (const item of coreItems(payload)) {
+    if (item.icon !== null && icons[item.id] === undefined) icons[item.id] = item.icon;
+  }
+
+  const lines = (payload as { lines?: unknown })?.lines;
+  if (!Array.isArray(lines)) return 0;
+
+  let merged = 0;
+  for (const raw of lines as OverviewLine[]) {
+    const id = typeof raw?.id === 'string' && raw.id !== '' ? raw.id : null;
+    const value = finitePositive(raw?.primaryValue);
+    if (id === null || value === null) continue;
+    // First category wins, matching the old behaviour: when two types carry the same id the
+    // earlier (more specific) list is the one the operator put first on purpose.
+    if (into[id] === undefined) into[id] = value;
+    merged += 1;
   }
   return merged;
 }
 
-/** Merge one itemoverview payload into `into`. Here the icon is on the line itself. */
-export function mergeItemOverview(
-  payload: unknown,
-  into: Record<string, number>,
-  icons: Record<string, string> = Object.create(null) as Record<string, string>,
-): number {
-  const lines = (payload as { lines?: unknown })?.lines;
-  if (!Array.isArray(lines)) return 0;
-  let merged = 0;
-  for (const raw of lines as ItemLine[]) {
-    const name = typeof raw?.name === 'string' ? raw.name : null;
-    const value = finitePositive(raw?.chaosValue);
-    if (name === null || value === null) continue;
-    // First category wins. Categories do not overlap in practice, and when they do the
-    // earlier (more specific) list is the one the operator put first on purpose.
-    if (into[name] === undefined) into[name] = value;
-    const icon = iconUrl(raw?.icon);
-    if (icon !== null && icons[name] === undefined) icons[name] = icon;
-    merged += 1;
-  }
-  return merged;
+/**
+ * Chaos per divine, from whichever of the two places the payload states it.
+ *
+ * `lines` carries a `divine` row priced in chaos, and `core.rates.divine` carries the inverse —
+ * divine per chaos. They agree, so either will do, but reading both means a payload that drops
+ * one still yields a rate instead of failing the whole fetch.
+ */
+export function divineRateFrom(payload: unknown, prices: Record<string, number>): number | null {
+  const fromLines = finitePositive(prices[DIVINE_ID]);
+  if (fromLines !== null) return fromLines;
+
+  const rate = (payload as { core?: { rates?: Record<string, unknown> } })?.core?.rates?.[DIVINE_ID];
+  const inverse = finitePositive(rate);
+  return inverse === null ? null : 1 / inverse;
 }
 
 export class PriceService {
@@ -190,30 +242,37 @@ export class PriceService {
   #cached: PriceSet | null = null;
   /** Collapses concurrent callers onto one refetch. */
   #inFlight: Promise<PriceSet> | null = null;
-  /**
-   * The name poe.ninja turned out to know this league by, once a 404 forced us to look it up.
-   * Cached for the life of the process: it cannot change without the league changing.
-   */
-  #resolvedLeague: string | null = null;
 
   constructor(options: PriceServiceOptions) {
     this.#options = options;
     this.#fetch = options.fetchFn ?? globalThis.fetch;
     this.#now = options.now ?? Date.now;
     this.#log = options.log ?? silentLogger;
-    this.#baseUrl = options.baseUrl ?? 'https://poe.ninja/api/data';
+    this.#baseUrl = options.baseUrl ?? DEFAULT_NINJA_URL;
   }
 
   /** Load the newest persisted set at boot so a restart does not force a refetch. */
   async hydrate(): Promise<PriceSet | null> {
     const stored = await this.#options.store.latest(this.#options.league);
-    if (stored) {
-      this.#cached = stored;
+    if (!stored) return null;
+
+    // Rows written before the API change are keyed by display name ("Chaos Orb") rather than
+    // by id ("chaos"). Nothing would match against them and every item would read as unpriced,
+    // so an old row is discarded rather than restored. No migration: the next fetch replaces it,
+    // and a price set is a cache, not history.
+    if (!Object.hasOwn(stored.prices, CHAOS_ID)) {
       this.#log.info(
-        { fetchedAt: stored.fetchedAt.toISOString(), prices: Object.keys(stored.prices).length },
-        'restored price set from the database',
+        { fetchedAt: stored.fetchedAt.toISOString() },
+        'discarding a price set written against the old poe.ninja API; it will be refetched',
       );
+      return null;
     }
+
+    this.#cached = stored;
+    this.#log.info(
+      { fetchedAt: stored.fetchedAt.toISOString(), prices: Object.keys(stored.prices).length },
+      'restored price set from the database',
+    );
     return stored;
   }
 
@@ -256,108 +315,45 @@ export class PriceService {
     }
   }
 
-  /**
-   * Fetch a set, and on "no such league" look up what poe.ninja calls it and try once more.
-   *
-   * The retry is bounded to a single extra attempt and only ever fires on a 404, so the normal
-   * path — the two vocabularies agreeing, which is every permanent league — is unchanged and
-   * costs no extra request. Once a name resolves it is remembered, so the lookup happens at
-   * most once per process rather than once per TTL lapse.
-   */
   async #fetchAll(): Promise<PriceSet> {
-    const configured = this.#options.league;
-    const first = this.#options.ninjaLeague?.trim() || this.#resolvedLeague || configured;
-
-    try {
-      return await this.#fetchWith(first);
-    } catch (error) {
-      // An explicit override is the operator's decision; second-guessing it would only make the
-      // error harder to read. An already-resolved name that stopped working is equally final.
-      if (
-        !(error instanceof LeagueNotIndexedError) ||
-        first !== configured ||
-        (this.#options.ninjaLeague?.trim() ?? '') !== ''
-      ) {
-        throw error;
-      }
-
-      const resolved = await this.#resolveLeague(configured, error);
-      const set = await this.#fetchWith(resolved);
-      // Remembered only once it has actually produced a price set, so a name that resolved but
-      // did not work leaves the next attempt free to resolve again.
-      this.#resolvedLeague = resolved;
-      return set;
-    }
-  }
-
-  /**
-   * Ask poe.ninja what it indexes and pick this league out of the answer.
-   *
-   * Every failure here rethrows the original 404 rather than its own: the operator's problem is
-   * "no prices for my league", and "getindexstate returned HTTP 500" would bury that behind an
-   * endpoint they have never heard of. What the listing does buy, when it works, is a message
-   * naming the leagues poe.ninja actually has — which turns a dead end into a choice.
-   */
-  async #resolveLeague(configured: string, notIndexed: LeagueNotIndexedError): Promise<string> {
-    let indexed: string[];
-    try {
-      const payload = await this.#getJsonAt(`${this.#baseUrl}/getindexstate`, 'league index');
-      indexed = harvestLeagueNames(payload);
-    } catch (error) {
-      this.#log.warn(
-        { err: error },
-        'poe.ninja rejected this league and its league index could not be read either',
-      );
-      throw notIndexed;
-    }
-
-    const match = matchLeagueName(configured, indexed);
-    if (match === null) {
-      const known = indexed.slice(0, 30).join(', ');
-      throw new PriceFetchError(
-        `${notIndexed.message} poe.ninja's own league list has no entry matching ` +
-          `"${configured}"${known === '' ? '' : `; it currently indexes: ${known}`}. Set ` +
-          'POE_NINJA_LEAGUE to the name it uses if you can see the right one there.',
-      );
-    }
-
-    this.#log.info(
-      { configured, ninjaLeague: match.name, how: match.how, indexed: indexed.length },
-      'poe.ninja indexes this league under a different name',
-    );
-    return match.name;
-  }
-
-  async #fetchWith(league: string): Promise<PriceSet> {
-    const { currencyCategories, itemCategories } = this.#options;
-    // Null-prototype: every key here is an item name straight out of a remote payload. On a
-    // normal object `prices['toString']` is a function rather than undefined, so the
-    // "have I seen this name already" check below would silently discard a real price — and
-    // `prices['__proto__'] = …` would reassign the prototype instead of storing anything.
+    const { league, currencyCategories, itemCategories } = this.#options;
+    // Null-prototype: every key here comes straight out of a remote payload. On a normal object
+    // `prices['toString']` is a function rather than undefined, so the "have I seen this id
+    // already" check would silently discard a real price — and `prices['__proto__'] = …` would
+    // reassign the prototype instead of storing anything.
     const prices: Record<string, number> = Object.create(null) as Record<string, number>;
     const icons: Record<string, string> = Object.create(null) as Record<string, string>;
     const uniques: UniqueIndex = Object.create(null) as UniqueIndex;
 
-    for (const type of currencyCategories) {
-      const payload = await this.#getJson(`${this.#baseUrl}/currencyoverview`, league, type);
-      const merged = mergeCurrencyOverview(payload, prices, icons);
-      this.#log.debug({ type, merged }, 'merged currency overview');
+    let divineRate: number | null = null;
+
+    for (const type of [...currencyCategories, ...itemCategories]) {
+      const payload = await this.#getJson(league, type);
+      const merged = mergeOverview(payload, prices, icons);
+      divineRate ??= divineRateFrom(payload, prices);
+      this.#log.debug({ type, merged }, 'merged overview');
+
+      // Only chaos and divine are named, so this can check little — but those two are what every
+      // other price is quoted in, and an error there would be an error everywhere.
+      const problems = verifyAliases(coreItems(payload));
+      if (problems.length > 0) {
+        this.#log.warn(
+          { problems },
+          'poe.ninja names an item differently than the alias table expects; prices for it may ' +
+            'be missing. Please report this.',
+        );
+      }
     }
 
-    for (const type of itemCategories) {
-      const payload = await this.#getJson(`${this.#baseUrl}/itemoverview`, league, type);
-      const merged = mergeItemOverview(payload, prices, icons);
-      this.#log.debug({ type, merged }, 'merged item overview');
-    }
-
+    // Uniques still go through the variant-aware path rather than the flat map. The current API
+    // publishes no variant fields, so this yields nothing and uniques stay unpriced — which is
+    // the intended outcome, not a bug. Valuing them by name alone is the failure this avoids.
     for (const type of this.#options.uniqueCategories ?? []) {
-      const payload = await this.#getJson(`${this.#baseUrl}/itemoverview`, league, type);
+      const payload = await this.#getJson(league, type);
       const merged = mergeUniqueOverview(payload, uniques, iconUrl);
       this.#log.debug({ type, merged }, 'merged unique overview');
     }
 
-    // Icons for uniques are registered under the same display key the breakdown will use, so
-    // the UI needs no rule for turning "Bronn's Lithe (6L)" back into an icon lookup.
     for (const entries of Object.values(uniques)) {
       for (const entry of entries) {
         if (entry.icon === null) continue;
@@ -366,22 +362,19 @@ export class PriceService {
       }
     }
 
-    // poe.ninja quotes everything in chaos, so chaos itself is never in the payload.
-    prices[CHAOS] = 1;
+    // Chaos prices itself at one. The payload does carry a `chaos` line, but asserting it here
+    // means a response that omits it cannot produce a set where chaos is unpriced.
+    prices[CHAOS_ID] = 1;
 
-    const divineRate = Object.hasOwn(prices, DIVINE) ? prices[DIVINE] : undefined;
-    if (divineRate === undefined) {
+    if (divineRate === null) {
       throw new PriceFetchError(
-        `poe.ninja returned no "${DIVINE}" price for league "${league}"; refusing to value a ` +
-          'snapshot without a divine rate',
+        `poe.ninja returned no divine rate for league "${league}"; refusing to value a snapshot ` +
+          'without one',
       );
     }
 
     const set: PriceSet = {
-      // The configured league, never the poe.ninja spelling. This is the key the store and the
-      // snapshots are filed under; writing poe.ninja's name here would strand the persisted set
-      // where `hydrate()` cannot find it, and quietly split the history in two.
-      league: this.#options.league,
+      league,
       fetchedAt: new Date(this.#now()),
       prices,
       divineRate,
@@ -390,8 +383,7 @@ export class PriceService {
     };
     this.#log.info(
       {
-        league: this.#options.league,
-        ...(league === this.#options.league ? {} : { ninjaLeague: league }),
+        league,
         entries: Object.keys(prices).length,
         uniques: Object.keys(uniques).length,
         icons: Object.keys(icons).length,
@@ -402,12 +394,10 @@ export class PriceService {
     return set;
   }
 
-  async #getJson(base: string, league: string, type: string): Promise<unknown> {
-    const url = `${base}?league=${encodeURIComponent(league)}&type=${encodeURIComponent(type)}`;
-    return this.#getJsonAt(url, type, league);
-  }
-
-  async #getJsonAt(url: string, type: string, league?: string): Promise<unknown> {
+  async #getJson(league: string, type: string): Promise<unknown> {
+    const url =
+      `${this.#baseUrl}/overview?league=${encodeURIComponent(league)}` +
+      `&type=${encodeURIComponent(type)}`;
     const response = await this.#fetch(url, {
       headers: {
         accept: 'application/json',
@@ -416,16 +406,15 @@ export class PriceService {
       signal: timeoutSignal(this.#options.timeoutMs ?? 30_000),
     });
     if (!response.ok) {
-      // The URL belongs in the message. "poe.ninja Currency returned HTTP 404" tells an
-      // operator nothing they can act on; the same line with the address is something they can
-      // paste into a browser and see for themselves in five seconds.
-      if (response.status === 404 && league !== undefined) {
-        throw new LeagueNotIndexedError(
+      // The URL belongs in the message. "poe.ninja Currency returned HTTP 404" tells an operator
+      // nothing they can act on; the same line with the address is something they can paste into
+      // a browser and see for themselves in five seconds.
+      if (response.status === 404) {
+        throw new PriceFetchError(
           `poe.ninja has no ${type} data for league "${league}" (HTTP 404 from ${url}). ` +
-            'poe.ninja indexes leagues under its own names and only once it has data for them, ' +
-            'so this is usually a league that is brand new, an event or private league it does ' +
-            'not track, or a name spelled differently there than GGG spells it. Open the URL ' +
-            'above to see what it says, and set POE_NINJA_URL if the API has moved.',
+            'A 404 from this endpoint means the league or the category is not indexed — or that ' +
+            'the API has moved again, which is what happened when it left /api/data. Open the ' +
+            'URL above to see which, and set POE_NINJA_URL if it has moved.',
         );
       }
       throw new PriceFetchError(`poe.ninja ${type} returned HTTP ${response.status} from ${url}`);
@@ -436,4 +425,29 @@ export class PriceService {
       throw new PriceFetchError(`poe.ninja ${type} was unusable: ${describeError(error).message}`);
     }
   }
+}
+
+/**
+ * poe.ninja ids that nothing in the stash resolved to.
+ *
+ * This is the feedback loop for the alias table in services/ninjaId.ts, which cannot be checked
+ * against the payload because the payload has no names. An abbreviation we do not know about
+ * shows up here as an id nothing claimed, which is a concrete thing to look up and add — rather
+ * than a currency that quietly never gets counted.
+ *
+ * Slugs are excluded: an id containing a hyphen came from a name by rule, so its absence means
+ * the account simply does not hold that item, which is not interesting. A short code is the
+ * shape that indicates a gap.
+ */
+export function unmatchedIds(
+  prices: Record<string, number>,
+  resolved: ReadonlySet<string>,
+  limit = 40,
+): string[] {
+  const missing: string[] = [];
+  for (const id of Object.keys(prices)) {
+    if (id.includes('-') || resolved.has(id)) continue;
+    missing.push(id);
+  }
+  return missing.sort().slice(0, limit);
 }

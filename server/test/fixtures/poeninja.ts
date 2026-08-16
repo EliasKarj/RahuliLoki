@@ -2,75 +2,98 @@
  * Recorded poe.ninja payloads, trimmed to a handful of lines each but keeping the exact shape
  * the live API returns — including the fields we ignore, so a parser that reads the wrong key
  * fails here rather than in production.
+ *
+ * These are transcribed from real responses of the redesigned API at
+ * `/poe1/api/economy/exchange/current/overview`. The old `/api/data/` endpoints these replaced
+ * keyed every line by display name; nothing here does, which is the whole reason the valuation
+ * path had to change. The mix of short codes (`alt`, `chaos`) and slugs (`ancient-orb`) in the
+ * currency fixture is not tidied up — it is exactly what the live API sends, and it is the case
+ * the alias table exists to handle.
  */
 
-export const currencyOverview = {
-  lines: [
+const CHAOS_IMAGE =
+  '/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQ3VycmVuY3kvQ3VycmVuY3lSZXJvbGxSYXJlIiwic2NhbGUiOjF9XQ/46a2347805/CurrencyRerollRare.png';
+const DIVINE_IMAGE =
+  '/gen/image/WzI1LDE0LHsiZiI6IjJESXRlbXMvQ3VycmVuY3kvQ3VycmVuY3lNb2RWYWx1ZXMiLCJzY2FsZSI6MX1d/ec48896769/CurrencyModValues.png';
+
+/** The pricing pair. Present on every overview, and the only items the API still names. */
+export const core = {
+  items: [
     {
-      currencyTypeName: 'Divine Orb',
-      pay: { id: 1, league_id: 1, pay_currency_id: 1, get_currency_id: 2, value: 0.0045 },
-      receive: { id: 2, value: 215.5, count: 42 },
-      chaosEquivalent: 218.4,
+      id: 'chaos',
+      name: 'Chaos Orb',
+      image: CHAOS_IMAGE,
+      category: 'Currency',
+      detailsId: 'chaos-orb',
+    },
+    {
+      id: 'divine',
+      name: 'Divine Orb',
+      image: DIVINE_IMAGE,
+      category: 'Currency',
       detailsId: 'divine-orb',
     },
-    {
-      currencyTypeName: 'Orb of Alteration',
-      chaosEquivalent: 0.12,
-      detailsId: 'orb-of-alteration',
-    },
-    {
-      currencyTypeName: 'Exalted Orb',
-      chaosEquivalent: 42.6,
-      detailsId: 'exalted-orb',
-    },
-    {
-      currencyTypeName: 'Orb of Annulment',
-      chaosEquivalent: 9.1,
-      detailsId: 'orb-of-annulment',
-    },
-    // Lines with a null value do occur early in a league, before there is a market.
-    { currencyTypeName: 'Mirror of Kalandra', chaosEquivalent: null, detailsId: 'mirror-of-kalandra' },
   ],
-  currencyDetails: [
-    { id: 1, name: 'Divine Orb', icon: 'https://web.poecdn.com/divine.png', tradeId: 'divine' },
+  // Divine per chaos — the inverse of the rate this app reports.
+  rates: { divine: 0.00508 },
+  primary: 'chaos',
+  secondary: 'divine',
+};
+
+export const currencyOverview = {
+  core,
+  lines: [
+    {
+      id: 'chaos',
+      primaryValue: 1,
+      volumePrimaryValue: 19156804,
+      maxVolumeCurrency: 'divine',
+      maxVolumeRate: 196.9,
+      sparkline: { totalChange: 7.14, data: [2.59, 6.65, 7.14] },
+    },
+    { id: 'divine', primaryValue: 196.9, volumePrimaryValue: 19156804, maxVolumeCurrency: 'chaos' },
+    // A short code no rule produces from "Orb of Alteration".
+    { id: 'alt', primaryValue: 0.1238, volumePrimaryValue: 97366 },
+    { id: 'exalted', primaryValue: 1.63 },
+    { id: 'annul', primaryValue: 11.14 },
+    // A slug, in the same payload as the short codes above.
+    { id: 'ancient-orb', primaryValue: 8.27 },
+    { id: 'awakeners-orb', primaryValue: 453.8 },
+    // Lines with no usable value do occur early in a league, before there is a market.
+    { id: 'mirror', primaryValue: null },
   ],
 };
 
 export const fragmentOverview = {
+  core,
   lines: [
-    { currencyTypeName: 'Sacrifice at Dusk', chaosEquivalent: 3.4, detailsId: 'sacrifice-at-dusk' },
-    { currencyTypeName: 'Fragment of the Phoenix', chaosEquivalent: 12.5, detailsId: 'phoenix' },
+    { id: 'sacrifice-at-dusk', primaryValue: 3.4 },
+    { id: 'fragment-of-the-phoenix', primaryValue: 12.5 },
   ],
-  currencyDetails: [],
 };
 
 export const divinationCardOverview = {
+  core,
   lines: [
     {
-      id: 900,
-      name: 'The Doctor',
-      icon: 'https://web.poecdn.com/doctor.png',
-      stackSize: 8,
-      chaosValue: 1450.5,
-      divineValue: 6.64,
-      count: 120,
-      listingCount: 340,
+      id: 'the-doctor',
+      primaryValue: 1450.5,
+      volumePrimaryValue: 120,
+      maxVolumeCurrency: 'divine',
+      sparkline: { totalChange: -6.25, data: [-7.92, -6.25] },
     },
-    {
-      id: 901,
-      name: 'Rain of Chaos',
-      chaosValue: 0.3,
-      divineValue: 0.001,
-      count: 900,
-      listingCount: 1200,
-    },
+    { id: 'rain-of-chaos', primaryValue: 0.3 },
+    // Apostrophe dropped rather than hyphenated — the rule `slugify` has to match.
+    { id: 'assassins-favour', primaryValue: 1 },
+    { id: 'brush-paint-and-palette', primaryValue: 8.23 },
   ],
 };
 
 export const scarabOverview = {
+  core,
   lines: [
-    { id: 700, name: 'Gilded Bestiary Scarab', chaosValue: 88.2, divineValue: 0.4 },
-    { id: 701, name: 'Rusted Cartography Scarab', chaosValue: 1.1, divineValue: 0.005 },
+    { id: 'gilded-bestiary-scarab', primaryValue: 88.2 },
+    { id: 'rusted-cartography-scarab', primaryValue: 1.1 },
   ],
 };
 
@@ -107,8 +130,11 @@ export const uniqueArmourOverview = {
   ],
 };
 
-/** poe.ninja answers 200 with an empty `lines` array for a league it has never heard of. */
-export const emptyOverview = { lines: [] };
+/** poe.ninja answers 200 with an empty `lines` array for a category it has no data for. */
+export const emptyOverview = { core, lines: [] };
+
+/** No `core` at all — the shape a response takes if poe.ninja changes its mind again. */
+export const bareOverview = { lines: [{ id: 'chaos', primaryValue: 1 }] };
 
 export function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {

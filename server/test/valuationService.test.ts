@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   priceKeyCandidates,
-  resolvePriceKey,
+  resolvePrice,
   skipReason,
   stripNameMarkup,
   tabTotals,
@@ -11,14 +11,19 @@ import {
 } from '../src/services/valuationService.ts';
 import { dumpTabResponse, mapTabResponse, tabListResponse } from './fixtures/stash.ts';
 
+/**
+ * Keyed by poe.ninja's identifiers, because that is what the API returns now. The mix is the
+ * point: `chaos` and `alt` are short codes that only the alias table produces, the rest are
+ * slugs derived from the display name.
+ */
 const prices: Record<string, number> = {
-  'Chaos Orb': 1,
-  'Divine Orb': 218.4,
-  'Orb of Alteration': 0.12,
-  'The Doctor': 1450.5,
-  Headhunter: 5000,
-  'Gilded Bestiary Scarab': 88.2,
-  'Leather Belt': 0.5,
+  chaos: 1,
+  divine: 218.4,
+  alt: 0.12,
+  'the-doctor': 1450.5,
+  headhunter: 5000,
+  'gilded-bestiary-scarab': 88.2,
+  'leather-belt': 0.5,
 };
 
 const tabs: ValuationInput[] = [
@@ -80,19 +85,26 @@ describe('skipReason', () => {
   });
 });
 
-describe('resolvePriceKey', () => {
+describe('resolvePrice', () => {
   it('resolves through the markup prefix', () => {
     const item = { typeLine: '<<set:MS>><<set:M>><<set:S>>Divine Orb', baseType: 'Divine Orb', frameType: 5 };
-    expect(resolvePriceKey(item, prices)).toBe('Divine Orb');
+    // The name is what a person reads; the id is what poe.ninja filed the price under.
+    expect(resolvePrice(item, prices)).toEqual({ name: 'Divine Orb', id: 'divine', chaos: 218.4 });
+  });
+
+  it('goes through the alias table, not just the slug rule', () => {
+    // "Orb of Alteration" slugifies to `orb-of-alteration`, which the payload does not contain.
+    const item = { typeLine: 'Orb of Alteration', baseType: 'Orb of Alteration', frameType: 5 };
+    expect(resolvePrice(item, prices)?.id).toBe('alt');
   });
 
   it('returns null rather than a wrong price when nothing matches', () => {
-    expect(resolvePriceKey({ typeLine: 'Fractured Fossil Prototype', frameType: 0 }, prices)).toBeNull();
+    expect(resolvePrice({ typeLine: 'Fractured Fossil Prototype', frameType: 0 }, prices)).toBeNull();
   });
 
   it('falls through to the base type when the unique itself is unpriced', () => {
     const item = { name: 'Some Unlisted Unique', baseType: 'Leather Belt', frameType: 3 };
-    expect(resolvePriceKey(item, prices)).toBe('Leather Belt');
+    expect(resolvePrice(item, prices)?.name).toBe('Leather Belt');
   });
 });
 

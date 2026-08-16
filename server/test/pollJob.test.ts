@@ -99,8 +99,8 @@ describe('runPoll', () => {
     const { snapshot } = await runPoll(deps);
 
     expect(snapshot.totalChaos).toBeGreaterThan(0);
-    expect(snapshot.divineRate).toBe(218.4);
-    expect(snapshot.totalDivine).toBeCloseTo(snapshot.totalChaos / 218.4, 2);
+    expect(snapshot.divineRate).toBe(196.9);
+    expect(snapshot.totalDivine).toBeCloseTo(snapshot.totalChaos / 196.9, 2);
   });
 
   it('records when the prices were fetched, not just when the poll ran', async () => {

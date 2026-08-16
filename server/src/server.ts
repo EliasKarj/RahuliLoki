@@ -128,7 +128,6 @@ export async function startServer(options: StartOptions = {}): Promise<RunningSe
     userAgent: config.userAgent,
     timeoutMs: config.requestTimeoutMs,
     baseUrl: config.poeNinjaUrl,
-    ninjaLeague: config.poeNinjaLeague,
     log,
   });
   const stash = new StashService({

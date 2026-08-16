@@ -1,13 +1,19 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  CHAOS_ID,
   PriceFetchError,
   PriceService,
-  mergeCurrencyOverview,
-  mergeItemOverview,
+  coreItems,
+  divineRateFrom,
+  iconUrl,
+  mergeOverview,
+  unmatchedIds,
   type PriceSet,
   type PriceSetStore,
 } from '../src/services/priceService.ts';
 import {
+  bareOverview,
+  core,
   currencyOverview,
   divinationCardOverview,
   emptyOverview,
@@ -55,126 +61,152 @@ function service(options: {
   now?: () => number;
   ttlMs?: number;
   maxBytes?: number;
-  league?: string;
-  ninjaLeague?: string | null;
 } = {}) {
   return new PriceService({
-    league: options.league ?? 'Settlers',
+    league: 'Allflame',
     currencyCategories: ['Currency', 'Fragment'],
     itemCategories: ['DivinationCard', 'Scarab'],
     ttlMs: options.ttlMs ?? 3_600_000,
     store: options.store ?? memoryStore().store,
     fetchFn: options.fetchFn ?? fixtureFetch(),
     now: options.now ?? (() => 0),
-    ...(options.ninjaLeague === undefined ? {} : { ninjaLeague: options.ninjaLeague }),
     ...(options.maxBytes === undefined ? {} : { maxBytes: options.maxBytes }),
   });
 }
 
-/**
- * A poe.ninja that only answers for `indexedAs`, plus a getindexstate listing it.
- *
- * Everything else 404s, which is exactly what the real API does for a league name it does not
- * recognise — the failure this whole path exists to recover from.
- */
-function pickyFetch(indexedAs: string, indexPayload?: unknown) {
-  const calls: string[] = [];
-  const fetchFn = vi.fn(async (input: string | URL | Request) => {
-    const url = new URL(String(input));
-    calls.push(url.pathname + url.search);
-    if (url.pathname.endsWith('/getindexstate')) {
-      if (indexPayload === undefined) return new Response('not found', { status: 404 });
-      return jsonResponse(indexPayload);
-    }
-    if (url.searchParams.get('league') !== indexedAs) {
-      return new Response('not found', { status: 404 });
-    }
-    return fixtureFetch()(input);
-  }) as unknown as typeof fetch;
-  return { fetchFn, calls };
-}
+describe('the request it makes', () => {
+  it('asks the per-game endpoint, not the retired /api/data one', async () => {
+    // /api/data answers a bare "not found" for every league, including Standard: it predates
+    // poe.ninja serving two games and carries nothing to say which one is meant.
+    const fetchFn = fixtureFetch();
+    await service({ fetchFn }).getPrices();
 
-describe('icon collection', () => {
-  it('reads currency icons out of currencyDetails, not the lines', () => {
-    // currencyoverview puts icons in a sibling array keyed by the same display name.
-    const prices: Record<string, number> = {};
-    const icons: Record<string, string> = {};
-    mergeCurrencyOverview(currencyOverview, prices, icons);
-    expect(icons['Divine Orb']).toBe('https://web.poecdn.com/divine.png');
+    const urls = (fetchFn as unknown as { mock: { calls: [string][] } }).mock.calls.map(
+      ([input]) => String(input),
+    );
+    expect(urls[0]).toBe(
+      'https://poe.ninja/poe1/api/economy/exchange/current/overview?league=Allflame&type=Currency',
+    );
+    expect(urls.every((url) => !url.includes('/api/data'))).toBe(true);
   });
 
-  it('reads item icons off the line itself', () => {
-    const prices: Record<string, number> = {};
-    const icons: Record<string, string> = {};
-    mergeItemOverview(divinationCardOverview, prices, icons);
-    expect(icons['The Doctor']).toBe('https://web.poecdn.com/doctor.png');
-  });
+  it("sends GGG's league name unchanged", async () => {
+    // index-state lists "Allflame" and "Hardcore Allflame" — the same spelling GGG uses. There
+    // is no separate poe.ninja league vocabulary to translate into.
+    const fetchFn = fixtureFetch();
+    await new PriceService({
+      league: 'Hardcore Allflame',
+      currencyCategories: ['Currency'],
+      itemCategories: [],
+      ttlMs: 1,
+      store: memoryStore().store,
+      fetchFn,
+      now: () => 0,
+    }).getPrices();
 
-  it('leaves a line with no icon out rather than inventing one', () => {
-    const prices: Record<string, number> = {};
-    const icons: Record<string, string> = {};
-    mergeItemOverview(scarabOverview, prices, icons);
-    // The scarab fixture carries prices but no icons; the prices still land.
-    expect(Object.keys(icons)).toHaveLength(0);
-    expect(prices['Gilded Bestiary Scarab']).toBe(88.2);
-  });
-
-  it('refuses an icon URL that is not https on a poecdn host', () => {
-    // The field comes from a remote payload and ends up in an <img src>. A javascript: or
-    // data: URL there, or a host that is not GGG's CDN, is not an icon.
-    const hostile = {
-      lines: [
-        { name: 'A', chaosValue: 1, icon: 'javascript:alert(1)' },
-        { name: 'B', chaosValue: 1, icon: 'http://web.poecdn.com/b.png' },
-        { name: 'C', chaosValue: 1, icon: 'https://evil.example/c.png' },
-        { name: 'D', chaosValue: 1, icon: 'https://web.poecdn.com/d.png' },
-      ],
-    };
-    const prices: Record<string, number> = {};
-    const icons: Record<string, string> = {};
-    mergeItemOverview(hostile, prices, icons);
-    expect(icons).toEqual({ D: 'https://web.poecdn.com/d.png' });
-  });
-
-  it('carries icons through a fetch onto the price set', async () => {
-    const set = await service().getPrices();
-    expect(set.icons['Divine Orb']).toBe('https://web.poecdn.com/divine.png');
-    expect(set.icons['The Doctor']).toBe('https://web.poecdn.com/doctor.png');
+    const { calls } = (fetchFn as unknown as { mock: { calls: [string][] } }).mock;
+    expect(new URL(String(calls[0]?.[0])).searchParams.get('league')).toBe('Hardcore Allflame');
   });
 });
 
-describe('mergeCurrencyOverview', () => {
-  it('keys by currencyTypeName and chaosEquivalent', () => {
+describe('iconUrl', () => {
+  it('resolves poe.ninja\'s relative image paths against its origin', () => {
+    // `<img src="/gen/image/…">` in the dashboard would resolve against our own origin and 404.
+    expect(iconUrl('/gen/image/abc/CurrencyRerollRare.png')).toBe(
+      'https://poe.ninja/gen/image/abc/CurrencyRerollRare.png',
+    );
+  });
+
+  it('still accepts GGG\'s CDN, which older price sets point at', () => {
+    expect(iconUrl('https://web.poecdn.com/divine.png')).toBe('https://web.poecdn.com/divine.png');
+  });
+
+  it('refuses anything that is not https on an allowed host', () => {
+    // The field comes from a remote payload and ends up in an <img src>. A javascript: or data:
+    // URL there, or a host that is neither GGG's CDN nor poe.ninja, is not an icon.
+    expect(iconUrl('javascript:alert(1)')).toBeNull();
+    expect(iconUrl('http://web.poecdn.com/b.png')).toBeNull();
+    expect(iconUrl('https://evil.example/c.png')).toBeNull();
+    expect(iconUrl('data:image/png;base64,AAAA')).toBeNull();
+    expect(iconUrl('')).toBeNull();
+    expect(iconUrl(42)).toBeNull();
+  });
+});
+
+describe('coreItems', () => {
+  it('reads the pricing pair with its names and icons', () => {
+    const items = coreItems(currencyOverview);
+    expect(items.map((item) => item.id)).toEqual(['chaos', 'divine']);
+    expect(items[0]?.name).toBe('Chaos Orb');
+    expect(items[0]?.icon).toMatch(/^https:\/\/poe\.ninja\/gen\/image\//);
+  });
+
+  it('returns nothing rather than throwing when core is absent', () => {
+    expect(coreItems(bareOverview)).toEqual([]);
+    expect(coreItems(null)).toEqual([]);
+  });
+});
+
+describe('mergeOverview', () => {
+  it('keys by the line id and reads primaryValue', () => {
     const prices: Record<string, number> = {};
-    mergeCurrencyOverview(currencyOverview, prices);
-    expect(prices['Divine Orb']).toBe(218.4);
-    expect(prices['Orb of Alteration']).toBe(0.12);
+    mergeOverview(currencyOverview, prices);
+    expect(prices['alt']).toBe(0.1238);
+    expect(prices['divine']).toBe(196.9);
+    expect(prices['ancient-orb']).toBe(8.27);
   });
 
   it('drops lines with no price rather than storing NaN', () => {
     const prices: Record<string, number> = {};
-    mergeCurrencyOverview(currencyOverview, prices);
-    expect(prices['Mirror of Kalandra']).toBeUndefined();
+    mergeOverview(currencyOverview, prices);
+    expect(prices['mirror']).toBeUndefined();
+  });
+
+  it('lets the first category win when two overviews carry the same id', () => {
+    const prices: Record<string, number> = { 'the-doctor': 1 };
+    mergeOverview(divinationCardOverview, prices);
+    expect(prices['the-doctor']).toBe(1);
   });
 
   it('survives a payload with no lines array', () => {
     const prices: Record<string, number> = {};
-    expect(mergeCurrencyOverview({ error: 'nope' }, prices)).toBe(0);
+    expect(mergeOverview({ error: 'nope' }, prices)).toBe(0);
     expect(prices).toEqual({});
+  });
+
+  it('collects icons for the ids the payload names', () => {
+    const prices: Record<string, number> = {};
+    const icons: Record<string, string> = {};
+    mergeOverview(currencyOverview, prices, icons);
+    expect(icons['chaos']).toMatch(/CurrencyRerollRare\.png$/);
+    // And nothing for the rest: the API no longer publishes their icons at all.
+    expect(Object.keys(icons).sort()).toEqual(['chaos', 'divine']);
+  });
+
+  it('refuses a payload quoted in something other than chaos', () => {
+    // Reading divine-denominated numbers as chaos would multiply the chart by ~200, and a chart
+    // wrong by a constant factor is harder to notice than an empty one.
+    const prices: Record<string, number> = {};
+    expect(() =>
+      mergeOverview({ core: { primary: 'divine' }, lines: [{ id: 'x', primaryValue: 1 }] }, prices),
+    ).toThrow(/rather than chaos/);
   });
 });
 
-describe('mergeItemOverview', () => {
-  it('keys by name and chaosValue', () => {
+describe('divineRateFrom', () => {
+  it('prefers the divine line, which is already chaos-denominated', () => {
     const prices: Record<string, number> = {};
-    mergeItemOverview(divinationCardOverview, prices);
-    expect(prices['The Doctor']).toBe(1450.5);
+    mergeOverview(currencyOverview, prices);
+    expect(divineRateFrom(currencyOverview, prices)).toBe(196.9);
   });
 
-  it('lets the first category win when two overviews carry the same name', () => {
-    const prices: Record<string, number> = { 'The Doctor': 1 };
-    mergeItemOverview(divinationCardOverview, prices);
-    expect(prices['The Doctor']).toBe(1);
+  it('falls back to core.rates, inverting it', () => {
+    // core.rates.divine is divine-per-chaos; this app reports chaos-per-divine.
+    expect(divineRateFrom({ core }, {})).toBeCloseTo(1 / 0.00508, 6);
+  });
+
+  it('returns null when neither is present', () => {
+    expect(divineRateFrom(bareOverview, {})).toBeNull();
   });
 });
 
@@ -182,20 +214,27 @@ describe('PriceService', () => {
   it('merges every configured category into one flat map', async () => {
     const set = await service().getPrices();
 
-    expect(set.prices['Divine Orb']).toBe(218.4);
-    expect(set.prices['Sacrifice at Dusk']).toBe(3.4);
-    expect(set.prices['The Doctor']).toBe(1450.5);
-    expect(set.prices['Gilded Bestiary Scarab']).toBe(88.2);
+    expect(set.prices['alt']).toBe(0.1238);
+    expect(set.prices['sacrifice-at-dusk']).toBe(3.4);
+    expect(set.prices['the-doctor']).toBe(1450.5);
+    expect(set.prices['gilded-bestiary-scarab']).toBe(88.2);
   });
 
-  it('always prices chaos at one, since poe.ninja never lists it', async () => {
+  it('always prices chaos at one', async () => {
     const set = await service().getPrices();
-    expect(set.prices['Chaos Orb']).toBe(1);
+    expect(set.prices[CHAOS_ID]).toBe(1);
   });
 
   it('takes the divine rate from the currency set', async () => {
     const set = await service().getPrices();
-    expect(set.divineRate).toBe(218.4);
+    expect(set.divineRate).toBe(196.9);
+  });
+
+  it('leaves uniques empty, because the API no longer publishes variants', async () => {
+    // Not an oversight. Without `links` and `corrupted` a unique cannot be priced per variant,
+    // and pricing it by name would be wrong by up to fortyfold with nothing to show it.
+    const set = await service().getPrices();
+    expect(set.uniques).toEqual({});
   });
 
   it('caches for the TTL and refetches once past it', async () => {
@@ -231,14 +270,14 @@ describe('PriceService', () => {
     const { store, saved } = memoryStore();
     await service({ store }).getPrices();
     expect(saved).toHaveLength(1);
-    expect(saved[0]?.league).toBe('Settlers');
+    expect(saved[0]?.league).toBe('Allflame');
   });
 
   it('restores the persisted set on hydrate', async () => {
     const stored: PriceSet = {
-      league: 'Settlers',
+      league: 'Allflame',
       fetchedAt: new Date(0),
-      prices: { 'Chaos Orb': 1, 'Divine Orb': 200 },
+      prices: { chaos: 1, divine: 200 },
       divineRate: 200,
       icons: {},
       uniques: {},
@@ -251,6 +290,26 @@ describe('PriceService', () => {
 
     expect(set.divineRate).toBe(200);
     expect((fetchFn as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(0);
+  });
+
+  it('discards a price set written against the old name-keyed API', async () => {
+    // Rows saved before the redesign are keyed "Chaos Orb", not "chaos". Restoring one would
+    // match nothing and read as a stash that suddenly became worthless.
+    const stale: PriceSet = {
+      league: 'Allflame',
+      fetchedAt: new Date(0),
+      prices: { 'Chaos Orb': 1, 'Divine Orb': 200 },
+      divineRate: 200,
+      icons: {},
+      uniques: {},
+    };
+    const subject = service({ store: memoryStore(stale).store, now: () => 0 });
+
+    expect(await subject.hydrate()).toBeNull();
+    expect(subject.cached).toBeNull();
+
+    const set = await subject.getPrices();
+    expect(set.divineRate).toBe(196.9);
   });
 
   it('keeps using the previous set when poe.ninja goes down mid-league', async () => {
@@ -269,7 +328,7 @@ describe('PriceService', () => {
     const set = await subject.getPrices();
 
     // Stale, but a poll with hour-old prices beats a hole in the chart. `fetchedAt` records it.
-    expect(set.divineRate).toBe(218.4);
+    expect(set.divineRate).toBe(196.9);
     expect(set.fetchedAt.getTime()).toBe(0);
   });
 
@@ -279,8 +338,18 @@ describe('PriceService', () => {
   });
 
   it('refuses a price set with no divine rate rather than valuing against zero', async () => {
-    const fetchFn = fixtureFetch({ Currency: () => jsonResponse(emptyOverview) });
-    await expect(service({ fetchFn }).getPrices()).rejects.toThrow(/Divine Orb/);
+    // Every category, not just Currency: the rate is taken from whichever payload states it
+    // first, so leaving one intact would supply one and hide the failure this asserts.
+    const fetchFn = vi.fn(async () => jsonResponse(bareOverview)) as unknown as typeof fetch;
+    await expect(service({ fetchFn }).getPrices()).rejects.toThrow(/divine rate/);
+  });
+
+  it('takes the rate from a later category when the first one omits it', async () => {
+    // A poll that fails because one payload was thin, while another carried the answer, would
+    // be a hole in the chart with no cause worth having.
+    const fetchFn = fixtureFetch({ Currency: () => jsonResponse(bareOverview) });
+    const set = await service({ fetchFn }).getPrices();
+    expect(set.divineRate).toBeCloseTo(1 / 0.00508, 6);
   });
 
   it('rejects unparseable JSON with a clear message', async () => {
@@ -291,14 +360,16 @@ describe('PriceService', () => {
   });
 
   it('names the league and the URL when poe.ninja has no data for it', async () => {
-    // A bare "returned HTTP 404" sends someone hunting. The league name and the address they
-    // can paste into a browser are the two things that make it a five-second question.
     const fetchFn = vi.fn(
       async () => new Response('not found', { status: 404 }),
     ) as unknown as typeof fetch;
 
-    await expect(service({ fetchFn }).getPrices()).rejects.toThrow(/no Currency data for league "Settlers"/);
-    await expect(service({ fetchFn }).getPrices()).rejects.toThrow(/poe\.ninja\/api\/data\/currencyoverview/);
+    await expect(service({ fetchFn }).getPrices()).rejects.toThrow(
+      /no Currency data for league "Allflame"/,
+    );
+    await expect(service({ fetchFn }).getPrices()).rejects.toThrow(
+      /poe\.ninja\/poe1\/api\/economy\/exchange\/current\/overview/,
+    );
   });
 
   it('still reports other HTTP failures with the URL', async () => {
@@ -344,90 +415,21 @@ describe('PriceService', () => {
   });
 });
 
-describe('resolving the name poe.ninja indexes the league under', () => {
-  const indexState = {
-    economyLeagues: [{ name: 'Allflame', url: 'allflame' }, { name: 'AllflameHC' }],
-  };
-
-  it('asks nothing extra when the two names already agree', async () => {
-    // The common case, and the whole reason resolution is a recovery step rather than a
-    // preflight: four category requests, no listing lookup.
-    const { calls } = pickyFetch('Settlers');
-    const fetchFn = fixtureFetch();
-    await service({ fetchFn }).getPrices();
-    expect(calls).toHaveLength(0);
-    expect(
-      (fetchFn as unknown as { mock: { calls: unknown[] } }).mock.calls.length,
-    ).toBe(4);
+describe('unmatchedIds', () => {
+  it('reports short codes nothing claimed, which is what a missing alias looks like', () => {
+    const prices = { chaos: 1, alt: 0.12, fusing: 3, 'ancient-orb': 8 };
+    expect(unmatchedIds(prices, new Set(['chaos']))).toEqual(['alt', 'fusing']);
   });
 
-  it("retries under poe.ninja's own name after a 404", async () => {
-    const { fetchFn, calls } = pickyFetch('Allflame', indexState);
-    const set = await service({ fetchFn, league: 'Allflame Ember' }).getPrices();
-
-    expect(set.divineRate).toBe(218.4);
-    expect(calls.some((call) => call.includes('/getindexstate'))).toBe(true);
-    expect(calls.some((call) => call.includes('league=Allflame&'))).toBe(true);
+  it('ignores slugs, since those are just items the account does not hold', () => {
+    const prices = { 'the-doctor': 1450, 'rain-of-chaos': 0.3 };
+    expect(unmatchedIds(prices, new Set())).toEqual([]);
   });
 
-  it('files the set under the configured league, not poe.ninja\'s name', async () => {
-    // The store and every snapshot key on this. Writing "Allflame" for a league configured as
-    // "Allflame Ember" would strand the row where hydrate() cannot find it.
-    const { store, saved } = memoryStore();
-    const { fetchFn } = pickyFetch('Allflame', indexState);
-    await service({ fetchFn, store, league: 'Allflame Ember' }).getPrices();
-    expect(saved[0]?.league).toBe('Allflame Ember');
-  });
-
-  it('resolves once and reuses the name on later refetches', async () => {
-    const { fetchFn, calls } = pickyFetch('Allflame', indexState);
-    let now = 0;
-    const subject = service({ fetchFn, league: 'Allflame Ember', now: () => now });
-
-    await subject.getPrices();
-    now = 2 * 3_600_000;
-    await subject.getPrices();
-
-    expect(calls.filter((call) => call.includes('/getindexstate'))).toHaveLength(1);
-  });
-
-  it('skips resolution entirely when POE_NINJA_LEAGUE says what to use', async () => {
-    const { fetchFn, calls } = pickyFetch('Allflame', indexState);
-    const set = await service({
-      fetchFn,
-      league: 'Allflame Ember',
-      ninjaLeague: 'Allflame',
-    }).getPrices();
-
-    expect(set.divineRate).toBe(218.4);
-    expect(calls.some((call) => call.includes('/getindexstate'))).toBe(false);
-  });
-
-  it('names the leagues poe.ninja does index when none of them fit', async () => {
-    const { fetchFn } = pickyFetch('Allflame', indexState);
-    await expect(service({ fetchFn, league: 'Phrecia' }).getPrices()).rejects.toThrow(
-      /it currently indexes: Allflame, allflame, AllflameHC/,
+  it('caps the list so one report cannot flood the log', () => {
+    const prices = Object.fromEntries(
+      Array.from({ length: 100 }, (_, index) => [`id${index}`, 1]),
     );
+    expect(unmatchedIds(prices, new Set(), 5)).toHaveLength(5);
   });
-
-  it('reports the original 404 when the listing cannot be read either', async () => {
-    // "getindexstate returned HTTP 404" would bury the operator's actual problem behind an
-    // endpoint they have never heard of.
-    const { fetchFn } = pickyFetch('Allflame');
-    await expect(service({ fetchFn, league: 'Phrecia' }).getPrices()).rejects.toThrow(
-      /no Currency data for league "Phrecia"/,
-    );
-  });
-
-  it('does not go looking when the failure is not a 404', async () => {
-    const { calls } = pickyFetch('Settlers');
-    const fetchFn = vi.fn(async (input: string | URL | Request) => {
-      calls.push(String(input));
-      return new Response('nope', { status: 503 });
-    }) as unknown as typeof fetch;
-
-    await expect(service({ fetchFn }).getPrices()).rejects.toThrow(/HTTP 503/);
-    expect(calls.some((call) => call.includes('getindexstate'))).toBe(false);
-  });
-
 });
