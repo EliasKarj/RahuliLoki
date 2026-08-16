@@ -12,7 +12,7 @@
  * cannot quietly bury real history under invented numbers.
  */
 
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '../generated/prisma/index.js';
 import type { Breakdown } from '../src/services/valuationService.ts';
 
 interface Options {

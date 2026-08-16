@@ -14,7 +14,8 @@
     "seed": "node --env-file-if-exists=../.env tools/seed.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "verify:migrator": "node tools/verify-migrator.mjs"
   },
   "dependencies": {
     "@fastify/static": "^10.1.3",
@@ -27,5 +28,10 @@
     "@types/node": "^22.13.1",
     "typescript": "^5.7.3",
     "vitest": "^3.0.5"
+  },
+  "exports": {
+    "./dist/server.js": "./dist/server.js",
+    "./dist/lib/migrate.js": "./dist/lib/migrate.js",
+    "./package.json": "./package.json"
   }
 }

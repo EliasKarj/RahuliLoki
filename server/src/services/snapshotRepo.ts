@@ -11,7 +11,7 @@
  * somebody has actually asked for it.
  */
 
-import type { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '../../generated/prisma/index.js';
 import type { Breakdown } from './valuationService.ts';
 import { tabTotals } from './valuationService.ts';
 import type { PriceSet, PriceSetStore } from './priceService.ts';

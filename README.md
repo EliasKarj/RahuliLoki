@@ -17,7 +17,7 @@ varallisuuden kertymisen liigan alusta loppuun.
 ## Sisältö
 
 - [Mitä tämä tekee](#mitä-tämä-tekee)
-- [Käyttöönotto](#käyttöönotto) — `./start.sh`, Docker tai paikallinen ajo
+- [Käyttöönotto](#käyttöönotto) — työpöytäohjelma, `./start.sh`, Docker tai paikallinen ajo
 - [POESESSID ja miksi siihen suhtaudutaan näin](#poesessid-ja-miksi-siihen-suhtaudutaan-näin) — sekä miksi GGG:n OAuth ei tähän käy
 - [Pääsynhallinta](#pääsynhallinta) — mitä token suojaa ja miksi palvelin kieltäytyy käynnistymästä
 - [Asetukset](#asetukset)
@@ -59,6 +59,34 @@ kun avaat sen viikon tauon jälkeen.
 ---
 
 ## Käyttöönotto
+
+### Työpöytäohjelma
+
+```bash
+pnpm install
+pnpm desktop            # kääntää ja käynnistää
+pnpm desktop:package    # rakentaa asennuspaketin tälle alustalle
+```
+
+Sama palvelin, sama paneeli — mutta oma ikkuna, ilmaisinalue ja **oikea kirjautuminen**.
+Ohjelma avaa GGG:n kirjautumissivun omaan ikkunaansa, ja istunto luetaan siitä. POESESSIDiä
+ei tarvitse kaivaa devtoolsista eikä liittää mihinkään.
+
+> **▸ Miksi kirjautumisikkuna on koko työpöytäversion syy:** ohje "avaa F12, etsi evästekaappi,
+> kopioi arvo jonka juuri kerroimme olevan salasanan veroinen" on kolme askelta kitkaa ja yksi
+> askel huonon tavan opettamista. Kuka tahansa joka oppii kaivamaan POESESSIDin pyynnöstä on
+> yhden uskottavan sivuston päässä siitä että antaa sen jollekin muulle. Tässä tunnus ei kulje
+> käyttäjän käsien kautta lainkaan.
+
+> **▸ Miksi ikkunan sulkeminen ei lopeta keruuta:** valvomaton keruu on tämän sovelluksen etu
+> Exilence Nextiin nähden — se keräsi vain kun ohjelma oli auki. Sulkeminen piilottaa ikkunan
+> ilmaisinalueelle ja kerääjä jatkaa. Lopettaminen on erillinen valinta ilmaisinalueen valikossa.
+
+> **▸ Miksi Prisman CLI:tä ei paketoida mukaan:** se on 36 MB alustabinäärejä, joiden ainoa
+> tehtävä valmiissa ohjelmassa olisi ajaa kourallinen CREATE TABLE -lauseita kerran
+> käynnistyksessä. Migraatiot ajetaan samoista SQL-tiedostoista `node:sqlite`llä, ja CI
+> tarkistaa Prismalta itseltään että lopputulos on identtinen. Tämä on myös syy siihen miksi
+> Electron 38 on alaraja: sitä vanhemmat pakkaavat Node 20:n, jossa `node:sqlite`ä ei ole.
 
 ### Yksi komento (nopein)
 
@@ -569,6 +597,8 @@ pnpm test
     index.ts    käynnistys, ajastin, staattinen sivusto
   /prisma       schema.prisma + migraatiot
   /tools        seed.ts
+/desktop
+  /src          main (Electron), login (kirjautumisikkuna), settings, preload
 /scripts        with-env.mjs (lataa juuren .env Prisma CLI:lle)
 /web
   /src

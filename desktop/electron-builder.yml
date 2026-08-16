@@ -1,0 +1,60 @@
+# Packaging. `pnpm desktop:package` builds an installer for the current platform.
+#
+# The database and settings live in the user data directory, never inside the app bundle, so
+# an update replaces the program and leaves a league's history alone.
+appId: fi.eliaskarj.valuuttaloki
+productName: valuuttaloki
+copyright: MIT
+
+directories:
+  output: release
+  buildResources: build
+
+# The shell, the compiled server, the built dashboard, and the migration SQL. The Prisma CLI is
+# deliberately absent: migrations run through server/dist/lib/migrate.js on node:sqlite, which
+# is why Electron 38 (Node 22) is the floor — see server/src/lib/migrate.ts.
+files:
+  - dist/**/*
+  - package.json
+  - '!**/*.map'
+
+extraResources:
+  # The generated Prisma client, which schema.prisma emits here precisely so a packager can
+  # find it. Left in node_modules/.prisma it is unreachable under pnpm, and the packaged app
+  # gets the ungenerated stub and dies on `Named export 'PrismaClient' not found`.
+  - from: ../server/generated
+    to: server/generated
+  - from: ../server/dist
+    to: server/dist
+  - from: ../server/prisma/migrations
+    to: server/prisma/migrations
+  - from: ../web/dist
+    to: web/dist
+
+# asar off, deliberately.
+#
+# The workspace dependency on @valuuttaloki/server is a pnpm symlink out of desktop/, and
+# electron-builder's asar packer refuses to unpack anything whose real path lies outside the
+# app directory — it fails with "server/dist/app.js must be under desktop/". asar is a
+# packaging convenience, not a security boundary (its contents are trivially readable), so
+# turning it off costs nothing that matters here and keeps the workspace layout intact.
+#
+# It also sidesteps the separate problem that the Prisma client's WASM engine is read from
+# disk at runtime and would need unpacking anyway.
+asar: false
+
+linux:
+  target: [AppImage]
+  category: Utility
+  # Without this the executable is named after the npm package — "@valuuttalokidesktop", scope
+  # punctuation and all — rather than after the product.
+  executableName: valuuttaloki
+mac:
+  target: [dmg]
+  category: public.app-category.utilities
+win:
+  target: [nsis]
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true

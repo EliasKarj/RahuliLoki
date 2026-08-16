@@ -8,6 +8,17 @@
 
 generator client {
   provider = "prisma-client-js"
+  // Deterministic location, on purpose.
+  //
+  // By default the generated client is written into node_modules/.prisma, which under pnpm
+  // lives inside the virtual store next to a hashed directory name. Nothing outside pnpm can
+  // find it reliably — the packaged desktop build shipped the ungenerated @prisma/client stub
+  // instead and died at startup on "Named export 'PrismaClient' not found", which is the same
+  // trap the Dockerfile hit from a different direction.
+  //
+  // Emitting into the repository makes the client an ordinary directory that any packager
+  // copies like any other file. It is gitignored; `prisma generate` recreates it.
+  output   = "../generated/prisma"
 }
 
 datasource db {

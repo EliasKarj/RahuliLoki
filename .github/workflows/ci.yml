@@ -47,6 +47,11 @@ jobs:
           DATABASE_URL: file:./ci.db
         run: pnpm exec prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --shadow-database-url file:./shadow.db --exit-code
 
+      # The desktop build ships its own migrator instead of the Prisma CLI's 36 MB of engines.
+      # That is only sound while the two produce identical databases, so CI asks Prisma itself.
+      - name: Verify the standalone migrator matches Prisma
+        run: pnpm --filter @valuuttaloki/server verify:migrator
+
       # A known-vulnerable dependency should fail the build here rather than be discovered on
       # the volume holding a league's history. This app serves an authenticated HTTP surface
       # and holds an account credential, so "moderate" is the right floor.

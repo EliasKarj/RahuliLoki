@@ -1,7 +1,10 @@
 node_modules/
 dist/
+# Generated Prisma client (see schema.prisma). Recreated by `prisma generate`.
+server/generated/
 build/
 coverage/
+release/
 
 # POESESSID lives here. Never commit.
 .env

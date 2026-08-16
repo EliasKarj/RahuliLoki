@@ -9,6 +9,7 @@ import { Empty, Panel, RangeToggle, StatTile } from './components/ui.tsx';
 import { TokenGate } from './components/TokenGate.tsx';
 import { ChangesTable } from './components/ChangesTable.tsx';
 import { ItemHistory } from './components/ItemHistory.tsx';
+import { DesktopSetup } from './components/DesktopSetup.tsx';
 import { hasToken } from './lib/api.ts';
 import { rangeStart } from './lib/series.ts';
 import {
@@ -86,6 +87,11 @@ export default function App() {
 
         <div className="mt-3">
           <PollerStatus health={health} onPolled={refresh} />
+        </div>
+
+        {/* Desktop build only: renders nothing in a browser. */}
+        <div className="mt-3">
+          <DesktopSetup onChanged={refresh} />
         </div>
 
         {error ? (

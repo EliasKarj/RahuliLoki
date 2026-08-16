@@ -78,6 +78,15 @@ export interface AppConfig {
   priceSetRetention: number;
   /** Ceiling on a single outbound request to GGG or poe.ninja. */
   requestTimeoutMs: number;
+  /**
+   * Where the database lives, read here rather than left to Prisma's own env lookup.
+   *
+   * PrismaClient reads `process.env.DATABASE_URL` at construction. That is invisible to any
+   * caller that passes a different environment — the desktop shell does exactly that, and the
+   * result was a server whose config pointed at one database while its client pointed at
+   * nothing at all. Carrying it in the config makes the dependency explicit and injectable.
+   */
+  databaseUrl: string | undefined;
   /** Directory of the built SPA, or null when the API runs headless (dev, tests). */
   webDist: string | null;
   logLevel: string;
@@ -217,6 +226,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ConfigResult {
     trustProxy: readBool(env, 'TRUST_PROXY'),
     priceSetRetention,
     requestTimeoutMs,
+    databaseUrl: env.DATABASE_URL?.trim() || undefined,
     webDist: env.WEB_DIST?.trim() || null,
     logLevel: env.LOG_LEVEL?.trim() || 'info',
   };
