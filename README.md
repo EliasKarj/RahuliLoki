@@ -602,6 +602,26 @@ kauppoineen. Kieltäytyy koskemasta liigaan, jolla on jo tilannekuvia, ellei ann
 
 ---
 
+## Riippuvuuksien tarkistus
+
+CI ajaa `pnpm audit --audit-level moderate` ja kaataa käännöksen tunnettuun haavoittuvuuteen.
+Yksi neuvonta on ohitettu, `package.json`in `pnpm.auditConfig.ignoreGhsas`issa:
+
+**[GHSA-jmr9-qjv8-65gv](https://github.com/advisories/GHSA-jmr9-qjv8-65gv)** — `extract-zip`,
+validoimaton symlinkkien polkuhyppäys purettaessa. Korjattua versiota **ei ole olemassa**
+(`Patched versions: <0.0.0`); paketti on ylläpitämätön.
+
+> **▸ Miksi tämä on hyväksyttävä poikkeus:** `extract-zip` tulee Electronin *asennusskriptin*
+> mukana, ja sen ainoa tehtävä on purkaa Electronin oma binääri kehittäjän koneella. Se ei ole
+> mukana julkaistussa ohjelmassa, sitä ei aja mikään tämän repon koodi, eikä se pura mitään
+> muuta kuin Electronin oman GitHub-julkaisun. Haavoittuvuus edellyttää vihamielistä
+> zip-tiedostoa, jollaista tässä ketjussa ei ole.
+>
+> Ohitus on nimenomaisesti tuossa yhdessä paikassa eikä kynnysarvoa laskemalla, jotta se on
+> yhden rivin muutos diffissä eikä kokonaisen portin hiljainen sammuttaminen.
+
+---
+
 ## Testit
 
 ```bash

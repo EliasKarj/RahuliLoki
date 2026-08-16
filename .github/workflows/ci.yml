@@ -55,5 +55,9 @@ jobs:
       # A known-vulnerable dependency should fail the build here rather than be discovered on
       # the volume holding a league's history. This app serves an authenticated HTTP surface
       # and holds an account credential, so "moderate" is the right floor.
+      #
+      # One advisory is ignored, listed in package.json under pnpm.auditConfig.ignoreGhsas with
+      # the reasoning. Ignoring it there rather than lowering this threshold keeps the exception
+      # reviewable: it is one line in a diff, not a whole gate quietly switched off.
       - name: Audit dependencies
         run: pnpm audit --audit-level moderate
