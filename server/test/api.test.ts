@@ -207,6 +207,60 @@ describe('GET /api/leagues', () => {
   });
 });
 
+describe('GET /api/account', () => {
+  it('reports the name GGG gives and that it matches the configured one', async () => {
+    const { app } = await makeApp();
+    const response = await app.inject({ method: 'GET', url: '/api/account' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      name: 'Exile#1234',
+      configured: 'Exile#1234',
+      matches: true,
+    });
+  });
+
+  it('reports a mismatch rather than leaving the comparison to the caller', async () => {
+    // The entire question this endpoint answers. A name that is merely close is refused by the
+    // stash endpoint with a 403 that explains nothing.
+    const { app } = await makeApp({ profile: async () => ({ name: 'Someone#9999', uuid: null }) });
+    const body = (await app.inject({ method: 'GET', url: '/api/account' })).json();
+
+    expect(body.matches).toBe(false);
+    expect(body.name).toBe('Someone#9999');
+    expect(body.configured).toBe('Exile#1234');
+  });
+
+  it('ignores case, which GGG does too', async () => {
+    const { app } = await makeApp({ profile: async () => ({ name: 'exile#1234', uuid: null }) });
+    expect((await app.inject({ method: 'GET', url: '/api/account' })).json().matches).toBe(true);
+  });
+
+  it("passes GGG's refusal through as 502 with its message intact", async () => {
+    // Ours would be a guess; GGG's already says whether the session is the problem.
+    const { app } = await makeApp({
+      profile: async () => {
+        throw new Error('GGG does not accept this session (HTTP 403)');
+      },
+    });
+    const response = await app.inject({ method: 'GET', url: '/api/account' });
+
+    expect(response.statusCode).toBe(502);
+    expect(response.json().error).toMatch(/does not accept this session/);
+  });
+
+  it('never returns the session itself', async () => {
+    const { app } = await makeApp();
+    const body = (await app.inject({ method: 'GET', url: '/api/account' })).body;
+    expect(body.toLowerCase()).not.toContain('poesessid');
+  });
+
+  it('is behind the token like everything else', async () => {
+    const { app } = await makeApp({}, { AUTH_TOKEN: 'a'.repeat(32) } as NodeJS.ProcessEnv);
+    expect((await app.inject({ method: 'GET', url: '/api/account' })).statusCode).toBe(401);
+  });
+});
+
 describe('GET /api/stats', () => {
   it('reports the gain, both rates, and the best hour', async () => {
     const { app } = await makeApp();

@@ -6,6 +6,7 @@ import type { PriceSet } from '../services/priceService.ts';
 import type { SnapshotStore } from '../services/snapshotRepo.ts';
 import type { PollerHealth, PollOutcome } from '../jobs/pollJob.ts';
 import type { LeagueList } from '../services/leagueService.ts';
+import type { Profile } from '../services/profileService.ts';
 
 export interface PollerLike {
   readonly health: PollerHealth;
@@ -28,4 +29,9 @@ export interface ApiDeps {
   startedAt: Date;
   /** The league list for the setup dropdown. Cached and failure-tolerant — see leagueService. */
   leagues: () => Promise<LeagueList>;
+  /**
+   * Who GGG says the stored session belongs to. Rejects when GGG will not say, which is itself
+   * the answer — see services/profileService.ts.
+   */
+  profile: () => Promise<Profile>;
 }

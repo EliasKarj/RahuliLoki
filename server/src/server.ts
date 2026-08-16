@@ -25,6 +25,7 @@ import { PriceService } from './services/priceService.ts';
 import { StashService } from './services/stashService.ts';
 import { PrismaPriceSetStore, PrismaSnapshotStore } from './services/snapshotRepo.ts';
 import { LeagueService } from './services/leagueService.ts';
+import { fetchProfile } from './services/profileService.ts';
 import { PollRunner } from './jobs/pollJob.ts';
 import type { ApiDeps } from './routes/deps.ts';
 
@@ -106,6 +107,12 @@ export async function startServer(options: StartOptions = {}): Promise<RunningSe
     },
     rateLimit: () => limiter.view(),
     leagues: () => leagues.list(),
+    profile: () =>
+      fetchProfile({
+        poesessid: config.poesessid,
+        userAgent: config.userAgent,
+        timeoutMs: config.requestTimeoutMs,
+      }),
   };
 
   const app = await buildApp(deps, { webDist, logLevel: config.logLevel });
