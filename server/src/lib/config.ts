@@ -14,7 +14,7 @@
 import { validate as cronValidate } from 'node-cron';
 import { isLoopbackBind, MIN_TOKEN_LENGTH } from './auth.ts';
 
-/** poe.ninja categories that key cleanly by item name. Uniques/gems/maps are opt-in — see README. */
+/** poe.ninja categories that key cleanly by item name. Gems and maps stay out — see README. */
 export const DEFAULT_CURRENCY_CATEGORIES = ['Currency', 'Fragment'] as const;
 export const DEFAULT_ITEM_CATEGORIES = [
   'DivinationCard',
@@ -31,6 +31,25 @@ export const DEFAULT_ITEM_CATEGORIES = [
   'Tattoo',
 ] as const;
 
+/**
+ * Unique categories, priced per variant rather than by name — see services/uniques.ts.
+ *
+ * On by default now that links and corruption are matched against the actual item. They were
+ * excluded while the only available key was the name, because that silently picked whichever
+ * variant poe.ninja listed first: a plain Bronn's Lithe valued as a 6-linked one, or the
+ * reverse, with nothing in the chart to show it happened.
+ *
+ * UniqueMap is deliberately absent: maps are skipped in valuation regardless of rarity, since
+ * tier prices them more than name does.
+ */
+export const DEFAULT_UNIQUE_CATEGORIES = [
+  'UniqueWeapon',
+  'UniqueArmour',
+  'UniqueAccessory',
+  'UniqueJewel',
+  'UniqueFlask',
+] as const;
+
 export interface AppConfig {
   /** Full account credential. Never logged, never sent to the frontend. */
   poesessid: string;
@@ -42,6 +61,7 @@ export interface AppConfig {
   trackedTabs: string[];
   currencyCategories: string[];
   itemCategories: string[];
+  uniqueCategories: string[];
   priceTtlMs: number;
   userAgent: string;
   port: number;
@@ -185,6 +205,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ConfigResult {
     trackedTabs: readList(env, 'TRACKED_TABS', []),
     currencyCategories: readList(env, 'PRICE_CURRENCY_CATEGORIES', DEFAULT_CURRENCY_CATEGORIES),
     itemCategories: readList(env, 'PRICE_ITEM_CATEGORIES', DEFAULT_ITEM_CATEGORIES),
+    uniqueCategories: readList(env, 'PRICE_UNIQUE_CATEGORIES', DEFAULT_UNIQUE_CATEGORIES),
     priceTtlMs: priceTtlMinutes * 60_000,
     // GGG asks for a User-Agent they can identify and contact. Give them one.
     userAgent: `valuuttaloki/${VERSION} (+https://github.com/EliasKarj/RahuliLoki) ${contact}`,
@@ -217,7 +238,11 @@ export function publicConfig(config: AppConfig, missing: string[]) {
     pollCron: config.pollCron,
     minItemChaos: config.minItemChaos,
     trackedTabs: config.trackedTabs,
-    priceCategories: [...config.currencyCategories, ...config.itemCategories],
+    priceCategories: [
+      ...config.currencyCategories,
+      ...config.itemCategories,
+      ...config.uniqueCategories,
+    ],
     priceTtlMinutes: Math.round(config.priceTtlMs / 60_000),
     configured: missing.length === 0,
     missing,

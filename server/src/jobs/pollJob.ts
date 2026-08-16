@@ -50,6 +50,7 @@ export async function runPoll(deps: PollDependencies): Promise<PollOutcome> {
     prices: priceSet.prices,
     divineRate: priceSet.divineRate,
     minItemChaos: deps.minItemChaos,
+    uniques: priceSet.uniques,
   });
 
   if (valuation.unresolved.length > 0) {

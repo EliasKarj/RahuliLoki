@@ -231,12 +231,25 @@ Kaikki `.env`-tiedostossa; `.env.example` on malli.
 Oletushintakategoriat: `DivinationCard, Essence, Fossil, Resonator, Scarab, Oil, DeliriumOrb,
 Incubator, Artifact, Vial, Omen, Tattoo`.
 
-> **▸ Miksi uniikit, jalokivet ja kartat puuttuvat oletuksesta:** ne eivät mene nimellä.
-> Jalokiven hinta riippuu tasosta, laadusta ja turmeluksesta; kartan tasosta; klusterikorun
-> siitä mitä siihen osui. Nimellä arvostaminen antaisi niille jonkin luvun, ja se luku olisi
-> väärä tavalla, jota ei kaaviosta huomaa. Uniikit voi ottaa mukaan lisäämällä
-> `PRICE_ITEM_CATEGORIES`iin `UniqueWeapon,UniqueArmour,UniqueAccessory,UniqueJewel` — ne menevät
-> nimellä siedettävästi, kunhan muistaa ettei turmeltua ja turmelematonta eroteta.
+> **▸ Miksi jalokivet ja kartat puuttuvat oletuksesta:** ne eivät mene nimellä. Jalokiven
+> hinta riippuu tasosta, laadusta ja turmeluksesta; kartan tasosta; klusterikorun siitä mitä
+> siihen osui. Nimellä arvostaminen antaisi niille jonkin luvun, ja se luku olisi väärä
+> tavalla, jota ei kaaviosta huomaa.
+>
+> **▸ Miksi uniikit ovat mukana, vaikka nekään eivät mene nimellä:** koska niille on olemassa
+> oikea avain. poe.ninja palauttaa yhden rivin jokaiselle yhdistelmälle ja kertoo rivillä
+> `links` ja `corrupted`; aarrearkun esine kertoo omat pistokkaansa ja turmeluksensa. Avain on
+> siis `(nimi, linkit, turmelus)`, ei nimi. Sama Bronn's Lithe on 5 chaosia linkittömänä ja
+> 210 kuutoslinkkinä — nimellä arvostettuna toinen niistä olisi ollut väärässä
+> nelikymmenkertaisesti.
+>
+> Erittelyssä ne näkyvät erillisinä riveinä (`Bronn's Lithe`, `Bronn's Lithe (6L)`), koska
+> yhteen niputettuna kaavio piilottaisi juuri sen syyn, miksi luku liikkui.
+>
+> **▸ Mitä tämä ei vieläkään ratkaise:** variantit. poe.ninja erottaa esimerkiksi
+> 3.0:aa edeltävän Shavronne's Wrappingsin nykyisestä, eikä aarrekaapin datassa ole mitään
+> mikä kertoisi kumpi sinulla on. Kun rivit eroavat vain variantilta, käytetään **halvinta**.
+> Molemmat suunnat ovat väärin, mutta yliarvio näkyy kaaviossa tuottona jota ei tullut.
 
 ---
 

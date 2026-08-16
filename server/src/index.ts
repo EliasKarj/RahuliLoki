@@ -78,6 +78,7 @@ async function main(): Promise<void> {
     league: config.league,
     currencyCategories: config.currencyCategories,
     itemCategories: config.itemCategories,
+    uniqueCategories: config.uniqueCategories,
     ttlMs: config.priceTtlMs,
     store: priceStore,
     userAgent: config.userAgent,

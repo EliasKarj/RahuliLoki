@@ -15,6 +15,7 @@ import type { PrismaClient } from '@prisma/client';
 import type { Breakdown } from './valuationService.ts';
 import { tabTotals } from './valuationService.ts';
 import type { PriceSet, PriceSetStore } from './priceService.ts';
+import type { UniqueIndex } from './uniques.ts';
 
 export interface SnapshotMeta {
   id: number;
@@ -213,6 +214,11 @@ export class PrismaPriceSetStore implements PriceSetStore {
       // Null on rows written before the icons column existed. An empty map is the right
       // reading: the UI falls back to no icon, and the next fetch fills it in.
       icons: asIcons(row.icons),
+      // Not persisted. A restored set exists so a restart does not refetch immediately, and
+      // the very next poll refreshes it; carrying the unique index through the database would
+      // multiply the row size for a window measured in minutes. Uniques go unpriced until
+      // then, which the unresolved log makes visible rather than silent.
+      uniques: Object.create(null) as UniqueIndex,
     };
   }
 

@@ -16,6 +16,7 @@
 
 import { describeError, silentLogger, type Logger } from '../lib/logger.ts';
 import { readJsonCapped, timeoutSignal } from '../lib/http.ts';
+import { mergeUniqueOverview, uniqueKey, type UniqueIndex } from './uniques.ts';
 
 export interface PriceSet {
   league: string;
@@ -33,6 +34,14 @@ export interface PriceSet {
    * same string over and over.
    */
   icons: Record<string, string>;
+  /**
+   * Unique lines kept per name, not flattened into `prices`.
+   *
+   * They cannot be flattened: the same name has several prices depending on links and
+   * corruption, and which one applies is a property of the item in the stash, not of the
+   * price set. See services/uniques.ts.
+   */
+  uniques: UniqueIndex;
 }
 
 export interface PriceSetStore {
@@ -58,7 +67,7 @@ interface CurrencyDetail {
 }
 
 /** poe.ninja serves icons off GGG's CDN. Anything else in that field is not an icon. */
-function iconUrl(value: unknown): string | null {
+export function iconUrl(value: unknown): string | null {
   if (typeof value !== 'string' || value === '') return null;
   let parsed: URL;
   try {
@@ -75,6 +84,8 @@ export interface PriceServiceOptions {
   league: string;
   currencyCategories: string[];
   itemCategories: string[];
+  /** poe.ninja itemoverview types whose lines are uniques. Priced per variant, not by name. */
+  uniqueCategories?: string[];
   ttlMs: number;
   store: PriceSetStore;
   fetchFn?: typeof fetch;
@@ -234,6 +245,7 @@ export class PriceService {
     // `prices['__proto__'] = …` would reassign the prototype instead of storing anything.
     const prices: Record<string, number> = Object.create(null) as Record<string, number>;
     const icons: Record<string, string> = Object.create(null) as Record<string, string>;
+    const uniques: UniqueIndex = Object.create(null) as UniqueIndex;
 
     for (const type of currencyCategories) {
       const payload = await this.#getJson(`${this.#baseUrl}/currencyoverview`, league, type);
@@ -247,6 +259,22 @@ export class PriceService {
       this.#log.debug({ type, merged }, 'merged item overview');
     }
 
+    for (const type of this.#options.uniqueCategories ?? []) {
+      const payload = await this.#getJson(`${this.#baseUrl}/itemoverview`, league, type);
+      const merged = mergeUniqueOverview(payload, uniques, iconUrl);
+      this.#log.debug({ type, merged }, 'merged unique overview');
+    }
+
+    // Icons for uniques are registered under the same display key the breakdown will use, so
+    // the UI needs no rule for turning "Bronn's Lithe (6L)" back into an icon lookup.
+    for (const entries of Object.values(uniques)) {
+      for (const entry of entries) {
+        if (entry.icon === null) continue;
+        const key = uniqueKey(entry.name, entry.links, entry.corrupted);
+        if (icons[key] === undefined) icons[key] = entry.icon;
+      }
+    }
+
     // poe.ninja quotes everything in chaos, so chaos itself is never in the payload.
     prices[CHAOS] = 1;
 
@@ -258,9 +286,22 @@ export class PriceService {
       );
     }
 
-    const set: PriceSet = { league, fetchedAt: new Date(this.#now()), prices, divineRate, icons };
+    const set: PriceSet = {
+      league,
+      fetchedAt: new Date(this.#now()),
+      prices,
+      divineRate,
+      icons,
+      uniques,
+    };
     this.#log.info(
-      { league, entries: Object.keys(prices).length, icons: Object.keys(icons).length, divineRate },
+      {
+        league,
+        entries: Object.keys(prices).length,
+        uniques: Object.keys(uniques).length,
+        icons: Object.keys(icons).length,
+        divineRate,
+      },
       'fetched a fresh price set',
     );
     return set;

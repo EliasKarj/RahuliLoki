@@ -24,6 +24,8 @@ export interface StashItem {
   frameType?: number;
   identified?: boolean;
   corrupted?: boolean;
+  /** Sockets sharing a `group` are linked. Five or six of them prices a unique — see uniques.ts. */
+  sockets?: Array<{ group?: unknown }>;
 }
 
 export interface StashTabInfo {

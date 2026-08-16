@@ -215,6 +215,7 @@ describe('PriceService', () => {
       prices: { 'Chaos Orb': 1, 'Divine Orb': 200 },
       divineRate: 200,
       icons: {},
+      uniques: {},
     };
     const fetchFn = fixtureFetch();
     const subject = service({ fetchFn, store: memoryStore(stored).store, now: () => 60_000 });

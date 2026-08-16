@@ -17,6 +17,8 @@
  * caller. A silent zero is the failure mode this design exists to avoid.
  */
 
+import { linkCount, pickCandidate, uniqueKey, type UniqueIndex } from './uniques.ts';
+
 export interface ValuedEntry {
   qty: number;
   chaosEach: number;
@@ -54,6 +56,8 @@ export interface ValuationInput {
     stackSize?: number;
     frameType?: number;
     identified?: boolean;
+    corrupted?: boolean;
+    sockets?: Array<{ group?: unknown }>;
   }>;
 }
 
@@ -61,9 +65,11 @@ export interface ValuationOptions {
   prices: Record<string, number>;
   divineRate: number;
   minItemChaos: number;
+  /** Per-variant unique lines. Omit to price uniques by name only, as before. */
+  uniques?: UniqueIndex;
 }
 
-const FRAME_UNIQUE = 3;
+export const FRAME_UNIQUE = 3;
 const FRAME_GEM = 4;
 const FRAME_DIVINATION = 6;
 
@@ -135,8 +141,30 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+/**
+ * Price one unique against the variant index, or null when it is not a unique / has no line.
+ *
+ * The returned key carries the links and corruption so the breakdown keeps a 6-linked item
+ * apart from a plain one — merging them would hide the whole reason a number moved.
+ */
+export function resolveUnique(
+  item: ValuationInput['items'][number],
+  uniques: UniqueIndex,
+): { key: string; chaos: number } | null {
+  if (item.frameType !== FRAME_UNIQUE) return null;
+  const name = text(item.name);
+  if (name === null || !Object.hasOwn(uniques, name)) return null;
+
+  const links = linkCount(item.sockets);
+  const corrupted = item.corrupted === true;
+  const picked = pickCandidate(uniques[name] ?? [], links, corrupted);
+  if (picked === null) return null;
+
+  return { key: uniqueKey(name, links, corrupted), chaos: picked.chaos };
+}
+
 export function valueTabs(tabs: ValuationInput[], options: ValuationOptions): ValuationResult {
-  const { prices, minItemChaos } = options;
+  const { prices, minItemChaos, uniques } = options;
 
   // Aggregate before applying the threshold. A hundred separate stacks of alterations are one
   // pile of alterations to the player, and thresholding each stack would throw the pile away.
@@ -157,14 +185,18 @@ export function valueTabs(tabs: ValuationInput[], options: ValuationOptions): Va
         continue;
       }
 
-      const key = resolvePriceKey(item, prices);
+      // Uniques take the variant-aware path: the same name is several prices depending on
+      // links and corruption, so the flat name map cannot answer for them.
+      const unique = uniques === undefined ? null : resolveUnique(item, uniques);
+
+      const key = unique?.key ?? resolvePriceKey(item, prices);
       if (key === null) {
         const label = priceKeyCandidates(item)[0] ?? '(unnamed item)';
         unresolved.set(label, (unresolved.get(label) ?? 0) + 1);
         continue;
       }
 
-      const chaosEach = prices[key] as number;
+      const chaosEach = unique?.chaos ?? (prices[key] as number);
       const qty =
         typeof item.stackSize === 'number' && Number.isFinite(item.stackSize) && item.stackSize > 0
           ? Math.floor(item.stackSize)
