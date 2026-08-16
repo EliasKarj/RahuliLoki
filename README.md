@@ -711,7 +711,7 @@ validoimaton symlinkkien polkuhyppäys purettaessa. Korjattua versiota **ei ole 
 pnpm test
 ```
 
-**409 testiä**, ei yhtään verkkopyyntöä:
+**423 testiä**, ei yhtään verkkopyyntöä:
 
 - **Nopeusrajoitin** — otsakkeiden jäsennys, tahdistus, sarjallistuminen, `Retry-After`,
   kaksinkertaistuminen kattoon asti. Kello ja uni ovat väärennettyjä, joten 30 minuutin
@@ -725,7 +725,8 @@ pnpm test
 - **Kerääjä** — mitään ei kirjoiteta kun jokin kaatuu; perääntyminen; pysäytys kolmen jälkeen;
   käsin ajo purkaa pysäytyksen.
 - **API** — jokainen reitti `app.inject()`illa väärennetyllä varastolla.
-- **Selainpuoli** — muotoilusäännöt ja kaavioiden muodonmuutokset.
+- **Selainpuoli** — muotoilusäännöt, kaavioiden muodonmuutokset, ja esinetaulukon niputus
+  välilehtien yli, haku ja lajittelu.
 - **Kirjautuminen** — että anonyymi eväste *ei* kelpaa istunnoksi, että GGG:n myöhemmin
   antama kelpaa, ettei samaa evästettä kysytä GGG:ltä joka kierroksella, ja että odotus
   loppuu aikakatkaisuun eikä jää polkemaan.

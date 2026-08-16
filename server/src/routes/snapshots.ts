@@ -110,7 +110,10 @@ export async function snapshotRoutes(app: FastifyInstance, deps: ApiDeps): Promi
       snapshot,
       tabs: tabTotals(snapshot.breakdown),
       // Icons are joined in from the current price set, the only place they are stored.
-      topItems: topItems(snapshot.breakdown, 200, deps.prices.cached?.icons ?? {}),
+      // Raised from 200 now that the table is searchable and folds tabs together: a cap that
+      // small hid most of a stash from the search box, which is the one place someone goes when
+      // they want to know whether they still have a thing.
+      topItems: topItems(snapshot.breakdown, 2000, deps.prices.cached?.icons ?? {}),
     });
   });
 

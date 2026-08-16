@@ -144,6 +144,19 @@ export default function App() {
           </section>
 
           <Panel
+            title="Items"
+            subtitle={
+              latest
+                ? `Latest snapshot, ${formatDateTime(latest.snapshot.takenAt)}. Click a name for its history.`
+                : 'Latest snapshot.'
+            }
+          >
+            <TopItemsTable items={latest?.topItems ?? []} onSelect={setSelected} />
+          </Panel>
+
+          <Panel
+            collapsible
+            defaultOpen={false}
             title="Net worth over time"
             subtitle="Chaos on the left, the divine rate on the right — a rise against a falling rate is inflation, not profit."
           >
@@ -151,17 +164,26 @@ export default function App() {
           </Panel>
 
           <Panel
+            collapsible
+            defaultOpen={false}
             title="Chaos per hour"
             subtitle="One bar per interval. Faint bars moved less than a chaos and are left out of the active average."
           >
             <RatePerHourChart intervals={intervals} wide={wide} />
           </Panel>
 
-          <Panel title="Where the wealth sits" subtitle="Per-tab value over time.">
+          <Panel
+            collapsible
+            defaultOpen={false}
+            title="Where the wealth sits"
+            subtitle="Per-tab value over time."
+          >
             <TabAreaChart snapshots={snapshots} wide={wide} />
           </Panel>
 
           <Panel
+            collapsible
+            defaultOpen={false}
             title="What moved"
             subtitle={
               changes?.from && changes.to
@@ -187,17 +209,11 @@ export default function App() {
           ) : null}
 
           <Panel
-            title="Top holdings"
-            subtitle={
-              latest
-                ? `Latest snapshot, ${formatDateTime(latest.snapshot.takenAt)}. Click a name for its history.`
-                : 'Latest snapshot.'
-            }
+            collapsible
+            defaultOpen={false}
+            title="Snapshots"
+            subtitle="The rows behind the charts, newest first."
           >
-            <TopItemsTable items={latest?.topItems ?? []} onSelect={setSelected} />
-          </Panel>
-
-          <Panel title="Snapshots" subtitle="The rows behind the charts, newest first.">
             <SnapshotTable snapshots={snapshots} intervals={intervals} />
           </Panel>
         </div>

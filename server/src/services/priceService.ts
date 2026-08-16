@@ -156,7 +156,7 @@ export const DEFAULT_NINJA_URL = 'https://poe.ninja/poe1/api/economy/exchange/cu
 
 /** poe.ninja's id for chaos, which every other price on the set is quoted in. */
 export const CHAOS_ID = 'chaos';
-const DIVINE_ID = 'divine';
+export const DIVINE_ID = 'divine';
 
 /** poe.ninja returns numbers as numbers, but a null or a string would silently become NaN. */
 function finitePositive(value: unknown): number | null {

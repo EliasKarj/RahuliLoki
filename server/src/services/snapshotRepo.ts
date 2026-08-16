@@ -14,6 +14,7 @@
 import type { PrismaClient } from '../../generated/prisma/index.js';
 import type { Breakdown } from './valuationService.ts';
 import { tabTotals } from './valuationService.ts';
+import { DIVINE_ID } from './priceService.ts';
 import type { PriceSet, PriceSetStore } from './priceService.ts';
 import type { UniqueIndex } from './uniques.ts';
 
@@ -230,7 +231,11 @@ export class PrismaPriceSetStore implements PriceSetStore {
       league: row.league,
       fetchedAt: row.fetchedAt,
       prices,
-      divineRate: prices['Divine Orb'] ?? 0,
+      // Derived rather than stored: there is no column for it, and the divine price is already
+      // in the map. It has to be read by poe.ninja's *id*, not by the display name — reading
+      // `prices['Divine Orb']` against an id-keyed map silently yields 0, and a divine rate of
+      // zero makes every restored snapshot worth zero divine while its chaos total stays right.
+      divineRate: prices[DIVINE_ID] ?? 0,
       // Null on rows written before the icons column existed. An empty map is the right
       // reading: the UI falls back to no icon, and the next fetch fills it in.
       icons: asIcons(row.icons),

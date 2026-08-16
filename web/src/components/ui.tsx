@@ -1,29 +1,66 @@
 /** Small shared pieces: panels, stat tiles, pills, the range toggle, empty states. */
 
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { RANGES, type RangeKey } from '../lib/series.ts';
 
+/**
+ * A titled section, optionally one that folds away.
+ *
+ * Collapsing matters more than it sounds. Four full-height charts stacked above the item table
+ * meant the thing most people open this app to read — what they own and what it is worth — sat
+ * two screens down every single time. The charts are worth having *and* worth being out of the
+ * way by default; folding is what lets both be true.
+ */
 export function Panel({
   title,
   subtitle,
   actions,
+  collapsible = false,
+  defaultOpen = true,
   children,
 }: {
   title: string;
   subtitle?: ReactNode;
   actions?: ReactNode;
+  collapsible?: boolean;
+  defaultOpen?: boolean;
   children: ReactNode;
 }) {
+  const [open, setOpen] = useState(defaultOpen);
+  const shown = !collapsible || open;
+
+  const heading = (
+    <div className="text-left">
+      <h2 className="text-sm font-semibold tracking-wide text-ink-100">{title}</h2>
+      {subtitle && shown ? <p className="mt-0.5 text-xs text-ink-400">{subtitle}</p> : null}
+    </div>
+  );
+
   return (
     <section className="rounded-lg border border-ink-800 bg-ink-900">
-      <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-ink-800 px-4 py-3">
-        <div>
-          <h2 className="text-sm font-semibold tracking-wide text-ink-100">{title}</h2>
-          {subtitle ? <p className="mt-0.5 text-xs text-ink-400">{subtitle}</p> : null}
-        </div>
+      <header
+        className={`flex flex-wrap items-baseline justify-between gap-2 px-4 py-3 ${
+          shown ? 'border-b border-ink-800' : ''
+        }`}
+      >
+        {collapsible ? (
+          <button
+            type="button"
+            onClick={() => setOpen((value) => !value)}
+            aria-expanded={open}
+            className="flex flex-1 items-baseline gap-2 transition-colors hover:text-ink-100"
+          >
+            <span className="text-xs text-ink-400" aria-hidden="true">
+              {open ? '\u25be' : '\u25b8'}
+            </span>
+            {heading}
+          </button>
+        ) : (
+          heading
+        )}
         {actions}
       </header>
-      <div className="p-4">{children}</div>
+      {shown ? <div className="p-4">{children}</div> : null}
     </section>
   );
 }
