@@ -17,9 +17,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # No `version:` here on purpose. The action refuses to run when the version is pinned in
+      # both places, and package.json's `packageManager` field is the one that also governs
+      # corepack locally and in the Dockerfile. Two sources of truth for the same number is
+      # what broke this workflow on every run since it was written.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - uses: actions/setup-node@v4
         with:
