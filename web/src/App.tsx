@@ -3,9 +3,10 @@ import { useSnapshots } from './hooks/useSnapshots.ts';
 import { NetWorthChart } from './components/NetWorthChart.tsx';
 import { RatePerHourChart } from './components/RatePerHourChart.tsx';
 import { TabAreaChart, TopItemsTable } from './components/TabBreakdown.tsx';
+import { Hero } from './components/Hero.tsx';
 import { SnapshotTable } from './components/SnapshotTable.tsx';
 import { PollerStatus } from './components/PollerStatus.tsx';
-import { Empty, Panel, RangeToggle, StatTile } from './components/ui.tsx';
+import { Empty, Panel, RangeToggle } from './components/ui.tsx';
 import { TokenGate } from './components/TokenGate.tsx';
 import { ChangesTable } from './components/ChangesTable.tsx';
 import { ItemHistory } from './components/ItemHistory.tsx';
@@ -16,10 +17,6 @@ import {
   formatAgo,
   formatChaos,
   formatDateTime,
-  formatDivine,
-  formatHours,
-  formatRate,
-  formatSignedChaos,
 } from './lib/format.ts';
 import type { RangeKey } from './lib/series.ts';
 
@@ -110,38 +107,7 @@ export default function App() {
         </Empty>
       ) : (
         <div className="space-y-6">
-          <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <StatTile
-              label="Net worth"
-              value={`${formatChaos(stats?.currentChaos ?? 0)}c`}
-              hint={`${formatDivine(stats?.currentDivine ?? 0)} divine at ${formatChaos(stats?.divineRate ?? 0)}c`}
-            />
-            <StatTile
-              label="Gain in range"
-              value={`${formatSignedChaos(stats?.totalGainChaos ?? 0)}c`}
-              hint={
-                stats?.firstAt
-                  ? `since ${formatDateTime(stats.firstAt)}`
-                  : 'not enough history'
-              }
-            />
-            <StatTile
-              label="c/h active"
-              value={formatRate(stats?.chaosPerHourActive ?? 0)}
-              hint={`${formatHours(stats?.activeHours ?? 0)} of ${formatHours(stats?.wallClockHours ?? 0)} moving`}
-              tone="accent"
-            />
-            <StatTile
-              label="c/h wall-clock"
-              value={formatRate(stats?.chaosPerHourWallClock ?? 0)}
-              hint={
-                stats?.bestHour
-                  ? `best hour ${formatSignedChaos(stats.bestHour.gainChaos)}c`
-                  : 'best hour not established'
-              }
-              tone="cool"
-            />
-          </section>
+          <Hero snapshots={snapshots} stats={stats} />
 
           <Panel
             title="Items"

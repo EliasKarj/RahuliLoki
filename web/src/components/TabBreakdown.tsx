@@ -215,6 +215,10 @@ export function TopItemsTable({
   let running = 0;
 
   const total = rows.reduce((sum, row) => sum + row.chaosTotal, 0);
+  // Scaled against the largest row, not against the total: against the total, everything below
+  // the top two or three holdings is a bar too short to compare with its neighbours, which is
+  // the opposite of what the bar is for.
+  const largest = rows.reduce((max, row) => Math.max(max, row.chaosTotal), 0);
 
   return (
     <div>
@@ -274,9 +278,20 @@ export function TopItemsTable({
             {rows.map((row) => {
               running += row.chaosTotal;
               return (
-                <tr key={row.name} className="border-b border-ink-850 last:border-0">
-                  <td className="py-1.5 pr-3 text-ink-100">
-                    <span className="flex items-center gap-2">
+                <tr
+                  key={row.name}
+                  className="group relative border-b border-ink-850 last:border-0"
+                >
+                  {/* The row's share of the largest holding, drawn behind it. A hundred rows of
+                      right-aligned numbers are hard to weigh against each other; this makes the
+                      shape of a stash readable without a second chart to look at. */}
+                  <td className="relative py-1.5 pr-3 text-ink-100">
+                    <span
+                      aria-hidden="true"
+                      className="pointer-events-none absolute inset-y-0.5 left-0 z-0 rounded-r-sm bg-accent-500/[0.13] transition-colors group-hover:bg-accent-500/25"
+                      style={{ width: largest > 0 ? `${(row.chaosTotal / largest) * 100}%` : '0%' }}
+                    />
+                    <span className="relative z-10 flex items-center gap-2">
                       <ItemIcon src={row.icon} />
                       {onSelect ? (
                         <button
@@ -291,7 +306,7 @@ export function TopItemsTable({
                       )}
                     </span>
                   </td>
-                  <td className="py-1.5 pr-3 text-ink-400" title={row.tabs.join(', ')}>
+                  <td className="py-1.5 pr-3 text-ink-500" title={row.tabs.join(', ')}>
                     {row.tabs.length === 1 ? row.tabs[0] : `${row.tabs[0]} +${row.tabs.length - 1}`}
                   </td>
                   <td className="num py-1.5 pr-3 text-ink-200">{formatCount(row.qty)}</td>

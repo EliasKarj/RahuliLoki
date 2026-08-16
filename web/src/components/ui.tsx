@@ -4,12 +4,17 @@ import { useState, type ReactNode } from 'react';
 import { RANGES, type RangeKey } from '../lib/series.ts';
 
 /**
- * A titled section, optionally one that folds away.
+ * A titled section. Optionally one that folds away.
  *
- * Collapsing matters more than it sounds. Four full-height charts stacked above the item table
- * meant the thing most people open this app to read — what they own and what it is worth — sat
- * two screens down every single time. The charts are worth having *and* worth being out of the
- * way by default; folding is what lets both be true.
+ * Not a card. Cards put a border and a fill around everything, which gives every section the
+ * same visual weight and stacks eight hairlines down a screen that is mostly numbers. A rule
+ * and a small-caps label separate sections just as clearly and leave the data as the only thing
+ * with edges.
+ *
+ * Collapsing matters more than it sounds. Four full-height charts above the item table meant
+ * the thing most people open this app to read — what they own and what it is worth — sat two
+ * screens down every single time. The charts are worth having *and* worth being out of the way
+ * by default; folding is what lets both be true.
  */
 export function Panel({
   title,
@@ -30,29 +35,33 @@ export function Panel({
   const shown = !collapsible || open;
 
   const heading = (
-    <div className="text-left">
-      <h2 className="text-sm font-semibold tracking-wide text-ink-100">{title}</h2>
-      {subtitle && shown ? <p className="mt-0.5 text-xs text-ink-400">{subtitle}</p> : null}
+    <div className="flex items-baseline gap-2 text-left">
+      {collapsible ? (
+        <span className="text-[0.6rem] text-ink-500 transition-colors group-hover:text-accent-500" aria-hidden="true">
+          {open ? '\u25be' : '\u25b8'}
+        </span>
+      ) : null}
+      <h2 className="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-ink-300">
+        {title}
+      </h2>
+      {subtitle && shown ? (
+        <p className="hidden text-xs font-normal normal-case tracking-normal text-ink-500 lg:block">
+          {subtitle}
+        </p>
+      ) : null}
     </div>
   );
 
   return (
-    <section className="rounded-lg border border-ink-800 bg-ink-900">
-      <header
-        className={`flex flex-wrap items-baseline justify-between gap-2 px-4 py-3 ${
-          shown ? 'border-b border-ink-800' : ''
-        }`}
-      >
+    <section>
+      <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-ink-800 pb-2">
         {collapsible ? (
           <button
             type="button"
             onClick={() => setOpen((value) => !value)}
             aria-expanded={open}
-            className="flex flex-1 items-baseline gap-2 transition-colors hover:text-ink-100"
+            className="group flex flex-1 items-baseline transition-colors"
           >
-            <span className="text-xs text-ink-400" aria-hidden="true">
-              {open ? '\u25be' : '\u25b8'}
-            </span>
             {heading}
           </button>
         ) : (
@@ -60,33 +69,8 @@ export function Panel({
         )}
         {actions}
       </header>
-      {shown ? <div className="p-4">{children}</div> : null}
+      {shown ? <div className="pt-4">{children}</div> : null}
     </section>
-  );
-}
-
-export function StatTile({
-  label,
-  value,
-  hint,
-  tone = 'accent',
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-  tone?: 'accent' | 'cool' | 'plain';
-}) {
-  const valueColour =
-    tone === 'accent' ? 'text-accent-500' : tone === 'cool' ? 'text-cool-500' : 'text-ink-100';
-
-  return (
-    <div className="rounded-lg border border-ink-800 bg-ink-900 px-4 py-3">
-      <div className="text-[11px] font-medium uppercase tracking-wider text-ink-400">{label}</div>
-      <div className={`num mt-1 text-2xl leading-none ${valueColour}`} style={{ textAlign: 'left' }}>
-        {value}
-      </div>
-      {hint ? <div className="mt-1.5 text-xs text-ink-400">{hint}</div> : null}
-    </div>
   );
 }
 

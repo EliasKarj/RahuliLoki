@@ -415,6 +415,25 @@ Incubator, Artifact, Vial, Omen, Tattoo`.
 
 ## Mitä sivu näyttää
 
+Sivu on **loki, ei korttitaulu**. Ei laatikoita eikä reunuksia: hiusviivat erottavat osiot,
+ja ainoat asiat joilla on reunat ovat luvut itse.
+
+Ylinnä yksi hallitseva lukema — nettoarvo — ja sarja piirrettynä sen taakse. Tukiluvut ovat
+sen alla rivinä, hiusviivoin jaettuna. Heti perässä **esinetaulukko**, jossa jokaisen rivin
+takana on palkki: rivin osuus suurimmasta omistuksesta. Kaaviot ovat alempana yhden rivin
+palkkeina, oletuksena kiinni.
+
+> **▸ Miksi neljä yhtä suurta korttia lähti:** ne antoivat nettoarvolle, tuotolle ja kahdelle
+> tuntinopeudelle saman visuaalisen painon. Kukaan ei lue niitä niin: yksi on se luku jonka
+> takia sovellus avattiin, loput ovat sen taustaa. Neljä identtistä laatikkoa litistää eron ja
+> panee silmän etsimään sitä joka merkitsee.
+>
+> **▸ Miksi palkit taulukossa:** sata riviä oikealle tasattuja lukuja on vaikea punnita
+> keskenään. Palkki tekee arkun muodosta luettavan lisäämättä toista kaaviota katsottavaksi.
+> Se skaalataan suurimpaan riviin eikä summaan — summaa vasten kaikki kolmen kärkiomistuksen
+> alapuolella olisi liian lyhyt verrattavaksi, mikä on juuri päinvastoin kuin mitä palkilta
+> haetaan.
+
 ### 1. Nettoarvo ajassa
 
 Chaos pinta-alana vasemmalla akselilla, **divine-kurssi ohuena katkoviivana oikealla**.
@@ -711,7 +730,7 @@ validoimaton symlinkkien polkuhyppäys purettaessa. Korjattua versiota **ei ole 
 pnpm test
 ```
 
-**423 testiä**, ei yhtään verkkopyyntöä:
+**430 testiä**, ei yhtään verkkopyyntöä:
 
 - **Nopeusrajoitin** — otsakkeiden jäsennys, tahdistus, sarjallistuminen, `Retry-After`,
   kaksinkertaistuminen kattoon asti. Kello ja uni ovat väärennettyjä, joten 30 minuutin
