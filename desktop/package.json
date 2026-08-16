@@ -5,11 +5,13 @@
   "type": "module",
   "main": "dist/main.js",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "start": "pnpm build && electron .",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "tsc -p tsconfig.build.json",
     "package": "pnpm build && electron-builder --config electron-builder.yml",
-    "package:dir": "pnpm build && electron-builder --config electron-builder.yml --dir"
+    "package:dir": "pnpm build && electron-builder --config electron-builder.yml --dir",
+    "start": "pnpm build && electron .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@valuuttaloki/server": "workspace:*"
@@ -18,7 +20,8 @@
     "@types/node": "^22.13.1",
     "electron": "^39.8.10",
     "electron-builder": "^26.15.3",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "vitest": "^3.2.7"
   },
   "description": "Self-hosted Path of Exile wealth tracker, as a desktop application.",
   "author": "EliasKarj",
