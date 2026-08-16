@@ -22,6 +22,16 @@ function stashFetch(responses: Record<string, () => Response> = {}) {
   }) as unknown as typeof fetch;
 }
 
+/** The message of whatever `run` throws. Empty when it does not throw. */
+async function messageOf(run: () => Promise<unknown>): Promise<string> {
+  try {
+    await run();
+    return '';
+  } catch (thrown) {
+    return (thrown as Error).message;
+  }
+}
+
 function service(fetchFn: typeof fetch, trackedTabs: string[] = []) {
   const limiter = new RateLimiter({
     fetchFn,
@@ -123,24 +133,62 @@ describe('StashService', () => {
     expect(maxInFlight).toBe(1);
   });
 
-  it('names both causes of a 403, not just the expired session', async () => {
-    // Naming only expiry sends someone through a fresh login that cannot help, because GGG
-    // answers 403 just the same when the session is valid but names a different account than
-    // the request does. Both have to be in the message for either to be actionable.
+  it('names every cause of a 403, not just the expired session', async () => {
+    // Naming only expiry sends someone through a fresh login that cannot help: GGG answers 403
+    // just the same when the session is valid but names a different account, and Cloudflare
+    // answers 403 before GGG sees the request at all. All three have to be in the message for
+    // any of them to be actionable.
     registerSecret(SESSION);
     const fetchFn = stashFetch({ list: () => stashResponse({ error: 'forbidden' }, 403, HEADERS) });
 
-    let message = '';
-    try {
-      await service(fetchFn).listTabs();
-    } catch (thrown) {
-      message = (thrown as Error).message;
-    }
+    const message = await messageOf(() => service(fetchFn).listTabs());
 
     expect(message).toMatch(/session has expired/);
-    expect(message).toMatch(/POE_ACCOUNT_NAME does not match/);
+    expect(message).toMatch(/names a different account/);
+    expect(message).toMatch(/Cloudflare/);
     // And it says what the name currently is, so the comparison can be made without digging.
     expect(message).toContain('Exile#1234');
+    clearSecrets();
+  });
+
+  it('quotes the response body, which is what tells the three apart', async () => {
+    const fetchFn = stashFetch({
+      list: () => stashResponse({ error: { code: 1, message: 'Forbidden' } }, 403, HEADERS),
+    });
+    expect(await messageOf(() => service(fetchFn).listTabs())).toContain('"message":"Forbidden"');
+  });
+
+  it('flattens a Cloudflare page instead of pasting its markup', async () => {
+    // The distinguishing case. An HTML challenge page must arrive as one readable line, and it
+    // must be recognisable as HTML rather than as GGG's JSON.
+    const html =
+      '<html><head><style>.x{color:red}</style></head><body>\n  <h1>Sorry, you have been ' +
+      'blocked</h1>\n  <p>You are unable to access pathofexile.com</p>\n</body></html>';
+    const fetchFn = stashFetch({
+      list: () => new Response(html, { status: 403, headers: HEADERS }),
+    });
+
+    const message = await messageOf(() => service(fetchFn).listTabs());
+    expect(message).toContain('Sorry, you have been blocked You are unable to access');
+    expect(message).not.toContain('<h1>');
+    expect(message).not.toContain('color:red');
+  });
+
+  it('says so plainly when the refusal had no body at all', async () => {
+    const fetchFn = stashFetch({ list: () => new Response('', { status: 403, headers: HEADERS }) });
+    expect(await messageOf(() => service(fetchFn).listTabs())).toContain('no body');
+  });
+
+  it('never lets the session leak out through the quoted body', async () => {
+    // The body is remote text pasted into an error a person will screenshot. If GGG ever echoed
+    // the cookie back, scrub has to catch it on the way through.
+    registerSecret(SESSION);
+    const fetchFn = stashFetch({
+      list: () => new Response(`rejected session ${SESSION}`, { status: 403, headers: HEADERS }),
+    });
+
+    const message = await messageOf(() => service(fetchFn).listTabs());
+    expect(message).not.toContain(SESSION);
     clearSecrets();
   });
 

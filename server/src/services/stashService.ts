@@ -74,6 +74,35 @@ function asItems(value: unknown): StashItem[] {
   return Array.isArray(value) ? (value as StashItem[]) : [];
 }
 
+/**
+ * A short, flattened look at an error response body.
+ *
+ * Worth having because the two things a 403 can be look nothing alike and we were throwing the
+ * evidence away unread: GGG's own refusal is JSON — `{"error":{"code":1,"message":"Forbidden"}}`
+ * — while a Cloudflare bot challenge is an HTML page that never reached GGG at all. Same status
+ * code, completely different fix, and no way to tell them apart from the outside.
+ *
+ * Tags are stripped and whitespace collapsed so an HTML page becomes one readable line rather
+ * than two hundred of markup, and the whole thing is capped: this goes in an error message a
+ * person reads, not in a log nobody scrolls.
+ */
+export async function describeBody(response: Response, limit = 300): Promise<string> {
+  let text: string;
+  try {
+    text = await response.text();
+  } catch {
+    return '';
+  }
+  const flattened = text
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (flattened === '') return '';
+  return flattened.length > limit ? `${flattened.slice(0, limit)}…` : flattened;
+}
+
 /** Normalise GGG's tab list. `n` is the name, `i` the index, `type` the tab kind. */
 export function parseTabs(value: unknown): StashTabInfo[] {
   if (!Array.isArray(value)) return [];
@@ -149,16 +178,22 @@ export class StashService {
     });
 
     if (response.status === 403 || response.status === 401) {
-      // Two causes, not one, and the message used to name only the first — which sent someone
-      // through a fresh login that could not have helped. GGG answers 403 both for a session it
-      // does not accept *and* for a session that is fine but belongs to a different account than
-      // `accountName` says: asking for somebody else's stash is forbidden, not missing.
+      // Three causes, not one, and the message named only the first for a long time — which sent
+      // someone through a fresh login that could not have helped. GGG answers 403 for a session
+      // it does not accept, for a session that is fine but belongs to a different account than
+      // `accountName` says (asking for somebody else's stash is forbidden, not missing), and the
+      // edge in front of GGG answers 403 for a request it decides is a bot, before GGG sees it.
+      //
+      // The body is what separates them, so it goes in the message. `scrub` runs over the whole
+      // thing in the StashError constructor, so a body that echoed the cookie cannot leak here.
+      const body = await describeBody(response);
       throw new StashError(
-        `GGG rejected this request (HTTP ${response.status}). Either the session has expired — ` +
-          'sign in again — or POE_ACCOUNT_NAME does not match the account the session belongs ' +
-          `to. It is currently "${this.#options.accountName}"; GGG spells yours at ` +
-          'https://www.pathofexile.com/api/profile, and it must match exactly. Note that a ' +
-          'session that is valid for a different account fails here as 403, not as 404.',
+        `GGG rejected this request (HTTP ${response.status}). Three things do this: the session ` +
+          'has expired (sign in again); POE_ACCOUNT_NAME names a different account than the ' +
+          `session does (it is currently "${this.#options.accountName}" — GGG spells yours at ` +
+          'https://www.pathofexile.com/api/profile and it must match exactly); or Cloudflare ' +
+          'refused the request before GGG saw it, which looks like an HTML page rather than ' +
+          `JSON below.${body === '' ? ' The response had no body.' : ` GGG said: ${body}`}`,
         response.status,
       );
     }
@@ -170,7 +205,12 @@ export class StashService {
       );
     }
     if (!response.ok) {
-      throw new StashError(`GGG returned HTTP ${response.status} for tab ${tabIndex}`, response.status);
+      const body = await describeBody(response);
+      throw new StashError(
+        `GGG returned HTTP ${response.status} for tab ${tabIndex}` +
+          (body === '' ? '' : `: ${body}`),
+        response.status,
+      );
     }
 
     try {
