@@ -149,10 +149,16 @@ export class StashService {
     });
 
     if (response.status === 403 || response.status === 401) {
+      // Two causes, not one, and the message used to name only the first — which sent someone
+      // through a fresh login that could not have helped. GGG answers 403 both for a session it
+      // does not accept *and* for a session that is fine but belongs to a different account than
+      // `accountName` says: asking for somebody else's stash is forbidden, not missing.
       throw new StashError(
-        'GGG rejected the session (HTTP ' +
-          response.status +
-          '). POESESSID has most likely expired — log in again and copy a fresh one.',
+        `GGG rejected this request (HTTP ${response.status}). Either the session has expired — ` +
+          'sign in again — or POE_ACCOUNT_NAME does not match the account the session belongs ' +
+          `to. It is currently "${this.#options.accountName}"; GGG spells yours at ` +
+          'https://www.pathofexile.com/api/profile, and it must match exactly. Note that a ' +
+          'session that is valid for a different account fails here as 403, not as 404.',
         response.status,
       );
     }
