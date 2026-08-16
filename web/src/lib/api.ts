@@ -295,6 +295,13 @@ export const api = {
 
   health: (signal?: AbortSignal) => get<HealthResponse>('/api/health', signal),
 
+  /**
+   * Ask for a poll. Resolves once the server has *started* one, not once it has finished.
+   *
+   * The server answers 202 immediately, because a poll paces itself against GGG's rate limit and
+   * runs for minutes on a large stash. Watch `health.poller.running` for the rest — waiting on
+   * this request instead is what produced "Failed to fetch" over a poll that was running fine.
+   */
   poll: async (): Promise<{ ok: boolean; error?: string }> => {
     const response = await fetch('/api/poll', { method: 'POST', headers: authHeaders() });
     const body = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null;

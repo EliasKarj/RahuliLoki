@@ -208,14 +208,15 @@ describe('the cross-origin guard', () => {
 
   it('allows a write from the page it serves', async () => {
     const { app, poller } = await makeApp({}, env);
-    poller.outcome = new Error('upstream down');
     const response = await app.inject({
       method: 'POST',
       url: '/api/poll',
       headers: { ...auth, origin: 'http://localhost:3000', host: 'localhost:3000' },
     });
-    // 502 rather than 403: the guard let it through and the poll itself is what failed.
-    expect(response.statusCode).toBe(502);
+    // 202 rather than 403: the guard let it through and the poll started. What the poll then
+    // does is not this guard's business — the route answers before the poll finishes.
+    expect(response.statusCode).toBe(202);
+    expect(poller.calls).toBe(1);
   });
 
   it('allows a write with no Origin header at all, which is what curl sends', async () => {

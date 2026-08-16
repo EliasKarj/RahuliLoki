@@ -329,61 +329,84 @@ describe('GET /api/health', () => {
 });
 
 describe('POST /api/poll', () => {
-  it('returns the outcome of a manual poll', async () => {
+  it('answers 202 as soon as the poll has started, not when it finishes', async () => {
+    // A poll paces itself against GGG's rate limit — one stash request every eighteen seconds on
+    // the tightest bucket — so a full stash is minutes of work. Holding the request open for
+    // that long means the client gives up first and shows a network error over a poll that is
+    // running perfectly well, which is exactly what happened.
     const { app, poller } = await makeApp();
-    poller.outcome = {
-      snapshot: {
-        id: 9,
-        takenAt: new Date(START),
-        league: 'Settlers',
-        totalChaos: 1600,
-        totalDivine: 7.3,
-        divineRate: 218.4,
-        itemCount: 520,
-        priceSetAt: new Date(START),
-      },
-      tabsRead: 3,
-      unresolvedCount: 2,
-      skipped: 1,
-      droppedBelowThreshold: 4,
-      priceAgeMinutes: 0,
-      durationMs: 812,
-    };
 
     const response = await app.inject({ method: 'POST', url: '/api/poll' });
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({ ok: true, tabsRead: 3, unresolvedCount: 2 });
+
+    expect(response.statusCode).toBe(202);
+    expect(response.json()).toEqual({ ok: true, started: true });
+    expect(poller.calls).toBe(1);
   });
 
   it('answers 409 when a poll is already running', async () => {
     const { app, poller } = await makeApp();
-    poller.outcome = new PollerBusyError('a poll is already running');
-    expect((await app.inject({ method: 'POST', url: '/api/poll' })).statusCode).toBe(409);
+    poller.health = { ...idleHealth, running: true };
+
+    const response = await app.inject({ method: 'POST', url: '/api/poll' });
+
+    expect(response.statusCode).toBe(409);
+    // And it must not have started a second one on top of the first.
+    expect(poller.calls).toBe(0);
   });
 
   it('answers 503 when polling is disabled', async () => {
     const { app, poller } = await makeApp();
-    poller.outcome = new PollerHaltedError('polling disabled: POESESSID not set');
-    expect((await app.inject({ method: 'POST', url: '/api/poll' })).statusCode).toBe(503);
+    poller.health = { ...idleHealth, disabledReason: 'polling disabled: POESESSID not set' };
+
+    const response = await app.inject({ method: 'POST', url: '/api/poll' });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json().error).toMatch(/POESESSID/);
+    expect(poller.calls).toBe(0);
   });
 
-  it('answers 502 with the reason when the poll itself fails', async () => {
+  it('still answers 202 when the poll goes on to fail', async () => {
+    // The outcome cannot be this response's status any more: it arrives minutes later. It is
+    // recorded in the poller's health, which is where the dashboard reads it from.
     const { app, poller } = await makeApp();
     poller.outcome = new Error('GGG returned HTTP 500 for tab 1');
 
     const response = await app.inject({ method: 'POST', url: '/api/poll' });
-    expect(response.statusCode).toBe(502);
-    expect(response.json().error).toMatch(/HTTP 500/);
+    await poller.settle();
+
+    expect(response.statusCode).toBe(202);
+    expect(poller.calls).toBe(1);
   });
 
-  it('scrubs a credential out of a failure message', async () => {
+  it('does not crash the process when the started poll rejects', async () => {
+    // An unawaited rejection is an unhandled promise rejection, which Node treats as fatal.
+    const { app, poller } = await makeApp();
+    poller.outcome = new Error('GGG returned HTTP 500 for tab 1');
+
+    const rejections: unknown[] = [];
+    const onRejection = (reason: unknown): void => {
+      rejections.push(reason);
+    };
+    process.on('unhandledRejection', onRejection);
+    try {
+      await app.inject({ method: 'POST', url: '/api/poll' });
+      await poller.settle();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    } finally {
+      process.off('unhandledRejection', onRejection);
+    }
+
+    expect(rejections).toEqual([]);
+  });
+
+  it('keeps a credential out of the refusal it does report', async () => {
     registerSecret(SESSION);
     const { app, poller } = await makeApp();
-    poller.outcome = new Error(`request failed with POESESSID=${SESSION}`);
+    poller.health = { ...idleHealth, disabledReason: `bad session POESESSID=${SESSION}` };
 
     const response = await app.inject({ method: 'POST', url: '/api/poll' });
+
     expect(response.body).not.toContain(SESSION);
-    expect(response.json().error).toContain('[redacted]');
   });
 });
 
