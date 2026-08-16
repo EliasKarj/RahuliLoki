@@ -75,6 +75,14 @@ export async function runPoll(deps: PollDependencies): Promise<PollOutcome> {
     );
   }
 
+  // Icons come from the stash now — poe.ninja stopped publishing them. Merged into the price
+  // set, which is where every icon lookup already reads from, and only written when something
+  // was new. Failure here is not worth losing a snapshot over: an icon is decoration, the
+  // number is the point.
+  await deps.prices.rememberIcons(valuation.icons).catch((error: unknown) => {
+    log.warn({ err: error }, 'could not store the icons this poll saw');
+  });
+
   const snapshot = await deps.store.create({
     league: deps.league,
     takenAt: new Date(now()),

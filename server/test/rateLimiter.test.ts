@@ -62,22 +62,64 @@ describe('parseRetryAfter', () => {
 describe('computeDelayMs', () => {
   const limit = (hits: number, periodSeconds: number) => ({ hits, periodSeconds, restrictedSeconds: 0 });
 
-  it('paces at the bucket refill rate rather than bursting', () => {
-    // 45 hits per 60s is one request every 1.333s.
+  it('does not pace a bucket that still has room', () => {
+    // 1 of 45 used. Pacing every request at the bucket's average refill rate was what made a
+    // twenty-tab stash take six minutes with the allowance barely touched — the budget is there
+    // to be spent, and this is the half of it that is free.
     expect(computeDelayMs([limit(45, 60)], [{ hits: 1, periodSeconds: 60, restrictedSeconds: 0 }])).toBe(
-      1334,
+      0,
     );
   });
 
+  it('starts pacing once a bucket is past its reserve', () => {
+    // 30 of 45 used: a third of the bucket left, so a third of the way past the reserve.
+    const delay = computeDelayMs([limit(45, 60)], [{ hits: 30, periodSeconds: 60, restrictedSeconds: 0 }]);
+    expect(delay).toBeGreaterThan(0);
+    expect(delay).toBeLessThan(1334);
+  });
+
+  it('reaches the full refill rate as the bucket empties', () => {
+    // 44 of 45 used. One request left, and the pace has ramped to the bucket's own average —
+    // the approach to a cap is a slowdown, not a wall.
+    const delay = computeDelayMs([limit(45, 60)], [{ hits: 44, periodSeconds: 60, restrictedSeconds: 0 }]);
+    expect(delay).toBeGreaterThan(1200);
+    expect(delay).toBeLessThanOrEqual(1334);
+  });
+
+  it('ramps monotonically as a bucket fills', () => {
+    const at = (used: number) =>
+      computeDelayMs([limit(45, 60)], [{ hits: used, periodSeconds: 60, restrictedSeconds: 0 }]);
+    const curve = [0, 10, 22, 30, 38, 44].map(at);
+    for (let i = 1; i < curve.length; i += 1) {
+      expect(curve[i]).toBeGreaterThanOrEqual(curve[i - 1] as number);
+    }
+  });
+
   it('follows the tightest of several buckets', () => {
+    // The small bucket is 8 of 10 gone while the large one is untouched. The answer has to come
+    // from the small one — a spare hourly allowance is no reason to empty a per-minute cap.
     const delay = computeDelayMs(
       [limit(45, 60), limit(10, 60)],
       [
         { hits: 1, periodSeconds: 60, restrictedSeconds: 0 },
-        { hits: 1, periodSeconds: 60, restrictedSeconds: 0 },
+        { hits: 8, periodSeconds: 60, restrictedSeconds: 0 },
       ],
     );
-    expect(delay).toBe(6000);
+    expect(delay).toBeGreaterThan(3000);
+    expect(delay).toBeLessThanOrEqual(6000);
+  });
+
+  it('lets a long bucket with room stop dictating the pace', () => {
+    // The regression this change exists to fix. GGG's hourly policy averages to one request
+    // every eighteen seconds; with 17 of 200 spent there is no reason to crawl at it.
+    const delay = computeDelayMs(
+      [limit(45, 60), limit(200, 3600)],
+      [
+        { hits: 2, periodSeconds: 60, restrictedSeconds: 0 },
+        { hits: 17, periodSeconds: 3600, restrictedSeconds: 0 },
+      ],
+    );
+    expect(delay).toBe(0);
   });
 
   it('waits a whole period once a bucket is spent', () => {
@@ -122,7 +164,10 @@ function testLimiter(
 }
 
 describe('RateLimiter', () => {
-  it('paces later requests from the headers the first one returned', async () => {
+  it('stays at the minimum interval while the bucket has room', async () => {
+    // 2 of 45 used. The floor between requests still applies — being allowed to spend the
+    // budget is not a reason to fire as fast as the socket will go — but the bucket itself adds
+    // nothing on top of it.
     const fetchFn = vi.fn(async () =>
       stashResponse({ ok: true }, 200, { limit: '45:60:120', state: '2:60:0' }),
     ) as unknown as typeof fetch;
@@ -131,7 +176,22 @@ describe('RateLimiter', () => {
     await limiter.request('https://example.test/a');
     await limiter.request('https://example.test/b');
 
-    expect(sleeps.filter((ms) => ms > 0)).toEqual([1334]);
+    expect(sleeps.filter((ms) => ms > 0)).toEqual([1000]);
+  });
+
+  it('paces beyond the floor once the headers say the bucket is filling', async () => {
+    // 40 of 45 used, so the ramp is well past the reserve and asks for more than the floor.
+    const fetchFn = vi.fn(async () =>
+      stashResponse({ ok: true }, 200, { limit: '45:60:120', state: '40:60:0' }),
+    ) as unknown as typeof fetch;
+    const { limiter, sleeps } = testLimiter(fetchFn);
+
+    await limiter.request('https://example.test/a');
+    await limiter.request('https://example.test/b');
+
+    const paced = sleeps.filter((ms) => ms > 0);
+    expect(paced).toHaveLength(1);
+    expect(paced[0]).toBeGreaterThan(1000);
   });
 
   it('serialises requests instead of firing them in parallel', async () => {

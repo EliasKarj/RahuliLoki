@@ -111,6 +111,16 @@ export function parseRetryAfter(value: string | null | undefined, nowMs: number)
 }
 
 /**
+ * The share of a bucket that may be spent freely before pacing starts.
+ *
+ * Half. Below that the delay ramps toward the bucket's refill rate, so the second half of the
+ * allowance is what pays for the slowdown — the first half is there to be used. Lower means
+ * faster polls and less margin; higher means the opposite. It is a single number on purpose:
+ * the tuning knob for "how close to GGG's cap is this app willing to run".
+ */
+export const PACING_RESERVE = 0.5;
+
+/**
  * How long to wait before the next request, given every policy in force. Returns the largest
  * wait any single bucket demands — the tightest bucket, as the spec puts it.
  */
@@ -140,9 +150,23 @@ export function computeDelayMs(
       continue;
     }
 
-    // Pace at the rate the bucket refills. Bursting up to the cap and then stalling is what
-    // trips the longer policies, and it buys nothing: the poll has ten minutes to finish.
-    delay = Math.max(delay, (limit.periodSeconds / limit.hits) * 1000);
+    // Pace by how much of the bucket is left, not by its average refill rate.
+    //
+    // Pacing every request at the slowest bucket's average was too blunt. GGG publishes
+    // something like `45:60:120,200:3600:3600`, and the hourly policy averages out to one
+    // request every eighteen seconds — so reading a twenty-tab stash took six minutes with the
+    // hourly budget barely touched. The allowance was there; we simply refused to spend it.
+    //
+    // A bucket with room to spare imposes nothing. Past the reserve the delay ramps up smoothly
+    // and reaches the full refill rate exactly as the bucket empties, so approaching the cap is
+    // a slowdown rather than a wall. The hard protections are untouched above: a spent bucket
+    // still waits out its whole period, and an explicit restriction is still obeyed to the
+    // second.
+    const headroom = remaining / limit.hits;
+    if (headroom >= PACING_RESERVE) continue;
+
+    const pressure = (PACING_RESERVE - headroom) / PACING_RESERVE;
+    delay = Math.max(delay, pressure * (limit.periodSeconds / limit.hits) * 1000);
   }
 
   return Math.ceil(delay);

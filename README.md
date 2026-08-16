@@ -520,16 +520,27 @@ X-Rate-Limit-Account-State:  2:60:0,  17:3600:0
 
 Kolmikko on `osumat:jakso:rangaistus`. Rajoitin
 
-- **tahdistaa** pyynnöt tiukimman ämpärin luontaiseen täyttymisnopeuteen (`jakso / osumat`) sen
-  sijaan että purskauttaisi katon täyteen ja jäisi odottamaan;
+- **tahdistaa** sen mukaan **paljonko ämpärissä on jäljellä**, ei sen keskimääräisen
+  täyttymisnopeuden mukaan: ensimmäinen puolikas budjetista saa kulua vapaasti, ja sen jälkeen
+  viive kiihtyy tasaisesti täyteen `jakso / osumat` -vauhtiin siihen mennessä kun ämpäri on
+  tyhjä;
 - **sarjallistaa** pyynnöt — yksi kerrallaan, ei koskaan rinnakkain;
 - **odottaa koko jakson** kun ämpäri on tyhjä, ja ilmoitetun ajan kun tila kertoo rangaistuksesta;
 - **kunnioittaa `Retry-Afteria`** 429:ssä ja kaksinkertaistaa siitä 30 minuuttiin asti;
 - **luovuttaa** `RateLimitError`illa sen sijaan että jatkaisi hakkaamista.
 
-> **▸ Miksi tahdistus eikä purskaus:** purskaus mahtuu 45:60-ämpäriin mutta laukaisee pidemmän
-> 180:3600-säännön, ja pitkän säännön rangaistus on tunteja. Kierroksella on kymmenen minuuttia
-> aikaa; 30 välilehteä 1,3 sekunnin välein vie 40 sekuntia. Kiirettä ei ole.
+> **▸ Miksi jäljellä olevan mukaan eikä keskinopeudella:** aiempi sääntö tahdisti *jokaisen*
+> pyynnön hitaimman ämpärin keskiarvoon. Tuntisääntö `200:3600` on keskimäärin yksi pyyntö per
+> 18 sekuntia, joten kahdenkymmenen välilehden arkku kesti kuusi minuuttia — silloinkin kun
+> tuntibudjetista oli käytetty 17/200. Budjetti oli olemassa, me vain kieltäydyimme käyttämästä
+> sitä.
+>
+> Nyt väljä ämpäri ei vaadi mitään. Varannon jälkeen viive kiihtyy tasaisesti, joten katon
+> lähestyminen on hidastus eikä seinä. Kovat suojat ovat ennallaan: tyhjä ämpäri odottaa yhä
+> koko jaksonsa ja ilmoitettua rangaistusta noudatetaan sekunnilleen.
+>
+> Säädin on yksi luku, `PACING_RESERVE`. Se on tarkoituksella yksi: se vastaa kysymykseen
+> "kuinka lähelle GGG:n kattoa tämä sovellus suostuu ajamaan".
 
 Ensimmäinen kutsu palauttaa välilehtilistan **ja** ensimmäisen välilehden esineet samassa
 vastauksessa, joten sitä ei lueta kahdesti.
@@ -564,9 +575,11 @@ nimeä, koska sitä suuntaa ei voi palauttaa: `assassins-favour` ei kerro mihin 
 kuului. Erittely näytetään edelleen näyttönimellä, ja se tulee arkusta, mikä on parempi lähde
 kuin poe.ninja oli.
 
-**Ikonit** ovat poissa kaikelta paitsi chaosilta ja divinelta — ne ovat ainoat esineet jotka API
-vielä nimeää. Loput ovat sivuston omassa JavaScriptissä. Aukkoa ei paikata arvaamalla: esine
-ilman ikonia näkyy ilman ikonia.
+**Ikonit** eivät tule enää poe.ninjalta — se julkaisee ne vain chaosille ja divinelle. Ne
+otetaan nyt **aarrearkun vastauksesta**, jossa jokaisella esineellä on `icon`-kenttä GGG:n omaan
+CDN:ään. Se on parempi lähde kuin poe.ninja koskaan oli: se on juuri sen esineen kuva jota
+lasketaan, piirtäjiltä itseltään. Kierros tallettaa näkemänsä hintasettiin, jota ikonihaku lukee
+muutenkin, ja kirjoittaa vain kun jotain oli uutta.
 
 **Uniikit** jäävät hinnoittelematta, ks. `PRICE_UNIQUE_CATEGORIES` yllä.
 
@@ -698,7 +711,7 @@ validoimaton symlinkkien polkuhyppäys purettaessa. Korjattua versiota **ei ole 
 pnpm test
 ```
 
-**396 testiä**, ei yhtään verkkopyyntöä:
+**409 testiä**, ei yhtään verkkopyyntöä:
 
 - **Nopeusrajoitin** — otsakkeiden jäsennys, tahdistus, sarjallistuminen, `Retry-After`,
   kaksinkertaistuminen kattoon asti. Kello ja uni ovat väärennettyjä, joten 30 minuutin

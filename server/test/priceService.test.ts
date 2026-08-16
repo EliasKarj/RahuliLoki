@@ -174,13 +174,17 @@ describe('mergeOverview', () => {
     expect(prices).toEqual({});
   });
 
-  it('collects icons for the ids the payload names', () => {
+  it('keys icons by display name, which is how every lookup asks for them', () => {
+    // Keyed by id they matched nothing: the breakdown a person reads is keyed by name, so even
+    // chaos and divine — the only two items the API still names — never showed an icon.
     const prices: Record<string, number> = {};
     const icons: Record<string, string> = {};
     mergeOverview(currencyOverview, prices, icons);
-    expect(icons['chaos']).toMatch(/CurrencyRerollRare\.png$/);
-    // And nothing for the rest: the API no longer publishes their icons at all.
-    expect(Object.keys(icons).sort()).toEqual(['chaos', 'divine']);
+
+    expect(icons['Chaos Orb']).toMatch(/CurrencyRerollRare\.png$/);
+    // And nothing for the rest: the API no longer publishes their icons at all. Everything else
+    // the dashboard shows comes from the stash — see StashItem.icon.
+    expect(Object.keys(icons).sort()).toEqual(['Chaos Orb', 'Divine Orb']);
   });
 
   it('refuses a payload quoted in something other than chaos', () => {
@@ -431,5 +435,51 @@ describe('unmatchedIds', () => {
       Array.from({ length: 100 }, (_, index) => [`id${index}`, 1]),
     );
     expect(unmatchedIds(prices, new Set(), 5)).toHaveLength(5);
+  });
+});
+
+describe('rememberIcons', () => {
+  it('folds in icons the poll found and persists them', async () => {
+    // The stash is where icons come from now, and this is how they reach the read path that
+    // joins them onto the breakdown.
+    const { store, saved } = memoryStore();
+    const subject = service({ store });
+    await subject.getPrices();
+    const before = saved.length;
+
+    const added = await subject.rememberIcons({ 'The Doctor': 'https://web.poecdn.com/doc.png' });
+
+    expect(added).toBe(1);
+    expect(subject.cached?.icons['The Doctor']).toBe('https://web.poecdn.com/doc.png');
+    expect(saved.length).toBe(before + 1);
+  });
+
+  it('writes nothing when it learned nothing', async () => {
+    // Every poll passes the same icons. Rewriting the row 144 times a day for no difference is
+    // a write nobody asked for.
+    const { store, saved } = memoryStore();
+    const subject = service({ store });
+    await subject.getPrices();
+    await subject.rememberIcons({ 'The Doctor': 'https://web.poecdn.com/doc.png' });
+    const after = saved.length;
+
+    const added = await subject.rememberIcons({ 'The Doctor': 'https://web.poecdn.com/doc.png' });
+
+    expect(added).toBe(0);
+    expect(saved.length).toBe(after);
+  });
+
+  it('keeps the icon it already had rather than churning on a changed URL', async () => {
+    const subject = service();
+    await subject.getPrices();
+    await subject.rememberIcons({ 'The Doctor': 'https://web.poecdn.com/a.png' });
+    await subject.rememberIcons({ 'The Doctor': 'https://web.poecdn.com/b.png' });
+
+    expect(subject.cached?.icons['The Doctor']).toBe('https://web.poecdn.com/a.png');
+  });
+
+  it('does nothing at all when there is no price set yet', async () => {
+    const subject = service();
+    expect(await subject.rememberIcons({ 'The Doctor': 'https://web.poecdn.com/doc.png' })).toBe(0);
   });
 });

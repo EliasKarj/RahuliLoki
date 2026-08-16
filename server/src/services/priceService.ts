@@ -59,11 +59,13 @@ export interface PriceSet {
   /** Chaos per divine. */
   divineRate: number;
   /**
-   * poe.ninja id → icon URL, for the ids it gave one.
+   * Display name → icon URL.
    *
-   * Nearly empty against the current API, which names only chaos and divine. Kept because the
-   * shape is right and costs nothing, and because the alternative — deleting the feature — would
-   * have to be undone if poe.ninja starts sending icons again.
+   * Mostly filled in from the stash rather than from poe.ninja, which publishes no icons any
+   * more beyond chaos and divine. `rememberIcons` merges in what each poll saw; the set is the
+   * right home for them for the reason it always was — an icon is a property of the item, not
+   * of a moment, so repeating it in every snapshot would grow the largest column in the
+   * database 144 times a day to store the same strings.
    */
   icons: Record<string, string>;
   /**
@@ -198,7 +200,10 @@ export function mergeOverview(
   }
 
   for (const item of coreItems(payload)) {
-    if (item.icon !== null && icons[item.id] === undefined) icons[item.id] = item.icon;
+    // Keyed by display name, not by id: the breakdown a person reads is keyed by name, and so
+    // is every icon lookup. Keying these by id meant even chaos and divine — the only two items
+    // the API still names — never matched anything.
+    if (item.icon !== null && icons[item.name] === undefined) icons[item.name] = item.icon;
   }
 
   const lines = (payload as { lines?: unknown })?.lines;
@@ -278,6 +283,27 @@ export class PriceService {
 
   get cached(): PriceSet | null {
     return this.#cached;
+  }
+
+  /**
+   * Fold icons discovered elsewhere into the current set, and persist them.
+   *
+   * The poller calls this with what it saw in the stash. Existing entries are kept: an icon does
+   * not change, and rewriting the row on every poll for no difference is a write nobody asked
+   * for. Returns how many were new, which is also how it decides whether to save at all.
+   */
+  async rememberIcons(icons: Record<string, string>): Promise<number> {
+    const set = this.#cached;
+    if (set === null) return 0;
+
+    let added = 0;
+    for (const [name, url] of Object.entries(icons)) {
+      if (set.icons[name] !== undefined) continue;
+      set.icons[name] = url;
+      added += 1;
+    }
+    if (added > 0) await this.#options.store.save(set);
+    return added;
   }
 
   isStale(set: PriceSet | null = this.#cached): boolean {

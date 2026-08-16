@@ -23,6 +23,7 @@
  */
 
 import { ninjaId } from './ninjaId.ts';
+import { iconUrl } from './priceService.ts';
 import { linkCount, pickCandidate, uniqueKey, type UniqueIndex } from './uniques.ts';
 
 export interface ValuedEntry {
@@ -54,6 +55,14 @@ export interface ValuationResult {
    * see services/ninjaId.ts.
    */
   matchedIds: Set<string>;
+  /**
+   * Display name → the item's artwork on GGG's CDN, for the items that were priced.
+   *
+   * Collected here because this is the only place that holds both halves at once: the stash item
+   * carries the icon, and this is where it becomes a named row in the breakdown. poe.ninja used
+   * to supply these and no longer does — see StashItem.icon.
+   */
+  icons: Record<string, string>;
   /** Items in a category we deliberately do not price. */
   skipped: number;
   /** Aggregated entries that fell under MIN_ITEM_CHAOS. */
@@ -71,6 +80,8 @@ export interface ValuationInput {
     frameType?: number;
     identified?: boolean;
     corrupted?: boolean;
+    /** GGG's artwork for this item. The source of every icon the dashboard shows. */
+    icon?: string;
     sockets?: Array<{ group?: unknown }>;
   }>;
 }
@@ -196,6 +207,9 @@ export function valueTabs(tabs: ValuationInput[], options: ValuationOptions): Va
   const aggregated = new Map<string, Map<string, { qty: number; chaosEach: number }>>();
   const unresolved = new Map<string, number>();
   const matchedIds = new Set<string>();
+  // Null-prototype for the same reason the breakdown is: the keys are item names out of a
+  // remote payload.
+  const icons: Record<string, string> = Object.create(null) as Record<string, string>;
   let skipped = 0;
 
   for (const { tab, items } of tabs) {
@@ -223,6 +237,13 @@ export function valueTabs(tabs: ValuationInput[], options: ValuationOptions): Va
         continue;
       }
       if (priced !== null) matchedIds.add(priced.id);
+
+      // Validated rather than trusted: this string comes from a remote payload and ends up in an
+      // <img src>. First one wins — every copy of an item carries the same artwork.
+      if (icons[key] === undefined) {
+        const icon = iconUrl(item.icon);
+        if (icon !== null) icons[key] = icon;
+      }
 
       const chaosEach = unique?.chaos ?? (priced?.chaos as number);
       const qty =
@@ -275,6 +296,7 @@ export function valueTabs(tabs: ValuationInput[], options: ValuationOptions): Va
       .map(([name, count]) => ({ name, count }))
       .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
     matchedIds,
+    icons,
     skipped,
     droppedBelowThreshold,
     droppedChaos: round2(droppedChaos),

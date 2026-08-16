@@ -232,3 +232,48 @@ describe('topItems', () => {
     expect(topItems(breakdown, 2)).toHaveLength(2);
   });
 });
+
+describe('icons', () => {
+  it('takes the icon from the stash item, which is now the only source', () => {
+    // poe.ninja's redesigned API publishes no icons beyond chaos and divine. The stash response
+    // has carried this field all along — it is the artwork of the exact item being counted.
+    const result = valueTabs(tabs, options);
+    expect(result.icons['Chaos Orb']).toBe('https://web.poecdn.com/chaos.png');
+  });
+
+  it('keys them by display name, matching the breakdown they are joined onto', () => {
+    const result = valueTabs(tabs, options);
+    for (const name of Object.keys(result.icons)) {
+      expect(Object.values(result.breakdown).some((tab) => name in tab)).toBe(true);
+    }
+  });
+
+  it('refuses an icon that is not https on a CDN we expect', () => {
+    // Remote text on its way into an <img src>. The same rule as everywhere else.
+    const result = valueTabs(
+      [
+        {
+          tab: { name: 'Currency' },
+          items: [
+            { typeLine: 'Chaos Orb', baseType: 'Chaos Orb', frameType: 5, stackSize: 5, icon: 'javascript:alert(1)' },
+          ],
+        },
+      ],
+      options,
+    );
+    expect(result.icons).toEqual({});
+  });
+
+  it('does not invent an icon for an item that carries none', () => {
+    const result = valueTabs(
+      [
+        {
+          tab: { name: 'Currency' },
+          items: [{ typeLine: 'Chaos Orb', baseType: 'Chaos Orb', frameType: 5, stackSize: 5 }],
+        },
+      ],
+      options,
+    );
+    expect(result.icons['Chaos Orb']).toBeUndefined();
+  });
+});

@@ -24,6 +24,15 @@ export interface StashItem {
   frameType?: number;
   identified?: boolean;
   corrupted?: boolean;
+  /**
+   * The item's own artwork, on GGG's CDN.
+   *
+   * This is where icons come from now, and it is a better source than the one it replaces.
+   * poe.ninja used to publish an icon per priced line; its redesigned API publishes none except
+   * for chaos and divine. But the stash response has carried this field all along — it is the
+   * picture of the exact item being counted, straight from the people who drew it.
+   */
+  icon?: string;
   /** Sockets sharing a `group` are linked. Five or six of them prices a unique — see uniques.ts. */
   sockets?: Array<{ group?: unknown }>;
 }
