@@ -17,7 +17,7 @@ varallisuuden kertymisen liigan alusta loppuun.
 ## Sisältö
 
 - [Mitä tämä tekee](#mitä-tämä-tekee)
-- [Käyttöönotto](#käyttöönotto) — Docker tai paikallinen ajo
+- [Käyttöönotto](#käyttöönotto) — `./start.sh`, Docker tai paikallinen ajo
 - [POESESSID ja miksi siihen suhtaudutaan näin](#poesessid-ja-miksi-siihen-suhtaudutaan-näin) — sekä miksi GGG:n OAuth ei tähän käy
 - [Pääsynhallinta](#pääsynhallinta) — mitä token suojaa ja miksi palvelin kieltäytyy käynnistymästä
 - [Asetukset](#asetukset)
@@ -60,7 +60,36 @@ kun avaat sen viikon tauon jälkeen.
 
 ## Käyttöönotto
 
-### Docker (suositeltu)
+### Yksi komento (nopein)
+
+```bash
+git clone https://github.com/EliasKarj/RahuliLoki.git valuuttaloki
+cd valuuttaloki
+./start.sh
+```
+
+Skripti tarkistaa Noden ja pnpm:n, kysyy tunnukset (POESESSID syötetään näkymättömänä ja
+tallentuu `.env`:iin oikeuksilla 0600), ajaa migraatiot, kääntää, käynnistää palvelimen ja
+tekee **yhden** oikean kierroksen kertoakseen heti toimiiko tunnus. Sen jälkeen sivu on
+osoitteessa <http://localhost:3000>.
+
+| Lippu | Mitä |
+|-------|------|
+| `./start.sh` | Asennus tarvittaessa, käännös, käynnistys |
+| `./start.sh --dev` | Palvelin ja Vite hot reloadilla kehitystä varten |
+| `./start.sh --seed` | Täyttää kannan keksityllä datalla, jotta kaavioita voi katsoa heti |
+| `./start.sh --check` | Tarkistaa kaiken käynnistämättä mitään |
+| `./start.sh --reconfigure` | Kysyy tunnukset uudelleen (vanha `.env` varmuuskopioidaan) |
+
+> **▸ Miksi skripti tekee oikean kierroksen eikä vain käynnisty:** ainoa tapa tietää toimiiko
+> POESESSID on käyttää sitä. Yksi pyyntö, ei uudelleenyritystä — se kuluttaisi toisen
+> pyynnön samasta budjetista, jota koko nopeusrajoitin varjelee, kertomatta mitään uutta.
+
+> **▸ Miksi tunnusta ei tarkisteta suoraan skriptistä curlilla:** palvelimessa on jo
+> nopeusrajoitin ja hyvät virheilmoitukset. Toinen, tyhmempi toteutus kuoressa erkaantuisi
+> niistä ja ampuisi GGG:tä ämpäreistä välittämättä.
+
+### Docker (suositeltu palvelimelle)
 
 ```bash
 git clone https://github.com/EliasKarj/RahuliLoki.git valuuttaloki
@@ -540,6 +569,7 @@ pnpm test
     index.ts    käynnistys, ajastin, staattinen sivusto
   /prisma       schema.prisma + migraatiot
   /tools        seed.ts
+/scripts        with-env.mjs (lataa juuren .env Prisma CLI:lle)
 /web
   /src
     /components NetWorthChart, RatePerHourChart, TabBreakdown, SnapshotTable, PollerStatus,

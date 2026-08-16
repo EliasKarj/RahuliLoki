@@ -34,6 +34,57 @@ export function scrub(text: string): string {
 }
 
 /**
+ * Describe a thrown value that is not an Error, without falling back to `String()`.
+ *
+ * `String({})` is `"[object Object]"`, which is the least useful sentence a diagnostic can
+ * produce. Something was thrown and it had fields; print them.
+ */
+function describeNonError(value: unknown): string {
+  if (value === null || value === undefined || typeof value !== 'object') return String(value);
+
+  const record = value as Record<string, unknown>;
+  // The fields Node's own network and filesystem errors carry.
+  const parts = ['message', 'code', 'errno', 'syscall', 'hostname', 'address', 'port']
+    .filter((key) => record[key] !== undefined)
+    .map((key) => `${key}=${String(record[key])}`);
+  if (parts.length > 0) return parts.join(' ');
+
+  try {
+    const json = JSON.stringify(value);
+    if (json !== undefined && json !== '{}') return json;
+  } catch {
+    // Circular, or a getter that throws. Fall through to the last resort.
+  }
+  return Object.prototype.toString.call(value);
+}
+
+/**
+ * Follow an error's `cause` chain and append what each link says.
+ *
+ * This is the difference between a usable log line and a useless one. `fetch` reports every
+ * transport failure as a bare `TypeError: fetch failed` and puts the actual reason — DNS lookup
+ * failed, connection refused, certificate expired, timed out — in `cause`. Without this, the
+ * poller reports a GGG outage, a typo in a hostname, a dead network and an expired CA
+ * identically, and the operator has nothing to act on.
+ */
+function withCauses(error: Error): string {
+  const seen = new Set<unknown>([error]);
+  const parts = [error.message];
+
+  let current: unknown = (error as { cause?: unknown }).cause;
+  // Bounded: a cause chain can be circular, and a malformed one must not hang the logger.
+  for (let depth = 0; current !== undefined && current !== null && depth < 5; depth += 1) {
+    if (seen.has(current)) break;
+    seen.add(current);
+    parts.push(current instanceof Error ? current.message : describeNonError(current));
+    current = current instanceof Error ? (current as { cause?: unknown }).cause : undefined;
+  }
+
+  // Deduplicate: a wrapper that repeats its cause verbatim should not say it twice.
+  return [...new Set(parts.filter((part) => part !== ''))].join(': ');
+}
+
+/**
  * Turn anything throwable into a log-safe, scrubbed plain object. Error messages from fetch
  * and from GGG are the single most likely place for a credential to slip out.
  */
@@ -41,11 +92,11 @@ export function describeError(error: unknown): { message: string; name?: string;
   if (error instanceof Error) {
     return {
       name: error.name,
-      message: scrub(error.message),
+      message: scrub(withCauses(error)),
       ...(error.stack ? { stack: scrub(error.stack) } : {}),
     };
   }
-  return { message: scrub(String(error)) };
+  return { message: scrub(describeNonError(error)) };
 }
 
 /** pino's error serializer contract: `type`, `message` and `stack` are all required. */
