@@ -107,6 +107,19 @@ ei tarvitse kaivaa devtoolsista eikä liittää mihinkään.
 > yhden uskottavan sivuston päässä siitä että antaa sen jollekin muulle. Tässä tunnus ei kulje
 > käyttäjän käsien kautta lainkaan.
 
+> **▸ Miksi ikkuna odottaa GGG:n vahvistusta eikä pelkkää evästettä:** pathofexile.com asettaa
+> POESESSID-evästeen **jo anonyymille kävijälle**, ennen kuin kukaan on kirjoittanut mitään.
+> Ehto "eväste on olemassa" täyttyi siis puoli sekuntia sivun latauduttua: ikkuna sulkeutui,
+> paneeli ilmoitti kirjautumisen onnistuneen, ja tallessa oli istunto jolla ei ollut tiliä.
+>
+> Seuraukset olivat pahempia kuin ilmeinen virhe olisi ollut. Kaikki näytti oikealta, GGG vastasi
+> jokaiseen arkkupyyntöön 403, ja virheilmoitus syytti vanhentunutta istuntoa — mikä johti
+> kirjautumaan uudestaan, mikä "onnistui" täsmälleen samalla väärällä tavalla.
+>
+> Eväste ei ole istunto ennen kuin GGG kertoo kenelle se kuuluu. Ikkuna kysyy `/api/profile`lta,
+> joka tarvitsee pelkän istunnon eikä tilin nimeä, ja hyväksyy vain evästeen joka vastaa
+> tilinimellä. Samalla tilin nimi tulee GGG:ltä eikä tekstikentästä.
+
 > **▸ Miksi ikkunan sulkeminen ei lopeta keruuta:** valvomaton keruu on tämän sovelluksen etu
 > Exilence Nextiin nähden — se keräsi vain kun ohjelma oli auki. Sulkeminen piilottaa ikkunan
 > ilmaisinalueelle ja kerääjä jatkaa. Lopettaminen on erillinen valinta ilmaisinalueen valikossa.
@@ -685,7 +698,7 @@ validoimaton symlinkkien polkuhyppäys purettaessa. Korjattua versiota **ei ole 
 pnpm test
 ```
 
-**214 testiä**, ei yhtään verkkopyyntöä:
+**388 testiä**, ei yhtään verkkopyyntöä:
 
 - **Nopeusrajoitin** — otsakkeiden jäsennys, tahdistus, sarjallistuminen, `Retry-After`,
   kaksinkertaistuminen kattoon asti. Kello ja uni ovat väärennettyjä, joten 30 minuutin
@@ -700,6 +713,9 @@ pnpm test
   käsin ajo purkaa pysäytyksen.
 - **API** — jokainen reitti `app.inject()`illa väärennetyllä varastolla.
 - **Selainpuoli** — muotoilusäännöt ja kaavioiden muodonmuutokset.
+- **Kirjautuminen** — että anonyymi eväste *ei* kelpaa istunnoksi, että GGG:n myöhemmin
+  antama kelpaa, ettei samaa evästettä kysytä GGG:ltä joka kierroksella, ja että odotus
+  loppuu aikakatkaisuun eikä jää polkemaan.
 
 ---
 

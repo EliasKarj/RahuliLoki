@@ -18,9 +18,14 @@
  *   - navigation confined to pathofexile.com, so a redirect cannot take the login flow
  *     somewhere else and keep the window's trust;
  *   - new windows and downloads refused outright.
+ *
+ * What counts as "logged in" is decided in sessionWait.ts, and it is not "a cookie exists" —
+ * see the bug described there. The window stays open until GGG confirms whose session it is.
  */
 
 import { BrowserWindow, session, type Session } from 'electron';
+import { fetchProfile } from '@valuuttaloki/server/dist/services/profileService.js';
+import { awaitVerifiedSession } from './sessionWait.js';
 
 const LOGIN_URL = 'https://www.pathofexile.com/login';
 const PARTITION = 'persist:poe-login';
@@ -44,18 +49,24 @@ async function readSessionCookie(target: Session): Promise<string | null> {
 
 export interface LoginResult {
   poesessid: string | null;
-  /** True when the user closed the window rather than completing a login. */
+  /** The account GGG says the session belongs to. Null whenever `poesessid` is. */
+  accountName: string | null;
+  /** True when the window closed without a session GGG would accept. */
   cancelled: boolean;
 }
 
 /**
- * Open the login window and resolve once a POESESSID exists, or the window is closed.
+ * Open the login window and resolve once GGG confirms a session, or the window is closed.
  *
  * The cookie is polled rather than watched for a particular navigation: GGG's login can end on
- * any of several pages depending on two-factor settings and where the flow started, and
- * "the cookie is now set" is the condition that actually matters regardless of the route taken.
+ * any of several pages depending on two-factor settings and where the flow started, so no single
+ * navigation marks the end of it. What does mark the end is GGG answering `/api/profile` with an
+ * account name — see sessionWait.ts for why the mere presence of a cookie is not enough.
  */
-export function loginForSession(parent?: BrowserWindow): Promise<LoginResult> {
+export async function loginForSession(
+  parent?: BrowserWindow,
+  userAgent = 'valuuttaloki (desktop)',
+): Promise<LoginResult> {
   const loginSession = session.fromPartition(PARTITION);
 
   const window = new BrowserWindow({
@@ -80,32 +91,31 @@ export function loginForSession(parent?: BrowserWindow): Promise<LoginResult> {
   });
   loginSession.on('will-download', (event) => event.preventDefault());
 
-  return new Promise<LoginResult>((resolve) => {
-    let settled = false;
-    const finish = (result: LoginResult): void => {
-      if (settled) return;
-      settled = true;
-      clearInterval(timer);
-      if (!window.isDestroyed()) window.destroy();
-      resolve(result);
-    };
+  let open = true;
+  window.on('closed', () => {
+    open = false;
+  });
 
-    const timer = setInterval(() => {
-      void readSessionCookie(loginSession).then((value) => {
-        if (value !== null) finish({ poesessid: value, cancelled: false });
-      });
-    }, 500);
+  // Loaded before the wait begins, not after: awaiting first would poll a window showing nothing.
+  void window.loadURL(LOGIN_URL);
 
-    window.on('closed', () => {
-      // A closed window is not necessarily a cancellation: the cookie may have landed in the
-      // same tick the user closed it. Check once more before giving up.
-      void readSessionCookie(loginSession).then((value) => {
-        finish({ poesessid: value, cancelled: value === null });
-      });
+  try {
+    const verified = await awaitVerifiedSession({
+      readCookie: () => readSessionCookie(loginSession),
+      // The check runs against the exact value that will be stored, out of the main process
+      // rather than out of the window — the same request the server will make, so a session
+      // that passes here cannot fail there for a reason this never saw.
+      verify: async (poesessid) => (await fetchProfile({ poesessid, userAgent })).name,
+      isOpen: () => open,
+      wait: (ms) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
+      now: Date.now,
     });
 
-    void window.loadURL(LOGIN_URL);
-  });
+    if (verified === null) return { poesessid: null, accountName: null, cancelled: true };
+    return { ...verified, cancelled: false };
+  } finally {
+    if (!window.isDestroyed()) window.destroy();
+  }
 }
 
 /**

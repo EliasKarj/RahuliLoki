@@ -9,11 +9,11 @@
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
     "skipLibCheck": true,
-    "outDir": "dist",
-    "rootDir": "src",
-    "allowImportingTsExtensions": false,
-    "verbatimModuleSyntax": false,
-    "sourceMap": true
+    "noEmit": true,
+    // The tests import source directly, the way the server's do. Only typecheck reads this
+    // file; the build uses tsconfig.build.json, which emits and leaves the tests out.
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": false
   },
-  "include": ["src/**/*.ts", "src/**/*.cts"]
+  "include": ["src/**/*.ts", "src/**/*.cts", "test/**/*.ts"]
 }

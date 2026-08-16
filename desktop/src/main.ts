@@ -234,7 +234,14 @@ ipcMain.handle('session:login', async () => {
   const result = await loginForSession(mainWindow ?? undefined);
   if (result.poesessid === null) return { ok: false, cancelled: result.cancelled };
 
-  const settings = { ...loadSettings(userData), poesessid: result.poesessid };
+  // The account name comes from GGG, not from the text field. It is authoritative — the login
+  // proved which account the session is — and a name typed by hand is a pure liability next to
+  // it: a wrong one produces a 403 that says nothing about the spelling being wrong.
+  const settings = {
+    ...loadSettings(userData),
+    poesessid: result.poesessid,
+    ...(result.accountName === null ? {} : { accountName: result.accountName }),
+  };
   saveSettings(userData, settings);
   await restartServer(settings);
   refreshTray();

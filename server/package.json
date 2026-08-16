@@ -33,6 +33,7 @@
   "exports": {
     "./dist/server.js": "./dist/server.js",
     "./dist/lib/migrate.js": "./dist/lib/migrate.js",
+    "./dist/services/profileService.js": "./dist/services/profileService.js",
     "./package.json": "./package.json"
   }
 }
