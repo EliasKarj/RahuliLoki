@@ -26,20 +26,10 @@
 import { BrowserWindow, session, type Session } from 'electron';
 import { fetchProfile } from '@valuuttaloki/server/dist/services/profileService.js';
 import { awaitVerifiedSession } from './sessionWait.js';
+import { allowedHost } from './loginHosts.js';
 
 const LOGIN_URL = 'https://www.pathofexile.com/login';
 const PARTITION = 'persist:poe-login';
-
-/** Hosts the login flow is allowed to visit. GGG uses a few subdomains for the login itself. */
-function allowedHost(url: string): boolean {
-  try {
-    const { protocol, hostname } = new URL(url);
-    if (protocol !== 'https:') return false;
-    return hostname === 'pathofexile.com' || hostname.endsWith('.pathofexile.com');
-  } catch {
-    return false;
-  }
-}
 
 async function readSessionCookie(target: Session): Promise<string | null> {
   const cookies = await target.cookies.get({ name: 'POESESSID' });
@@ -86,9 +76,21 @@ export async function loginForSession(
   });
 
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  window.webContents.on('will-navigate', (event, url) => {
-    if (!allowedHost(url)) event.preventDefault();
-  });
+
+  // Both events, not just the first. `will-navigate` covers what the page initiates; a server
+  // sending a 302 only raises `will-redirect`, so guarding one and not the other means the
+  // allowlist has a hole and the flow has a step it cannot explain.
+  //
+  // A refusal is logged. The silent version of this left a login window sitting on a page whose
+  // buttons did nothing, with no hint anywhere that the app was the one saying no.
+  const guard = (event: { preventDefault: () => void }, url: string): void => {
+    if (allowedHost(url)) return;
+    event.preventDefault();
+    console.error(`login window refused to navigate to ${new URL(url).origin}`);
+  };
+  window.webContents.on('will-navigate', guard);
+  window.webContents.on('will-redirect', guard);
+
   loginSession.on('will-download', (event) => event.preventDefault());
 
   let open = true;
