@@ -60,12 +60,41 @@ kun avaat sen viikon tauon jälkeen.
 
 ## Käyttöönotto
 
+### Ennen kaikkea muuta: Node ja pnpm
+
+Kaikki alla oleva olettaa **Node 22:n tai uudemman** ja **pnpm:n**. Kumpaakaan ei ole
+missään valmiina, ja `pnpm` on se komento johon useimmat kompastuvat ensin:
+
+```
+pnpm : The term 'pnpm' is not recognized...
+```
+
+```bash
+# Onko Node?
+node -v                    # pitää olla v22 tai uudempi
+
+# pnpm tulee Noden mukana tulevalla corepackilla:
+corepack enable pnpm
+```
+
+Jos `node` puuttuu: [nodejs.org](https://nodejs.org) tai `winget install OpenJS.NodeJS.LTS`
+(Windows) / `brew install node` (macOS). Avaa **uusi terminaali** asennuksen jälkeen.
+
+Käynnistysskriptit tekevät tämän tarkistuksen puolestasi:
+`./start.sh` (macOS, Linux) ja `.\start.ps1` (Windows).
+
 ### Työpöytäohjelma
 
 ```bash
 pnpm install
 pnpm desktop            # kääntää ja käynnistää
 pnpm desktop:package    # rakentaa asennuspaketin tälle alustalle
+```
+
+Windowsilla ilman erillistä pnpm-asennusta:
+
+```powershell
+.\start.ps1 -Desktop
 ```
 
 Sama palvelin, sama paneeli — mutta oma ikkuna, ilmaisinalue ja **oikea kirjautuminen**.
@@ -93,8 +122,20 @@ ei tarvitse kaivaa devtoolsista eikä liittää mihinkään.
 ```bash
 git clone https://github.com/EliasKarj/RahuliLoki.git valuuttaloki
 cd valuuttaloki
-./start.sh
+./start.sh              # macOS, Linux
 ```
+
+```powershell
+git clone https://github.com/EliasKarj/RahuliLoki.git valuuttaloki
+cd valuuttaloki
+.\start.ps1            # Windows
+```
+
+Kumpikin tarkistaa Noden, hankkii pnpm:n corepackilla jos se puuttuu, ja jatkaa siitä.
+
+> **▸ Jos PowerShell kieltäytyy ajamasta skriptiä** (*running scripts is disabled on this
+> system*), se on oletusarvoinen suorituskäytäntö eikä vika tiedostossa:
+> `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`
 
 Skripti tarkistaa Noden ja pnpm:n, kysyy tunnukset (POESESSID syötetään näkymättömänä ja
 tallentuu `.env`:iin oikeuksilla 0600), ajaa migraatiot, kääntää, käynnistää palvelimen ja

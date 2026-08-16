@@ -24,16 +24,16 @@ RUN pnpm --filter @valuuttaloki/server build
 
 # Ship only what runs: compiled server, built SPA, production dependencies, migrations.
 #
-# The final `prisma generate` is not redundant. `pnpm deploy` copies a fresh, ungenerated
-# @prisma/client into /runtime, and the ungenerated package has no named ESM exports at all —
-# importing PrismaClient from it fails at startup. The client has to be generated where it
-# will actually be loaded from.
+# The generated Prisma client is copied like any other build output. It used to need a second
+# `prisma generate` here, because the default output — node_modules/.prisma — is not something
+# `pnpm deploy` reproduces, and the copied @prisma/client was the ungenerated stub with no
+# named ESM exports. schema.prisma now emits into server/generated, which removes the special
+# case entirely; the same change is what made the desktop package work.
 RUN pnpm --filter @valuuttaloki/server --prod deploy --legacy /runtime \
   && cp -r server/dist /runtime/dist \
+  && cp -r server/generated /runtime/generated \
   && cp -r server/prisma /runtime/prisma \
-  && cp -r web/dist /runtime/public \
-  && cd /runtime \
-  && ./node_modules/.bin/prisma generate --schema ./prisma/schema.prisma
+  && cp -r web/dist /runtime/public
 
 
 FROM node:22-slim AS runtime

@@ -18,6 +18,9 @@
 #    ("POESESSID has most likely expired"); a second, dumber implementation in shell would
 #    drift from it and spend GGG requests without honouring the buckets.
 #  - Nothing is overwritten without asking, and every step says what it is about to do.
+#
+# Windows has its own copy of this at start.ps1 — bash is not the right thing to send someone
+# to when the very first error they hit is PowerShell not knowing what pnpm is.
 
 set -euo pipefail
 
