@@ -123,11 +123,24 @@ describe('StashService', () => {
     expect(maxInFlight).toBe(1);
   });
 
-  it('explains an expired session rather than reporting a bare 403', async () => {
+  it('names both causes of a 403, not just the expired session', async () => {
+    // Naming only expiry sends someone through a fresh login that cannot help, because GGG
+    // answers 403 just the same when the session is valid but names a different account than
+    // the request does. Both have to be in the message for either to be actionable.
     registerSecret(SESSION);
     const fetchFn = stashFetch({ list: () => stashResponse({ error: 'forbidden' }, 403, HEADERS) });
 
-    await expect(service(fetchFn).listTabs()).rejects.toThrow(/POESESSID has most likely expired/);
+    let message = '';
+    try {
+      await service(fetchFn).listTabs();
+    } catch (thrown) {
+      message = (thrown as Error).message;
+    }
+
+    expect(message).toMatch(/session has expired/);
+    expect(message).toMatch(/POE_ACCOUNT_NAME does not match/);
+    // And it says what the name currently is, so the comparison can be made without digging.
+    expect(message).toContain('Exile#1234');
     clearSecrets();
   });
 
