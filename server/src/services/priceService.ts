@@ -317,7 +317,19 @@ export class PriceService {
       signal: timeoutSignal(this.#options.timeoutMs ?? 30_000),
     });
     if (!response.ok) {
-      throw new PriceFetchError(`poe.ninja ${type} returned HTTP ${response.status}`);
+      // The URL belongs in the message. "poe.ninja Currency returned HTTP 404" tells an
+      // operator nothing they can act on; the same line with the address is something they can
+      // paste into a browser and see for themselves in five seconds.
+      if (response.status === 404) {
+        throw new PriceFetchError(
+          `poe.ninja has no ${type} data for league "${league}" (HTTP 404 from ${url}). ` +
+            'poe.ninja indexes leagues under its own names and only once it has data for them, ' +
+            'so this is usually a league that is brand new, an event or private league it does ' +
+            'not track, or a name spelled differently there than GGG spells it. Open the URL ' +
+            'above to see what it says, and set POE_NINJA_URL if the API has moved.',
+        );
+      }
+      throw new PriceFetchError(`poe.ninja ${type} returned HTTP ${response.status} from ${url}`);
     }
     try {
       return await readJsonCapped(response, this.#options.maxBytes, `poe.ninja ${type}`);

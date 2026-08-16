@@ -79,6 +79,12 @@ export interface AppConfig {
   /** Ceiling on a single outbound request to GGG or poe.ninja. */
   requestTimeoutMs: number;
   /**
+   * poe.ninja's API root. Configurable because a third party's URL is not something this app
+   * should need a release to follow, and because a 404 from it is otherwise indistinguishable
+   * from "that league is not indexed".
+   */
+  poeNinjaUrl: string;
+  /**
    * Where the database lives, read here rather than left to Prisma's own env lookup.
    *
    * PrismaClient reads `process.env.DATABASE_URL` at construction. That is invisible to any
@@ -226,6 +232,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ConfigResult {
     trustProxy: readBool(env, 'TRUST_PROXY'),
     priceSetRetention,
     requestTimeoutMs,
+    poeNinjaUrl: env.POE_NINJA_URL?.trim() || 'https://poe.ninja/api/data',
     databaseUrl: env.DATABASE_URL?.trim() || undefined,
     webDist: env.WEB_DIST?.trim() || null,
     logLevel: env.LOG_LEVEL?.trim() || 'info',

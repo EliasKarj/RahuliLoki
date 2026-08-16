@@ -264,6 +264,24 @@ describe('PriceService', () => {
     await expect(service({ fetchFn }).getPrices()).rejects.toThrow(/not valid JSON/);
   });
 
+  it('names the league and the URL when poe.ninja has no data for it', async () => {
+    // A bare "returned HTTP 404" sends someone hunting. The league name and the address they
+    // can paste into a browser are the two things that make it a five-second question.
+    const fetchFn = vi.fn(
+      async () => new Response('not found', { status: 404 }),
+    ) as unknown as typeof fetch;
+
+    await expect(service({ fetchFn }).getPrices()).rejects.toThrow(/no Currency data for league "Settlers"/);
+    await expect(service({ fetchFn }).getPrices()).rejects.toThrow(/poe\.ninja\/api\/data\/currencyoverview/);
+  });
+
+  it('still reports other HTTP failures with the URL', async () => {
+    const fetchFn = vi.fn(
+      async () => new Response('nope', { status: 503 }),
+    ) as unknown as typeof fetch;
+    await expect(service({ fetchFn }).getPrices()).rejects.toThrow(/HTTP 503 from https:/);
+  });
+
   it('refuses an oversized overview on its declared length, before buffering it', async () => {
     const fetchFn = vi.fn(
       async () =>
