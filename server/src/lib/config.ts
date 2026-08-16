@@ -13,6 +13,7 @@
 
 import { validate as cronValidate } from 'node-cron';
 import { isLoopbackBind, MIN_TOKEN_LENGTH } from './auth.ts';
+import { DEFAULT_NINJA_URL } from '../services/priceService.ts';
 
 /** poe.ninja categories that key cleanly by item name. Gems and maps stay out — see README. */
 export const DEFAULT_CURRENCY_CATEGORIES = ['Currency', 'Fragment'] as const;
@@ -34,21 +35,21 @@ export const DEFAULT_ITEM_CATEGORIES = [
 /**
  * Unique categories, priced per variant rather than by name — see services/uniques.ts.
  *
- * On by default now that links and corruption are matched against the actual item. They were
- * excluded while the only available key was the name, because that silently picked whichever
- * variant poe.ninja listed first: a plain Bronn's Lithe valued as a 6-linked one, or the
- * reverse, with nothing in the chart to show it happened.
+ * Empty again, and this is a loss rather than a preference. Pricing uniques needs `links` and
+ * `corrupted` on each line, because the same name is several prices: a plain Bronn's Lithe is
+ * about 5 chaos and a 6-linked one about 210, and valuing by name alone silently picks one of
+ * them. poe.ninja's redesigned API no longer publishes those fields, so the variant index
+ * cannot be built.
  *
- * UniqueMap is deliberately absent: maps are skipped in valuation regardless of rarity, since
- * tier prices them more than name does.
+ * The alternative — turning uniques back on and letting them match by name through the flat map
+ * — would restore a number to the chart at the cost of that number being wrong by up to
+ * fortyfold, invisibly. Leaving them unpriced puts them in the snapshot's `unresolved` list
+ * instead, where the poller logs them and the omission is at least visible.
+ *
+ * Set PRICE_UNIQUE_CATEGORIES explicitly to opt back in if poe.ninja starts publishing the
+ * variant fields again.
  */
-export const DEFAULT_UNIQUE_CATEGORIES = [
-  'UniqueWeapon',
-  'UniqueArmour',
-  'UniqueAccessory',
-  'UniqueJewel',
-  'UniqueFlask',
-] as const;
+export const DEFAULT_UNIQUE_CATEGORIES = [] as const;
 
 export interface AppConfig {
   /** Full account credential. Never logged, never sent to the frontend. */
@@ -80,19 +81,10 @@ export interface AppConfig {
   requestTimeoutMs: number;
   /**
    * poe.ninja's API root. Configurable because a third party's URL is not something this app
-   * should need a release to follow, and because a 404 from it is otherwise indistinguishable
-   * from "that league is not indexed".
+   * should need a release to follow — and it has already moved once, from `/api/data` to the
+   * per-game path, which broke every install until the default was changed.
    */
   poeNinjaUrl: string;
-  /**
-   * The name poe.ninja indexes this league under, when it is not the one GGG uses.
-   *
-   * Normally null: the price service asks poe.ninja what it calls the league and works it out.
-   * This is the escape hatch for when it cannot — an event league, a name poe.ninja spells in a
-   * way no rule would connect to GGG's — so that being wrong about the mapping costs a setting
-   * rather than a release.
-   */
-  poeNinjaLeague: string | null;
   /**
    * Where the database lives, read here rather than left to Prisma's own env lookup.
    *
@@ -241,8 +233,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ConfigResult {
     trustProxy: readBool(env, 'TRUST_PROXY'),
     priceSetRetention,
     requestTimeoutMs,
-    poeNinjaUrl: env.POE_NINJA_URL?.trim() || 'https://poe.ninja/api/data',
-    poeNinjaLeague: env.POE_NINJA_LEAGUE?.trim() || null,
+    poeNinjaUrl: env.POE_NINJA_URL?.trim() || DEFAULT_NINJA_URL,
     databaseUrl: env.DATABASE_URL?.trim() || undefined,
     webDist: env.WEB_DIST?.trim() || null,
     logLevel: env.LOG_LEVEL?.trim() || 'info',

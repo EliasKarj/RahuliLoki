@@ -353,8 +353,7 @@ Kaikki `.env`-tiedostossa; `.env.example` on malli.
 | `PRICE_TTL_MINUTES` | `60` | Kuinka vanhaa hintasettiä käytetään ennen uutta hakua. |
 | `PRICE_CURRENCY_CATEGORIES` | `Currency,Fragment` | poe.ninjan `currencyoverview`-tyypit. |
 | `PRICE_ITEM_CATEGORIES` | ks. alla | poe.ninjan `itemoverview`-tyypit. |
-| `POE_NINJA_URL` | `https://poe.ninja/api/data` | poe.ninjan API-juuri. Vain jos se siirtyy. |
-| `POE_NINJA_LEAGUE` | tyhjä | Nimi, jolla poe.ninja indeksoi liigan, jos se ei ole GGG:n nimi. Ks. alla. |
+| `POE_NINJA_URL` | `https://poe.ninja/poe1/api/economy/exchange/current` | poe.ninjan API-juuri. Vain jos se siirtyy taas. |
 | `POE_CONTACT` | — | Yhteystieto, joka liitetään `User-Agent`iin. |
 | `DATABASE_URL` | `file:./data/valuuttaloki.db` | SQLite-tiedosto. |
 | `PORT` / `HOST` | `3000` / `127.0.0.1` | HTTP. Oletus on silmukkaosoite, ei kaikki verkkoliitännät. |
@@ -389,22 +388,15 @@ Incubator, Artifact, Vial, Omen, Tattoo`.
 > mikä kertoisi kumpi sinulla on. Kun rivit eroavat vain variantilta, käytetään **halvinta**.
 > Molemmat suunnat ovat väärin, mutta yliarvio näkyy kaaviossa tuottona jota ei tullut.
 
-> **▸ Miksi liigalla voi olla kaksi nimeä:** GGG ja poe.ninja eivät ole samaa mieltä siitä,
-> miksi liigaa kutsutaan. GGG antaa virallisen nimen; poe.ninja indeksoi talouden omalla,
-> yleensä lyhyemmällä nimellään — heidän oma dokumentaationsa pyytää `league=Keepers` liigalle,
-> jonka GGG kirjoittaa "Keepers of the Flame". Nimen välittäminen sellaisenaan tuottaa siis
-> 404:n, joka näyttää katkokselta mutta on sanastoero.
+> **▸ Miksi uniikit eivät ole enää mukana:** poe.ninja suunnitteli API:nsa uusiksi, eikä
+> hintariveillä ole enää `links`- eikä `corrupted`-kenttää. Ilman niitä varianttia ei voi
+> tunnistaa, ja uniikin hinnoittelu pelkällä nimellä valitsisi hiljaa jommankumman: sama
+> Bronn's Lithe on ~5 chaosia linkittömänä ja ~210 kuutoslinkkinä.
 >
-> Tätä ei tarvitse yleensä tehdä itse. Ensimmäinen pyyntö menee GGG:n nimellä — kun nimet
-> täsmäävät, mikä on kaikkien pysyvien liigojen tilanne, ylimääräistä pyyntöä ei tule. Vasta
-> 404:n jälkeen kysytään poe.ninjalta mitä se indeksoi ja etsitään liiga sieltä. Nimi
-> ratkaistaan kerran prosessia kohti.
->
-> Sovitus on tahallaan varovainen: kandidaatti kelpaa vain jos hardcore-, SSF- ja
-> ruthless-määreet ovat identtiset. **Väärä osuma olisi pahempi kuin 404** — hardcore-hinnat
-> softcore-arkkuun antaisivat kaavion, joka on yksinkertaisesti väärässä eikä näytä siltä.
-> Jos mikään ei sovi, virheilmoitus luettelee ne liigat jotka poe.ninjalla on, ja
-> `POE_NINJA_LEAGUE` on käsivalinta niiden joukosta.
+> Vaihtoehdot olivat luku joka on väärässä nelikymmenkertaisesti ilman mitään merkkiä siitä, tai
+> ei lukua lainkaan. Uniikit jäävät siis hinnoittelematta ja näkyvät kierroksen "ei hintaa"
+> -varoituksessa. Jos poe.ninja alkaa taas julkaista varianttikenttiä, `PRICE_UNIQUE_CATEGORIES`
+> kytkee ne takaisin.
 
 ---
 
@@ -533,8 +525,53 @@ vastauksessa, joten sitä ei lueta kahdesti.
 
 ## Hinnoittelu ja nimien selvitys
 
-poe.ninja avaimittaa näyttönimellä. Arkun esineessä on `name`, `typeLine` ja `baseType`, ja se
-kumpi niistä on näyttönimi riippuu esineen lajista:
+### poe.ninjan API vaihtui, ja se maksoi jotain
+
+Vanha rajapinta `/api/data/currencyoverview` ja `/itemoverview` avaimitti jokaisen rivin
+näyttönimellä. Se on poistettu: koko polku vastaa `not found` jokaiselle liigalle, myös
+Standardille, koska osoite on vanhempi kuin poe.ninjan kahden pelin tuki eikä kerro kummasta on
+kyse. Tilalla on yksi päätepiste peliä kohti:
+
+```
+https://poe.ninja/poe1/api/economy/exchange/current/overview?league=<liiga>&type=<tyyppi>
+```
+
+`league` on **GGG:n oma liiganimi sellaisenaan** — `Allflame`, `Hardcore Allflame`.
+
+Rivillä ei ole enää nimeä, ikonia eikä uniikkien varianttikenttiä. Rivi on tunniste ja luku:
+
+```json
+{ "id": "alt", "primaryValue": 0.1238 }
+```
+
+Kolme seurausta, kaikki menetyksiä:
+
+**Nimet** haetaan nyt toisin päin. Arkun esineen näyttönimestä lasketaan tunniste — ei tunnisteesta
+nimeä, koska sitä suuntaa ei voi palauttaa: `assassins-favour` ei kerro mihin heittomerkki
+kuului. Erittely näytetään edelleen näyttönimellä, ja se tulee arkusta, mikä on parempi lähde
+kuin poe.ninja oli.
+
+**Ikonit** ovat poissa kaikelta paitsi chaosilta ja divinelta — ne ovat ainoat esineet jotka API
+vielä nimeää. Loput ovat sivuston omassa JavaScriptissä. Aukkoa ei paikata arvaamalla: esine
+ilman ikonia näkyy ilman ikonia.
+
+**Uniikit** jäävät hinnoittelematta, ks. `PRICE_UNIQUE_CATEGORIES` yllä.
+
+> **▸ Miksi tunnisteissa on kahta lajia ja mitä siitä seuraa:** uudemmat esineet käyttävät
+> nimestä johdettua slugia (`accelerating-catalyst`, `awakeners-orb`), mutta vanhemmat valuutat
+> käyttävät kauppapaikan lyhenteitä (`alt`, `alch`, `gcp`, `chaos`). Slugin tuottaa sääntö;
+> lyhenteitä ei tuota mikään sääntö, joten ne ovat taulukossa `services/ninjaId.ts`.
+>
+> Taulukkoa **ei voi tarkistaa hintavastauksesta**, koska siinä ei ole nimiä. Siksi virhe on
+> muotoiltu näkyväksi: puuttuva lyhenne tarkoittaa että nimi ei osu mihinkään ja esine päätyy
+> "ei hintaa" -listaan — näkyvästi hinnoittelematta, ei hiljaa nollaksi. Kierros kirjaa lisäksi
+> ne tunnisteet, joita mikään arkussa ei vastannut; juuri siltä puuttuva lyhenne näyttää.
+> `verifyAliases` vertaa taulukkoa niihin kahteen nimeen jotka API vielä antaa.
+
+### Näyttönimen valinta arkun esineestä
+
+Arkun esineessä on `name`, `typeLine` ja `baseType`, ja se kumpi niistä on näyttönimi riippuu
+esineen lajista:
 
 | Laji | Näyttönimi |
 |------|------------|

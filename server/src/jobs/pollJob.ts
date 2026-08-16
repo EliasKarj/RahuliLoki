@@ -12,7 +12,7 @@
  */
 
 import { describeError, silentLogger, type Logger } from '../lib/logger.ts';
-import type { PriceService } from '../services/priceService.ts';
+import { unmatchedIds, type PriceService } from '../services/priceService.ts';
 import type { StashService } from '../services/stashService.ts';
 import type { SnapshotMeta, SnapshotStore } from '../services/snapshotRepo.ts';
 import { valueTabs } from '../services/valuationService.ts';
@@ -59,6 +59,19 @@ export async function runPoll(deps: PollDependencies): Promise<PollOutcome> {
     log.warn(
       { count: valuation.unresolved.length, items: valuation.unresolved.slice(0, 25) },
       'items had no poe.ninja price and were counted as zero',
+    );
+  }
+
+  // The other half of the same problem, and the only way to see it. poe.ninja's payload carries
+  // no names, so a currency whose abbreviation is missing from the alias table looks like an id
+  // nothing in the stash ever claimed. Reported at debug because most of these are simply items
+  // the account does not hold — it is a lead to follow, not a fault.
+  const orphans = unmatchedIds(priceSet.prices, valuation.matchedIds);
+  if (orphans.length > 0) {
+    log.debug(
+      { ids: orphans },
+      'poe.ninja priced these ids and nothing in the stash matched them; a missing alias in ' +
+        'services/ninjaId.ts would look like this',
     );
   }
 

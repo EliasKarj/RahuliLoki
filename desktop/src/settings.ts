@@ -100,7 +100,6 @@ export function toEnv(settings: Settings, databaseFile: string): NodeJS.ProcessE
     LOG_LEVEL: process.env.VALUUTTALOKI_LOG_LEVEL ?? 'info',
     // Passed through so an operator can redirect it without rebuilding the app.
     ...(process.env.POE_NINJA_URL ? { POE_NINJA_URL: process.env.POE_NINJA_URL } : {}),
-    ...(process.env.POE_NINJA_LEAGUE ? { POE_NINJA_LEAGUE: process.env.POE_NINJA_LEAGUE } : {}),
   };
 }
 

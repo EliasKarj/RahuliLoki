@@ -198,9 +198,12 @@ describe('valueTabs with uniques', () => {
   });
 
   it('prices uniques by name alone when no index is supplied, as before', () => {
+    // Still the fallback path, now keyed through the id the flat map uses. It only fires when
+    // the operator has opted uniques back in: the default leaves them unpriced, because without
+    // `links` and `corrupted` the name does not say which variant this is.
     const result = valueTabs(
       [{ tab: { name: 'Gear' }, items: [{ name: 'Headhunter', frameType: 3 }] }],
-      { prices: { Headhunter: 9 }, divineRate: 200, minItemChaos: 2 },
+      { prices: { headhunter: 9 }, divineRate: 200, minItemChaos: 2 },
     );
     expect(result.breakdown['Gear']?.['Headhunter']?.chaosTotal).toBe(9);
   });
