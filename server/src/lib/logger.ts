@@ -99,7 +99,15 @@ export function describeError(error: unknown): { message: string; name?: string;
   return { message: scrub(describeNonError(error)) };
 }
 
-/** pino's error serializer contract: `type`, `message` and `stack` are all required. */
+/**
+ * pino's error serializer contract: `type`, `message` and `stack` are all required.
+ *
+ * Log the raw error — `log.warn({ err: error }, …)` — and let this run. Calling `describeError`
+ * at the call site instead serialises twice: pino then receives a plain object, which is no
+ * longer an Error, so it gets described by its fields and the line reads
+ * `"message":"message=GGG returned HTTP 403"` with an empty stack. `describeError` is for
+ * places that need the text itself, like an API response.
+ */
 export function serializeError(error: unknown): { type: string; message: string; stack: string } {
   const described = describeError(error);
   return {

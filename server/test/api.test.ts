@@ -192,6 +192,21 @@ describe('GET /api/item-history', () => {
   });
 });
 
+describe('GET /api/leagues', () => {
+  it('serves the list the setup dropdown needs', async () => {
+    const { app } = await makeApp();
+    const response = await app.inject({ method: 'GET', url: '/api/leagues' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().leagues.map((l: { id: string }) => l.id)).toContain('Settlers');
+  });
+
+  it('is behind the token like everything else', async () => {
+    const { app } = await makeApp({}, { AUTH_TOKEN: 'a'.repeat(32) } as NodeJS.ProcessEnv);
+    expect((await app.inject({ method: 'GET', url: '/api/leagues' })).statusCode).toBe(401);
+  });
+});
+
 describe('GET /api/stats', () => {
   it('reports the gain, both rates, and the best hour', async () => {
     const { app } = await makeApp();

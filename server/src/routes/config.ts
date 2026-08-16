@@ -11,6 +11,16 @@ import type { ApiDeps } from './deps.ts';
 import { publicConfig } from '../lib/config.ts';
 
 export async function configRoutes(app: FastifyInstance, deps: ApiDeps): Promise<void> {
+  /**
+   * The leagues that currently exist, for the setup dropdown.
+   *
+   * Distinct from `/api/config`'s `leagues`, which is the leagues this database has history
+   * for. One answers "what can I track", the other "what have I tracked".
+   */
+  app.get('/leagues', async (_request: FastifyRequest, reply: FastifyReply) => {
+    return reply.send(await deps.leagues());
+  });
+
   app.get('/config', async (_request: FastifyRequest, reply: FastifyReply) => {
     const leagues = await deps.store.leagues();
     return reply.send({

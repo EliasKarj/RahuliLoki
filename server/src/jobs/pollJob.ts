@@ -233,7 +233,7 @@ export class PollRunner {
         this.#haltReason =
           `halted after ${this.#consecutiveFailures} consecutive failed polls: ${this.#lastError}`;
         this.#log.error(
-          { err: describeError(error), consecutiveFailures: this.#consecutiveFailures },
+          { err: error, consecutiveFailures: this.#consecutiveFailures },
           'POLLER HALTED — no further polls will run until POST /api/poll is called by hand',
         );
       } else {
@@ -244,7 +244,7 @@ export class PollRunner {
         this.#nextAttemptAfter = this.#now() + backoff;
         this.#log.error(
           {
-            err: describeError(error),
+            err: error,
             consecutiveFailures: this.#consecutiveFailures,
             backoffMs: backoff,
           },

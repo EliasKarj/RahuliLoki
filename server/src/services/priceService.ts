@@ -228,7 +228,7 @@ export class PriceService {
       if (this.#cached) {
         const ageMinutes = Math.round((this.#now() - this.#cached.fetchedAt.getTime()) / 60_000);
         this.#log.warn(
-          { err: describeError(error), ageMinutes },
+          { err: error, ageMinutes },
           'poe.ninja refetch failed; continuing with the previous price set',
         );
         return this.#cached;

@@ -24,6 +24,7 @@ import { RateLimiter } from './lib/rateLimiter.ts';
 import { PriceService } from './services/priceService.ts';
 import { StashService } from './services/stashService.ts';
 import { PrismaPriceSetStore, PrismaSnapshotStore } from './services/snapshotRepo.ts';
+import { LeagueService } from './services/leagueService.ts';
 import { PollRunner } from './jobs/pollJob.ts';
 import type { ApiDeps } from './routes/deps.ts';
 
@@ -90,6 +91,7 @@ export async function startServer(options: StartOptions = {}): Promise<RunningSe
   let limiter: RateLimiter;
   let prices: PriceService;
   let poller: PollRunner;
+  let leagues: LeagueService;
 
   const deps: ApiDeps = {
     config,
@@ -103,12 +105,19 @@ export async function startServer(options: StartOptions = {}): Promise<RunningSe
       return prices;
     },
     rateLimit: () => limiter.view(),
+    leagues: () => leagues.list(),
   };
 
   const app = await buildApp(deps, { webDist, logLevel: config.logLevel });
   const log = app.log;
 
   limiter = new RateLimiter({ log, timeoutMs: config.requestTimeoutMs });
+  leagues = new LeagueService({
+    userAgent: config.userAgent,
+    knownLeagues: () => store.leagues(),
+    timeoutMs: config.requestTimeoutMs,
+    log,
+  });
   prices = new PriceService({
     league: config.league,
     currencyCategories: config.currencyCategories,
@@ -141,7 +150,7 @@ export async function startServer(options: StartOptions = {}): Promise<RunningSe
   });
 
   await prices.hydrate().catch((error: unknown) => {
-    log.warn({ err: describeError(error) }, 'could not restore a price set from the database');
+    log.warn({ err: error }, 'could not restore a price set from the database');
   });
 
   if (missing.length > 0) {

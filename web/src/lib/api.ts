@@ -85,6 +85,21 @@ export interface ItemHistoryResponse {
   points: ItemHistoryPoint[];
 }
 
+export interface League {
+  id: string;
+  hardcore: boolean;
+  ssf: boolean;
+  ruthless: boolean;
+  endAt: string | null;
+}
+
+export interface LeagueListResponse {
+  leagues: League[];
+  /** 'fallback' means GGG could not be reached and these are the permanent leagues. */
+  source: 'ggg' | 'fallback';
+  fetchedAt: string;
+}
+
 export interface SeriesInterval {
   fromId: number;
   toId: number;
@@ -264,6 +279,8 @@ export const api = {
     get<LatestResponse>(`/api/snapshots/latest${query({ league })}`, signal),
 
   config: (signal?: AbortSignal) => get<ConfigResponse>('/api/config', signal),
+
+  leagueList: (signal?: AbortSignal) => get<LeagueListResponse>('/api/leagues', signal),
 
   health: (signal?: AbortSignal) => get<HealthResponse>('/api/health', signal),
 

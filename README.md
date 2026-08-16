@@ -554,6 +554,7 @@ Kaikki `/api`-alkuiset, kaikki JSONia.
 | `GET /api/stats?league=&from=&to=` | Tuotto, c/h aktiivinen ja seinäkello, aktiivitunnit, paras tunti, välikohtaiset tiedot. |
 | `GET /api/changes?league=&from=&to=&minChaos=` | Mikä liikkui aikavälin päiden välillä: esinekohtaiset muutokset, syy (`quantity`/`price`/`both`), voitot ja tappiot erikseen. |
 | `GET /api/item-history?name=&league=&from=` | Yhden esineen määrä ja arvo jokaisessa aikavälin tilannekuvassa. |
+| `GET /api/leagues` | Nykyiset liigat GGG:ltä työpöytäversion valikkoa varten. Välimuistissa 6 h; epäonnistuessa pysyvät liigat. |
 | `POST /api/poll` | Kierros käsin. Nollaa myös pysäytyksen. 409 jos kierros on kesken, 503 jos tunnukset puuttuvat, 502 jos kierros epäonnistuu. |
 | `GET /api/health` | Viimeisin onnistuminen, pysäytyksen syy, nopeusrajoituksen tila, hintojen ikä. |
 | `GET /api/config` | Liiga, ajastin, kynnysarvot, liigat joilla on historiaa. **Ei POESESSIDiä.** |

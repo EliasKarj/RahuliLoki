@@ -113,6 +113,14 @@ export async function makeApp(
         isStale: () => false,
       },
       rateLimit: () => rateLimitView,
+      leagues: async () => ({
+        leagues: [
+          { id: 'Settlers', hardcore: false, ssf: false, ruthless: false, endAt: null },
+          { id: 'Standard', hardcore: false, ssf: false, ruthless: false, endAt: null },
+        ],
+        source: 'ggg' as const,
+        fetchedAt: new Date(START).toISOString(),
+      }),
       startedAt: new Date(START),
       ...overrides,
     },

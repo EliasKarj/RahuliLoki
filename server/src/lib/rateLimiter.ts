@@ -221,7 +221,7 @@ export class RateLimiter {
       } catch (error) {
         // A transport failure still consumed a slot as far as we know. Keep the pacing.
         this.#nextRequestAt = this.#now() + this.#minIntervalMs;
-        this.#log.warn({ err: describeError(error) }, 'rate-limited request failed in transport');
+        this.#log.warn({ err: error }, 'rate-limited request failed in transport');
         throw error;
       }
 
