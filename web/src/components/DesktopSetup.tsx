@@ -67,14 +67,20 @@ export function DesktopSetup({ onChanged }: { onChanged: () => void }) {
   // just clutter on every launch afterwards.
   const showBody = expanded || !configured;
 
+  /**
+   * Run one action, then report what happened.
+   *
+   * An action that returns a string reports that instead of `note`, so a result only known once
+   * the call has been made — the account name GGG answered with — can be said out loud.
+   */
   const run = async (action: () => Promise<unknown>, note: string): Promise<void> => {
     setBusy(true);
     setMessage(null);
     try {
-      await action();
+      const result = await action();
       await refresh();
       onChanged();
-      setMessage(note);
+      setMessage(typeof result === 'string' && result !== '' ? result : note);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));
     } finally {
@@ -207,9 +213,29 @@ export function DesktopSetup({ onChanged }: { onChanged: () => void }) {
             >
               Save
             </button>
+            {/* Typing the account name is a pure liability when the session already knows it.
+                This asks GGG and fills it in — and because the question needs no account name,
+                a failure here proves the session is the problem rather than the spelling. */}
+            <button
+              type="button"
+              disabled={busy || !settings.hasSession}
+              title={settings.hasSession ? undefined : 'Sign in first'}
+              onClick={() =>
+                void run(async () => {
+                  const account = await api.account();
+                  if (account.matches) return `GGG confirms this session is ${account.name}.`;
+                  await desktop.writeSettings({ accountName: account.name });
+                  return `GGG says this session is ${account.name}. Saved.`;
+                }, 'Checked.')
+              }
+              className="rounded border border-ink-700 px-3 py-1.5 text-sm text-ink-200 transition-colors hover:border-ink-600 disabled:opacity-50"
+            >
+              Ask GGG
+            </button>
           </form>
           <p className="-mt-2 text-xs text-ink-500">
-            The account name must match GGG exactly, including the #number.
+            The account name must match GGG exactly, including the #number. <b>Ask GGG</b> fills
+            it in from the signed-in session, and tells you if the session itself is the problem.
             {leagueSource === 'fallback'
               ? ' League list unavailable — showing the permanent leagues; pick Other… for anything else.'
               : ''}

@@ -121,6 +121,7 @@ export async function makeApp(
         source: 'ggg' as const,
         fetchedAt: new Date(START).toISOString(),
       }),
+      profile: async () => ({ name: 'Exile#1234', uuid: 'uuid-1' }),
       startedAt: new Date(START),
       ...overrides,
     },

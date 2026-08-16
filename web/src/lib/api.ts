@@ -100,6 +100,15 @@ export interface LeagueListResponse {
   fetchedAt: string;
 }
 
+/** What GGG says about the stored session. See the server's /api/account. */
+export interface AccountResponse {
+  /** The account name GGG itself reports, discriminator included. */
+  name: string;
+  /** What POE_ACCOUNT_NAME is currently set to, or null when it is unset. */
+  configured: string | null;
+  matches: boolean;
+}
+
 export interface SeriesInterval {
   fromId: number;
   toId: number;
@@ -281,6 +290,8 @@ export const api = {
   config: (signal?: AbortSignal) => get<ConfigResponse>('/api/config', signal),
 
   leagueList: (signal?: AbortSignal) => get<LeagueListResponse>('/api/leagues', signal),
+
+  account: (signal?: AbortSignal) => get<AccountResponse>('/api/account', signal),
 
   health: (signal?: AbortSignal) => get<HealthResponse>('/api/health', signal),
 
