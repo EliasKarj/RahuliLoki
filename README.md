@@ -18,7 +18,7 @@ varallisuuden kertymisen liigan alusta loppuun.
 
 - [Mitä tämä tekee](#mitä-tämä-tekee)
 - [Käyttöönotto](#käyttöönotto) — Docker tai paikallinen ajo
-- [POESESSID ja miksi siihen suhtaudutaan näin](#poesessid-ja-miksi-siihen-suhtaudutaan-näin)
+- [POESESSID ja miksi siihen suhtaudutaan näin](#poesessid-ja-miksi-siihen-suhtaudutaan-näin) — sekä miksi GGG:n OAuth ei tähän käy
 - [Pääsynhallinta](#pääsynhallinta) — mitä token suojaa ja miksi palvelin kieltäytyy käynnistymästä
 - [Asetukset](#asetukset)
 - [Mitä sivu näyttää](#mitä-sivu-näyttää)
@@ -133,6 +133,44 @@ Eväste vanhenee itsestään. Kun se vanhenee, `/api/health` sanoo sen suoraan
 > Jo kerätty historia pysyy luettavana, ja `/api/health` kertoo mikä puuttuu. Käynnistymisen
 > estäminen veisi kaaviot alas juuri sillä hetkellä kun olet vaihtamassa vanhentunutta
 > tunnusta.
+
+### Kyllä, GGG:llä on virallinen OAuth — ja miksi sitä ei käytetä tässä
+
+Tämä on ensimmäinen kysymys jonka kuka tahansa esittää, joten vastaus kuuluu tänne eikä
+issueihin.
+
+GGG tarjoaa virallisen OAuth 2.0 -rajapinnan, jossa on `account:stashes`-scope juuri tähän
+käyttöön. Se olisi joka mittarilla parempi:
+
+| | POESESSID | OAuth |
+|---|---|---|
+| Laajuus | **Koko tili.** Kauppa, arkku, viestit | Vain myönnetyt scopet |
+| Peruutus | Vaihda salasana | Peru sovelluksen oikeus |
+| Vanheneminen | Epämääräinen | Access ~28 pv, refresh ~90 pv |
+| Asema | Yksityinen rajapinta | Dokumentoitu ja tuettu |
+
+**Miksi se ei silti käy tähän:** GGG vaatii, että OAuth-sovelluksen redirect URI on HTTPS ja
+**rekisteröity verkkotunnus jonka omistat**. IP-osoitteita ja `localhost`ia ei hyväksytä edes
+kehityksessä. Lisäksi sovellus pitää rekisteröidä ja saada hyväksytyksi.
+
+Tämä on suorassa ristiriidassa sen kanssa mitä valuuttaloki on. Se sitoutuu oletuksena
+silmukkaosoitteeseen, `docker compose` julkaisee portin vain `127.0.0.1`:een, ja koko premissi
+on yhden ihmisen itse isännöimä työkalu omalla koneellaan. Sellaisella ei ole verkkotunnusta,
+eikä sitä pitäisi tarvitakaan.
+
+Poikkeus on Fly-julkaisu, jolla verkkotunnus on. Jos ajat sitä siellä **ja** saat GGG:ltä
+rekisteröinnin läpi, OAuth olisi teknisesti mahdollinen — mutta se ei ole sama sovellus enää:
+OAuthin arkkuendpointit ovat eri kuin `character-window/get-stash-items`, joten vastausmuoto,
+sivutus ja nopeusrajoitus pitäisi käydä läpi uudelleen.
+
+> **▸ Mitä tästä seuraa sinulle:** kohtele POESESSIDiä salasanana, koska se on sitä. Älä
+> liitä sitä issueen, älä kuvakaappaukseen, ja jos epäilet sen vuotaneen, kirjaudu ulos
+> kaikilta istunnoilta pathofexile.comilla — se mitätöi evästeen.
+
+> **▸ Tarkkuudesta:** yllä olevat OAuthin yksityiskohdat on luettu toissijaisista lähteistä,
+> ei GGG:n dokumentaatiosta suoraan. Tarkista
+> [pathofexile.com/developer/docs/authorization](https://www.pathofexile.com/developer/docs/authorization)
+> ennen kuin teet päätöksiä niiden varassa — rajapinta on elänyt ja voi elää lisää.
 
 ---
 
