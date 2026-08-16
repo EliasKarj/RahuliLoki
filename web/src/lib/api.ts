@@ -45,6 +45,46 @@ export interface LatestResponse {
   topItems: TopItem[];
 }
 
+export interface ItemChange {
+  name: string;
+  qtyBefore: number;
+  qtyAfter: number;
+  qtyDelta: number;
+  chaosBefore: number;
+  chaosAfter: number;
+  chaosDelta: number;
+  chaosEachBefore: number;
+  chaosEachAfter: number;
+  reason: 'quantity' | 'price' | 'both';
+  icon?: string;
+}
+
+export interface ChangesResponse {
+  league: string;
+  from: string | null;
+  to: string | null;
+  changes: ItemChange[];
+  gainedChaos: number;
+  lostChaos: number;
+  netChaos: number;
+  /** Present only when there was nothing to diff. */
+  reason?: string;
+}
+
+export interface ItemHistoryPoint {
+  takenAt: string;
+  qty: number;
+  chaosEach: number;
+  chaosTotal: number;
+}
+
+export interface ItemHistoryResponse {
+  league: string;
+  name: string;
+  icon?: string;
+  points: ItemHistoryPoint[];
+}
+
 export interface SeriesInterval {
   fromId: number;
   toId: number;
@@ -213,6 +253,12 @@ export const api = {
 
   stats: (range: RangeQuery, signal?: AbortSignal) =>
     get<StatsResponse>(`/api/stats${query(range)}`, signal),
+
+  changes: (range: RangeQuery, signal?: AbortSignal) =>
+    get<ChangesResponse>(`/api/changes${query(range)}`, signal),
+
+  itemHistory: (name: string, range: RangeQuery, signal?: AbortSignal) =>
+    get<ItemHistoryResponse>(`/api/item-history${query({ ...range, name })}`, signal),
 
   latest: (league: string | undefined, signal?: AbortSignal) =>
     get<LatestResponse>(`/api/snapshots/latest${query({ league })}`, signal),

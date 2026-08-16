@@ -284,7 +284,37 @@ Ylhäällä molemmat luvut: **c/h aktiivinen** ja **c/h seinäkello**.
 Pinottu pinta-ala välilehdittäin, ja lajiteltava taulukko tuoreimman tilannekuvan suurimmista
 omistuksista.
 
-### 4. Tilannekuvat
+### 4. Mikä liikkui
+
+Aikavälin päiden erotus esineittäin, ei juokseva summa — juokseva summa toistaisi vain
+c/h-kaavion. Voitot ja tappiot näytetään erikseen eikä nettona: *+4000 ja −1000* ja *+3000*
+ovat sama netto ja hyvin erilainen ilta.
+
+> **▸ Miksi välilehdet lasketaan yhteen ennen erotusta:** pinon siirtäminen kaatopaikka-
+> välilehdeltä valuuttavälilehdelle ei ole tapahtuma. Välilehtikohtainen erotus raportoisi sen
+> tappiona yhtäällä ja täsmälleen samansuuruisena voittona toisaalla — kaksi riviä kohinaa
+> tapahtumasta jota ei tapahtunut, juuri siinä näkymässä jonka tehtävä on nostaa oikeat
+> tapahtumat esiin.
+
+> **▸ Miksi `Why`-sarake on siinä:** omistus jonka määrä ei muuttunut mutta arvo nousi on
+> markkina, ei sinä. Ilman erottelua varallisuusseuranta ottaa hiljaa kunnian divinen
+> kurssipiikistä. `held` = hankit tai kulutit, `price` = sama määrä eri hintaan, `both` =
+> molemmat liikkuivat.
+
+### 5. Esineen historia
+
+Klikkaa nimeä missä tahansa taulukossa. Pinta-ala on kasan arvo, ohut viiva yksikköhinta.
+Nouseva pinta-ala tasaisen viivan yllä on sinun ansiotasi; nouseva viiva tasaisen määrän alla
+on markkinan.
+
+> **▸ Miksi puuttuva esine on nolla eikä aukko:** myyty kasa kuuluu pudota nollaan. Aukko
+> saisi sarjan näyttämään päättyvän, mikä on eri väite.
+
+> **▸ Miksi tämä haetaan vasta klikkauksesta:** se on ainoa reitti joka lukee jokaisen
+> erittelyn aikaväliltä — sen sarakkeen, joka on tarkoituksella jätetty pois kaikista muista
+> listavastauksista.
+
+### 6. Tilannekuvat
 
 Rivit joista kaaviot on tehty: muutos edelliseen, divine-kurssi hetkellä, hintojen ikä ja
 laskettiinko väli aktiiviseksi. Tämä on taulukko, jota luetaan kun kaavio näyttää oudolta.
@@ -386,6 +416,8 @@ Kaikki `/api`-alkuiset, kaikki JSONia.
 | `GET /api/snapshots?league=&from=&to=&limit=` | Tilannekuvat vanhin ensin. Erittely mukaan vain `?full=1`; `?tabs=1` antaa välilehtikohtaiset summat ilman esinetason dataa. |
 | `GET /api/snapshots/latest?league=` | Tuorein tilannekuva täydellä erittelyllä, välilehtisummilla ja kärkiomistuksilla ikoneineen. 404 ennen ensimmäistä kierrosta. |
 | `GET /api/stats?league=&from=&to=` | Tuotto, c/h aktiivinen ja seinäkello, aktiivitunnit, paras tunti, välikohtaiset tiedot. |
+| `GET /api/changes?league=&from=&to=&minChaos=` | Mikä liikkui aikavälin päiden välillä: esinekohtaiset muutokset, syy (`quantity`/`price`/`both`), voitot ja tappiot erikseen. |
+| `GET /api/item-history?name=&league=&from=` | Yhden esineen määrä ja arvo jokaisessa aikavälin tilannekuvassa. |
 | `POST /api/poll` | Kierros käsin. Nollaa myös pysäytyksen. 409 jos kierros on kesken, 503 jos tunnukset puuttuvat, 502 jos kierros epäonnistuu. |
 | `GET /api/health` | Viimeisin onnistuminen, pysäytyksen syy, nopeusrajoituksen tila, hintojen ikä. |
 | `GET /api/config` | Liiga, ajastin, kynnysarvot, liigat joilla on historiaa. **Ei POESESSIDiä.** |
@@ -462,10 +494,10 @@ pnpm test
 ```
 /server
   /src
-    /services   priceService, stashService, valuationService, snapshotRepo
+    /services   priceService, stashService, valuationService, uniques, snapshotRepo
     /routes     snapshots, health, config
     /jobs       pollJob
-    /lib        rateLimiter, logger, series, config, auth, http
+    /lib        rateLimiter, logger, series, changes, config, auth, http
     app.ts      Fastifyn kokoaminen (testattavissa ilman kuuntelevaa porttia)
     index.ts    käynnistys, ajastin, staattinen sivusto
   /prisma       schema.prisma + migraatiot
@@ -473,7 +505,7 @@ pnpm test
 /web
   /src
     /components NetWorthChart, RatePerHourChart, TabBreakdown, SnapshotTable, PollerStatus,
-                TokenGate
+                TokenGate, ChangesTable, ItemHistory, ItemIcon
     /hooks      useSnapshots
     /lib        api, format, series
 ```

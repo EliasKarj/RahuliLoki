@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useSnapshots } from './hooks/useSnapshots.ts';
 import { NetWorthChart } from './components/NetWorthChart.tsx';
 import { RatePerHourChart } from './components/RatePerHourChart.tsx';
@@ -7,7 +7,10 @@ import { SnapshotTable } from './components/SnapshotTable.tsx';
 import { PollerStatus } from './components/PollerStatus.tsx';
 import { Empty, Panel, RangeToggle, StatTile } from './components/ui.tsx';
 import { TokenGate } from './components/TokenGate.tsx';
+import { ChangesTable } from './components/ChangesTable.tsx';
+import { ItemHistory } from './components/ItemHistory.tsx';
 import { hasToken } from './lib/api.ts';
+import { rangeStart } from './lib/series.ts';
 import {
   formatAgo,
   formatChaos,
@@ -22,9 +25,29 @@ import type { RangeKey } from './lib/series.ts';
 export default function App() {
   const [range, setRange] = useState<RangeKey>('24h');
   const [league, setLeague] = useState<string | undefined>(undefined);
+  /** The item whose history is open, if any. Clicking a name anywhere sets it. */
+  const [selected, setSelected] = useState<string | null>(null);
 
-  const { snapshots, stats, latest, config, health, loading, error, unauthorized, refreshedAt, refresh } =
-    useSnapshots(league, range);
+  const {
+    snapshots,
+    stats,
+    changes,
+    latest,
+    config,
+    health,
+    loading,
+    error,
+    unauthorized,
+    refreshedAt,
+    refresh,
+  } = useSnapshots(league, range);
+
+  // Same shape the hook queries with, so the on-demand item history covers the same window as
+  // everything else on screen.
+  const itemRange = useMemo(
+    () => ({ ...(league ? { league } : {}), ...(rangeStart(range) ? { from: rangeStart(range) as string } : {}) }),
+    [league, range],
+  );
 
   // A 401 while this tab already held a token means the token is wrong, not merely missing —
   // worth saying so, rather than silently showing the same empty box again.
@@ -133,14 +156,39 @@ export default function App() {
           </Panel>
 
           <Panel
+            title="What moved"
+            subtitle={
+              changes?.from && changes.to
+                ? `Between ${formatDateTime(changes.from)} and ${formatDateTime(changes.to)}. ` +
+                  `Gained ${formatChaos(changes.gainedChaos)}c, lost ${formatChaos(Math.abs(changes.lostChaos))}c.`
+                : 'Between the ends of this range.'
+            }
+          >
+            <ChangesTable
+              changes={changes?.changes ?? []}
+              emptyReason={changes?.reason}
+              onSelect={setSelected}
+            />
+          </Panel>
+
+          {selected ? (
+            <ItemHistory
+              name={selected}
+              range={itemRange}
+              wide={wide}
+              onClose={() => setSelected(null)}
+            />
+          ) : null}
+
+          <Panel
             title="Top holdings"
             subtitle={
               latest
-                ? `Latest snapshot, ${formatDateTime(latest.snapshot.takenAt)}. Sort by any column.`
+                ? `Latest snapshot, ${formatDateTime(latest.snapshot.takenAt)}. Click a name for its history.`
                 : 'Latest snapshot.'
             }
           >
-            <TopItemsTable items={latest?.topItems ?? []} />
+            <TopItemsTable items={latest?.topItems ?? []} onSelect={setSelected} />
           </Panel>
 
           <Panel title="Snapshots" subtitle="The rows behind the charts, newest first.">

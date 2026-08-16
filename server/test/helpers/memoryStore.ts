@@ -44,6 +44,16 @@ export class MemorySnapshotStore implements SnapshotStore {
     return rows[0] ?? null;
   }
 
+  async bounds(
+    query: SnapshotQuery,
+  ): Promise<{ first: SnapshotWithBreakdown; last: SnapshotWithBreakdown } | null> {
+    const rows = this.#filter({ ...query, limit: undefined });
+    const first = rows[0];
+    const last = rows[rows.length - 1];
+    if (!first || !last || first.id === last.id) return null;
+    return { first, last };
+  }
+
   async create(input: CreateSnapshotInput): Promise<SnapshotMeta> {
     if (this.failOnCreate) throw this.failOnCreate;
     const row: SnapshotWithBreakdown = {

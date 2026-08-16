@@ -59,6 +59,8 @@ export interface SnapshotStore {
   listTabTotals(query: SnapshotQuery): Promise<SnapshotWithTabs[]>;
   listFull(query: SnapshotQuery): Promise<SnapshotWithBreakdown[]>;
   latest(league: string): Promise<SnapshotWithBreakdown | null>;
+  /** The oldest and newest snapshot in a range, with breakdowns. Two rows, not the range. */
+  bounds(query: SnapshotQuery): Promise<{ first: SnapshotWithBreakdown; last: SnapshotWithBreakdown } | null>;
   create(input: CreateSnapshotInput): Promise<SnapshotMeta>;
   leagues(): Promise<string[]>;
 }
@@ -151,6 +153,24 @@ export class PrismaSnapshotStore implements SnapshotStore {
       orderBy: { takenAt: 'desc' },
     });
     return row === null ? null : { ...row, breakdown: asBreakdown(row.breakdown) };
+  }
+
+  /**
+   * The two endpoints of a range, read as two rows rather than by pulling the range and taking
+   * its ends. A month of ten-minute snapshots is ~4000 breakdown blobs; the diff needs two.
+   */
+  async bounds(
+    query: SnapshotQuery,
+  ): Promise<{ first: SnapshotWithBreakdown; last: SnapshotWithBreakdown } | null> {
+    const [first, last] = await Promise.all([
+      this.#prisma.snapshot.findFirst({ where: where(query), orderBy: { takenAt: 'asc' } }),
+      this.#prisma.snapshot.findFirst({ where: where(query), orderBy: { takenAt: 'desc' } }),
+    ]);
+    if (first === null || last === null || first.id === last.id) return null;
+    return {
+      first: { ...first, breakdown: asBreakdown(first.breakdown) },
+      last: { ...last, breakdown: asBreakdown(last.breakdown) },
+    };
   }
 
   async create(input: CreateSnapshotInput): Promise<SnapshotMeta> {

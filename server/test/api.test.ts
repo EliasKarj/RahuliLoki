@@ -135,6 +135,63 @@ describe('GET /api/snapshots/latest', () => {
   });
 });
 
+describe('GET /api/changes', () => {
+  it('diffs the ends of the range and joins icons in', async () => {
+    const { app } = await makeApp();
+    const body = (await app.inject({ method: 'GET', url: '/api/changes' })).json();
+
+    // The seed goes 1000c of chaos, then chaos plus a Doctor, then an empty breakdown.
+    // Ends of the range: everything present at the start is gone by the end.
+    expect(body.from).not.toBeNull();
+    expect(body.changes.map((c: { name: string }) => c.name)).toContain('Chaos Orb');
+    expect(body.lostChaos).toBeLessThan(0);
+  });
+
+  it('says why rather than returning an empty diff when there is only one snapshot', async () => {
+    const { app } = await makeApp();
+    const body = (await app.inject({ method: 'GET', url: '/api/changes?league=Standard' })).json();
+
+    expect(body.changes).toEqual([]);
+    expect(body.reason).toMatch(/at least two/);
+  });
+
+  it('rejects a nonsense minChaos', async () => {
+    const { app } = await makeApp();
+    const response = await app.inject({ method: 'GET', url: '/api/changes?minChaos=-4' });
+    expect(response.statusCode).toBe(400);
+  });
+});
+
+describe('GET /api/item-history', () => {
+  it('returns one point per snapshot in the range', async () => {
+    const { app } = await makeApp();
+    const body = (
+      await app.inject({ method: 'GET', url: '/api/item-history?name=Chaos%20Orb' })
+    ).json();
+
+    expect(body.name).toBe('Chaos Orb');
+    expect(body.points).toHaveLength(3);
+    expect(body.points[0].qty).toBe(1000);
+    // The trailing seeded snapshot has an empty breakdown: absence reads as zero.
+    expect(body.points[2].qty).toBe(0);
+  });
+
+  it('carries the icon when the price set knows one', async () => {
+    const { app } = await makeApp();
+    const body = (
+      await app.inject({ method: 'GET', url: '/api/item-history?name=The%20Doctor' })
+    ).json();
+    expect(body.icon).toBe('https://web.poecdn.com/doctor.png');
+  });
+
+  it('requires a name rather than silently answering for nothing', async () => {
+    const { app } = await makeApp();
+    const response = await app.inject({ method: 'GET', url: '/api/item-history' });
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toMatch(/name is required/);
+  });
+});
+
 describe('GET /api/stats', () => {
   it('reports the gain, both rates, and the best hour', async () => {
     const { app } = await makeApp();
