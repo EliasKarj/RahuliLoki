@@ -9,7 +9,19 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { api, type League } from '../lib/api.ts';
 import { bridge, type DesktopSettings } from '../lib/desktop.ts';
+
+/** The value that turns the dropdown back into a text box, for private leagues. */
+const OTHER = '\u0000other';
+
+/** Temporary leagues first, then the permanent ones. Nobody sets up a tracker for Standard. */
+function ordered(leagues: League[]): League[] {
+  return [...leagues].sort((a, b) => {
+    const temporary = Number(b.endAt !== null) - Number(a.endAt !== null);
+    return temporary !== 0 ? temporary : a.id.localeCompare(b.id);
+  });
+}
 
 export function DesktopSetup({ onChanged }: { onChanged: () => void }) {
   const desktop = bridge();
@@ -17,6 +29,10 @@ export function DesktopSetup({ onChanged }: { onChanged: () => void }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
+  const [leagues, setLeagues] = useState<League[] | null>(null);
+  const [leagueSource, setLeagueSource] = useState<'ggg' | 'fallback' | null>(null);
+  /** Set when the operator picked "Other", so the free-text box stays open while they type. */
+  const [custom, setCustom] = useState(false);
 
   const refresh = useCallback(async () => {
     if (desktop === null) return;
@@ -26,6 +42,23 @@ export function DesktopSetup({ onChanged }: { onChanged: () => void }) {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (desktop === null) return;
+    const controller = new AbortController();
+    api
+      .leagueList(controller.signal)
+      .then((response) => {
+        if (controller.signal.aborted) return;
+        setLeagues(response.leagues);
+        setLeagueSource(response.source);
+      })
+      // A failed request is not worth an error banner here: the server already falls back to
+      // the permanent leagues, so this only fires if the server itself is unreachable — in
+      // which case the dashboard behind this panel is saying so much more loudly.
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [desktop]);
 
   if (desktop === null || settings === null) return null;
 
@@ -106,14 +139,21 @@ export function DesktopSetup({ onChanged }: { onChanged: () => void }) {
             onSubmit={(event) => {
               event.preventDefault();
               const form = new FormData(event.currentTarget);
+              const chosen = String(form.get('league') ?? '').trim();
+              if (chosen === OTHER) {
+                // They opened the dropdown, chose Other and submitted without typing.
+                setCustom(true);
+                setMessage('Type the league name, then save.');
+                return;
+              }
               void run(
                 () =>
                   desktop.writeSettings({
                     accountName: String(form.get('accountName') ?? '').trim(),
-                    league: String(form.get('league') ?? '').trim() || 'Standard',
+                    league: chosen || 'Standard',
                   }),
                 'Saved.',
-              );
+              ).then(() => setCustom(false));
             }}
           >
             <label className="flex flex-col gap-1 text-xs text-ink-400">
@@ -127,11 +167,38 @@ export function DesktopSetup({ onChanged }: { onChanged: () => void }) {
             </label>
             <label className="flex flex-col gap-1 text-xs text-ink-400">
               League
-              <input
-                name="league"
-                defaultValue={settings.league}
-                className="w-40 rounded border border-ink-700 bg-ink-900 px-2 py-1.5 text-sm text-ink-100 outline-none focus:border-accent-600"
-              />
+              {leagues === null || custom ? (
+                // Before the list arrives, and for private leagues GGG does not publish.
+                <input
+                  name="league"
+                  defaultValue={settings.league}
+                  autoFocus={custom}
+                  placeholder="League name"
+                  className="w-48 rounded border border-ink-700 bg-ink-900 px-2 py-1.5 text-sm text-ink-100 outline-none focus:border-accent-600"
+                />
+              ) : (
+                <select
+                  name="league"
+                  defaultValue={settings.league}
+                  onChange={(event) => {
+                    if (event.target.value === OTHER) setCustom(true);
+                  }}
+                  className="w-48 rounded border border-ink-700 bg-ink-900 px-2 py-1.5 text-sm text-ink-100 outline-none focus:border-accent-600"
+                >
+                  {/* The configured league is always an option, even if GGG no longer lists
+                      it — a finished league still has history worth reading. */}
+                  {leagues.some((entry) => entry.id === settings.league) ? null : (
+                    <option value={settings.league}>{settings.league}</option>
+                  )}
+                  {ordered(leagues).map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {entry.id}
+                      {entry.endAt === null ? '' : ' (temporary)'}
+                    </option>
+                  ))}
+                  <option value={OTHER}>Other…</option>
+                </select>
+              )}
             </label>
             <button
               type="submit"
@@ -143,6 +210,9 @@ export function DesktopSetup({ onChanged }: { onChanged: () => void }) {
           </form>
           <p className="-mt-2 text-xs text-ink-500">
             The account name must match GGG exactly, including the #number.
+            {leagueSource === 'fallback'
+              ? ' League list unavailable — showing the permanent leagues; pick Other… for anything else.'
+              : ''}
           </p>
 
           <div className="flex flex-wrap gap-4 text-xs text-ink-300">

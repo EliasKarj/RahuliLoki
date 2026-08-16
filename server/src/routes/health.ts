@@ -71,7 +71,7 @@ export async function healthRoutes(app: FastifyInstance, deps: ApiDeps): Promise
       }
       // A failed manual poll is a normal answer to "try it and tell me what breaks", not a
       // server fault: report what went wrong with the poll rather than a bare 500.
-      app.log.error({ err: describeError(error) }, 'manual poll failed');
+      app.log.error({ err: error }, 'manual poll failed');
       return reply.code(502).send({ ok: false, error: describeError(error).message });
     }
   });

@@ -554,6 +554,7 @@ Kaikki `/api`-alkuiset, kaikki JSONia.
 | `GET /api/stats?league=&from=&to=` | Tuotto, c/h aktiivinen ja seinäkello, aktiivitunnit, paras tunti, välikohtaiset tiedot. |
 | `GET /api/changes?league=&from=&to=&minChaos=` | Mikä liikkui aikavälin päiden välillä: esinekohtaiset muutokset, syy (`quantity`/`price`/`both`), voitot ja tappiot erikseen. |
 | `GET /api/item-history?name=&league=&from=` | Yhden esineen määrä ja arvo jokaisessa aikavälin tilannekuvassa. |
+| `GET /api/leagues` | Nykyiset liigat GGG:ltä työpöytäversion valikkoa varten. Välimuistissa 6 h; epäonnistuessa pysyvät liigat. |
 | `POST /api/poll` | Kierros käsin. Nollaa myös pysäytyksen. 409 jos kierros on kesken, 503 jos tunnukset puuttuvat, 502 jos kierros epäonnistuu. |
 | `GET /api/health` | Viimeisin onnistuminen, pysäytyksen syy, nopeusrajoituksen tila, hintojen ikä. |
 | `GET /api/config` | Liiga, ajastin, kynnysarvot, liigat joilla on historiaa. **Ei POESESSIDiä.** |
@@ -598,6 +599,26 @@ kauppoineen. Kieltäytyy koskemasta liigaan, jolla on jo tilannekuvia, ellei ann
 > **▸ Miksi tämä on olemassa:** kaavioiden arvioiminen vaatii dataa, jolla on oikean datan muoto.
 > Kolmen vuorokauden odottaminen sen selvittämiseksi, että työkaluvinkki menee akselin päälle,
 > ei ole työtapa.
+
+---
+
+## Riippuvuuksien tarkistus
+
+CI ajaa `pnpm audit --audit-level moderate` ja kaataa käännöksen tunnettuun haavoittuvuuteen.
+Yksi neuvonta on ohitettu, `package.json`in `pnpm.auditConfig.ignoreGhsas`issa:
+
+**[GHSA-jmr9-qjv8-65gv](https://github.com/advisories/GHSA-jmr9-qjv8-65gv)** — `extract-zip`,
+validoimaton symlinkkien polkuhyppäys purettaessa. Korjattua versiota **ei ole olemassa**
+(`Patched versions: <0.0.0`); paketti on ylläpitämätön.
+
+> **▸ Miksi tämä on hyväksyttävä poikkeus:** `extract-zip` tulee Electronin *asennusskriptin*
+> mukana, ja sen ainoa tehtävä on purkaa Electronin oma binääri kehittäjän koneella. Se ei ole
+> mukana julkaistussa ohjelmassa, sitä ei aja mikään tämän repon koodi, eikä se pura mitään
+> muuta kuin Electronin oman GitHub-julkaisun. Haavoittuvuus edellyttää vihamielistä
+> zip-tiedostoa, jollaista tässä ketjussa ei ole.
+>
+> Ohitus on nimenomaisesti tuossa yhdessä paikassa eikä kynnysarvoa laskemalla, jotta se on
+> yhden rivin muutos diffissä eikä kokonaisen portin hiljainen sammuttaminen.
 
 ---
 

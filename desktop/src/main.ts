@@ -45,12 +45,55 @@ app.on('second-instance', () => {
   showWindow();
 });
 
+/**
+ * The port the window is pointed at, held across restarts.
+ *
+ * Every settings change restarts the server, and with port 0 each restart landed on a new
+ * port while the window stayed loaded at the old one. The result was the whole dashboard
+ * failing with "Failed to fetch" the moment you signed in — the one action a new user takes
+ * first — and showing stale text read from a server that no longer existed.
+ *
+ * So the OS picks a port once and it is reused. The window's origin then survives every
+ * restart, which also keeps whatever the person was looking at on screen.
+ */
+let boundPort: number | null = null;
+
 async function restartServer(settings: Settings): Promise<void> {
   await server?.close();
   server = null;
-  // Port 0: let the OS choose. A fixed port would collide with a self-hosted instance the same
-  // person may already be running, and there is no reason for the shell to care which port.
-  server = await startServer({ env: toEnv(settings, databaseFile), port: 0 });
+
+  const env = toEnv(settings, databaseFile);
+  try {
+    server = await startServer({ env, port: boundPort ?? 0 });
+  } catch (error) {
+    // Something else grabbed the port in the gap between closing and re-listening. Rare, but
+    // taking a different port beats failing to come back at all.
+    if (boundPort === null) throw error;
+    server = await startServer({ env, port: 0 });
+  }
+
+  const moved = boundPort !== null && boundPort !== server.port;
+  boundPort = server.port;
+
+  // Only when the fallback above actually changed the origin. Reloading otherwise would throw
+  // away the view on every checkbox toggle.
+  if (moved && mainWindow !== null && !mainWindow.isDestroyed()) {
+    void mainWindow.loadURL(server.url);
+  }
+}
+
+/** Settings the server reads. Everything else is the shell's own business. */
+const SERVER_SETTINGS: ReadonlyArray<keyof Settings> = [
+  'poesessid',
+  'accountName',
+  'league',
+  'pollCron',
+  'minItemChaos',
+  'trackedTabs',
+];
+
+function affectsServer(patch: Partial<Settings>): boolean {
+  return SERVER_SETTINGS.some((key) => Object.hasOwn(patch, key));
 }
 
 function showWindow(): void {
@@ -169,12 +212,20 @@ ipcMain.handle('settings:read', () => {
 });
 
 ipcMain.handle('settings:write', async (_event, patch: Partial<Settings>) => {
-  const settings = { ...loadSettings(userData), ...patch };
+  const current = loadSettings(userData);
+  const settings = { ...current, ...patch };
   // The credential is not settable through this channel; it only ever arrives from the login
   // window, so a renderer bug cannot plant one.
-  settings.poesessid = loadSettings(userData).poesessid;
+  settings.poesessid = current.poesessid;
   saveSettings(userData, settings);
-  await restartServer(settings);
+
+  if (settings.launchAtLogin !== current.launchAtLogin) {
+    app.setLoginItemSettings({ openAtLogin: settings.launchAtLogin });
+  }
+  // Restarting the server tears down the database connection and the scheduler. Ticking
+  // "start with my computer" is no reason to do any of that.
+  if (affectsServer(patch)) await restartServer(settings);
+
   refreshTray();
   return { ok: true };
 });
@@ -258,6 +309,18 @@ async function maybeSmokeTest(): Promise<void> {
     mainWindow.webContents.once('did-finish-load', () => resolve());
     if (!mainWindow.webContents.isLoading()) resolve();
   });
+
+  // Regression check for the bug that made signing in break the dashboard: a restart used to
+  // land on a new random port while the window stayed on the old one, so every request after
+  // the first settings change failed with "Failed to fetch".
+  const before = server?.port ?? 0;
+  await restartServer(loadSettings(userData));
+  const after = server?.port ?? 0;
+  console.error(`smoke: port before restart ${before}, after ${after}`);
+  if (before !== after || before === 0) {
+    errors.push(`server port changed across a restart: ${before} -> ${after}`);
+  }
+
   // The dashboard fetches after load; give it a moment to paint the result.
   await new Promise((resolve) => setTimeout(resolve, 2500));
 

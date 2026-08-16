@@ -16,8 +16,8 @@
   },
   "devDependencies": {
     "@types/node": "^22.13.1",
-    "electron": "^38.8.6",
-    "electron-builder": "^25.1.8",
+    "electron": "^39.8.10",
+    "electron-builder": "^26.15.3",
     "typescript": "^5.7.3"
   },
   "description": "Self-hosted Path of Exile wealth tracker, as a desktop application.",

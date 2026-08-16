@@ -5,6 +5,7 @@ import type { RateLimitView } from '../lib/rateLimiter.ts';
 import type { PriceSet } from '../services/priceService.ts';
 import type { SnapshotStore } from '../services/snapshotRepo.ts';
 import type { PollerHealth, PollOutcome } from '../jobs/pollJob.ts';
+import type { LeagueList } from '../services/leagueService.ts';
 
 export interface PollerLike {
   readonly health: PollerHealth;
@@ -25,4 +26,6 @@ export interface ApiDeps {
   prices: PriceStateLike;
   rateLimit: () => RateLimitView;
   startedAt: Date;
+  /** The league list for the setup dropdown. Cached and failure-tolerant — see leagueService. */
+  leagues: () => Promise<LeagueList>;
 }
