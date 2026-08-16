@@ -46,12 +46,17 @@ export async function healthRoutes(app: FastifyInstance, deps: ApiDeps): Promise
       rateLimit: deps.rateLimit(),
       prices:
         priceSet === null
-          ? { fetchedAt: null, entries: 0, divineRate: 0, stale: true }
+          ? { fetchedAt: null, entries: 0, divineRate: 0, stale: true, chaosIcon: null, divineIcon: null }
           : {
               fetchedAt: priceSet.fetchedAt.toISOString(),
               entries: Object.keys(priceSet.prices).length,
               divineRate: priceSet.divineRate,
               stale: deps.prices.isStale(),
+              // The two orbs every figure in this app is quoted in. Served here because this is
+              // already where the rate lives, and the header needs the icon for whichever unit
+              // the rate put the number in.
+              chaosIcon: priceSet.icons['Chaos Orb'] ?? null,
+              divineIcon: priceSet.icons['Divine Orb'] ?? null,
             },
       missing: deps.missing,
     });

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   formatAgo,
   formatChaos,
+  denominate,
   formatCount,
   formatDivine,
   formatHours,
@@ -108,5 +109,46 @@ describe('formatAgo', () => {
 
   it('does not report a future timestamp as a negative age', () => {
     expect(formatAgo('2026-01-01T12:05:00Z', now)).toBe('0s ago');
+  });
+});
+
+describe('denominate', () => {
+  it('quotes a stash in divine once it is worth one', () => {
+    // Nobody reports a stash as "twenty thousand chaos"; past a divine they count divines.
+    expect(denominate(20512, 196.9)).toMatchObject({ unit: 'divine' });
+    expect(denominate(20512, 196.9).value).toBeCloseTo(104.17, 2);
+  });
+
+  it('quotes it in chaos below a divine', () => {
+    // "0.4 divine" is a number you have to convert in your head to picture.
+    expect(denominate(150, 196.9)).toMatchObject({ unit: 'chaos', value: 150 });
+  });
+
+  it('switches exactly at one divine', () => {
+    expect(denominate(196.9, 196.9).unit).toBe('divine');
+    expect(denominate(196.89, 196.9).unit).toBe('chaos');
+  });
+
+  it('carries the other denomination for the line underneath', () => {
+    const amount = denominate(20512, 196.9);
+    expect(amount.otherUnit).toBe('chaos');
+    expect(amount.otherValue).toBe(20512);
+  });
+
+  it('falls back to chaos when the rate is unusable', () => {
+    // Dividing by zero yields Infinity, and "∞ divine" over a perfectly good chaos total is
+    // worse than simply saying the chaos.
+    expect(denominate(20512, 0)).toMatchObject({ unit: 'chaos', value: 20512 });
+    expect(denominate(20512, Number.NaN).unit).toBe('chaos');
+    expect(denominate(20512, -5).unit).toBe('chaos');
+  });
+
+  it('decides on magnitude, so a large loss is still quoted in divine', () => {
+    expect(denominate(-20512, 196.9).unit).toBe('divine');
+    expect(denominate(-20512, 196.9).value).toBeCloseTo(-104.17, 2);
+  });
+
+  it('does not invent a number from a broken total', () => {
+    expect(denominate(Number.NaN, 196.9).unit).toBe('chaos');
   });
 });

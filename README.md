@@ -418,7 +418,10 @@ Incubator, Artifact, Vial, Omen, Tattoo`.
 Sivu on **loki, ei korttitaulu**. Ei laatikoita eikä reunuksia: hiusviivat erottavat osiot,
 ja ainoat asiat joilla on reunat ovat luvut itse.
 
-Ylinnä yksi hallitseva lukema — nettoarvo — ja sarja piirrettynä sen taakse. Tukiluvut ovat
+Ylinnä yksi hallitseva lukema — nettoarvo — ja sarja piirrettynä sen taakse. Lukema on siinä
+yksikössä jossa sen sanoisi ääneen: **alle divinen arvoinen arkku chaoksina, sen yli divineinä**,
+ja vieressä sen orbin oma kuva. Toinen yksikkö on aina rivin alla, joten mitään ei häviä
+vaihdossa. Tukiluvut ovat
 sen alla rivinä, hiusviivoin jaettuna. Heti perässä **esinetaulukko**, jossa jokaisen rivin
 takana on palkki: rivin osuus suurimmasta omistuksesta. Kaaviot ovat alempana yhden rivin
 palkkeina, oletuksena kiinni.
@@ -730,7 +733,7 @@ validoimaton symlinkkien polkuhyppäys purettaessa. Korjattua versiota **ei ole 
 pnpm test
 ```
 
-**430 testiä**, ei yhtään verkkopyyntöä:
+**439 testiä**, ei yhtään verkkopyyntöä:
 
 - **Nopeusrajoitin** — otsakkeiden jäsennys, tahdistus, sarjallistuminen, `Retry-After`,
   kaksinkertaistuminen kattoon asti. Kello ja uni ovat väärennettyjä, joten 30 minuutin

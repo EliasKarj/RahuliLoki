@@ -183,7 +183,15 @@ export interface HealthResponse {
     totalRequests: number;
     total429: number;
   };
-  prices: { fetchedAt: string | null; entries: number; divineRate: number; stale: boolean };
+  prices: {
+    fetchedAt: string | null;
+    entries: number;
+    divineRate: number;
+    stale: boolean;
+    /** GGG's art for the two orbs everything is quoted in. Null until the first price set. */
+    chaosIcon: string | null;
+    divineIcon: string | null;
+  };
   missing: string[];
 }
 

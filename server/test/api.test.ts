@@ -447,3 +447,22 @@ describe('unknown routes', () => {
     expect(response.statusCode).toBe(404);
   });
 });
+
+describe('GET /api/health prices', () => {
+  it('serves the two orb icons the header quotes figures in', async () => {
+    // The header shows whichever orb the divine rate put the number in, so it needs the art for
+    // both. This is where the rate already lives.
+    const { app } = await makeApp();
+    const body = (await app.inject({ method: 'GET', url: '/api/health' })).json();
+
+    expect(body.prices.divineIcon).toBe('https://web.poecdn.com/divine.png');
+    expect(body.prices.chaosIcon).toBeNull();
+  });
+
+  it('answers null rather than omitting them before the first price set', async () => {
+    const { app } = await makeApp({ prices: { cached: null, isStale: () => true } });
+    const body = (await app.inject({ method: 'GET', url: '/api/health' })).json();
+
+    expect(body.prices).toMatchObject({ chaosIcon: null, divineIcon: null, divineRate: 0 });
+  });
+});

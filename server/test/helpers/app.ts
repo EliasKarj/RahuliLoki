@@ -119,7 +119,10 @@ export async function makeApp(
           fetchedAt: new Date(START),
           prices: { 'Chaos Orb': 1, 'Divine Orb': 218.4 },
           divineRate: 218.4,
-          icons: { 'The Doctor': 'https://web.poecdn.com/doctor.png' },
+          icons: {
+            'The Doctor': 'https://web.poecdn.com/doctor.png',
+            'Divine Orb': 'https://web.poecdn.com/divine.png',
+          },
           uniques: {},
         },
         isStale: () => false,

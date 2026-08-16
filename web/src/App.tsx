@@ -107,7 +107,7 @@ export default function App() {
         </Empty>
       ) : (
         <div className="space-y-6">
-          <Hero snapshots={snapshots} stats={stats} />
+          <Hero snapshots={snapshots} stats={stats} prices={health?.prices ?? null} />
 
           <Panel
             title="Items"

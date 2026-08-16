@@ -102,3 +102,42 @@ export function formatAgo(iso: string | null, now: number = Date.now()): string 
   if (hours < 48) return `${hours} h ago`;
   return `${Math.round(hours / 24)} d ago`;
 }
+
+/** Which orb a quantity is quoted in, and how much of it. */
+export interface Denominated {
+  unit: 'chaos' | 'divine';
+  value: number;
+  /** The same amount in the other orb, for the line underneath. */
+  otherUnit: 'chaos' | 'divine';
+  otherValue: number;
+}
+
+/**
+ * Quote an amount in the orb a player would actually say it in.
+ *
+ * Nobody reports a stash as "twenty thousand chaos"; past a divine they count divines. Below
+ * one, divines are the wrong unit in the other direction — "0.4 divine" is a number you have to
+ * convert in your head to picture. So the threshold is one divine, which is exactly where the
+ * spoken unit changes.
+ *
+ * Falls back to chaos whenever the rate is unusable. A rate of zero is not merely unhelpful
+ * here: dividing by it yields Infinity, and a net worth of "∞ divine" over a perfectly good
+ * chaos total is worse than simply saying the chaos.
+ */
+export function denominate(chaos: number, divineRate: number): Denominated {
+  const rate = Number.isFinite(divineRate) && divineRate > 0 ? divineRate : 0;
+  if (rate === 0 || !Number.isFinite(chaos) || Math.abs(chaos) < rate) {
+    return {
+      unit: 'chaos',
+      value: chaos,
+      otherUnit: 'divine',
+      otherValue: rate === 0 ? 0 : chaos / rate,
+    };
+  }
+  return { unit: 'divine', value: chaos / rate, otherUnit: 'chaos', otherValue: chaos };
+}
+
+/** Format an amount in whichever orb `denominate` chose. */
+export function formatDenominated(amount: Denominated): string {
+  return amount.unit === 'divine' ? formatDivine(amount.value) : formatChaos(amount.value);
+}

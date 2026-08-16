@@ -12,10 +12,13 @@
  */
 
 import { useMemo } from 'react';
-import type { SnapshotWithTabs, StatsResponse } from '../lib/api.ts';
+import type { HealthResponse, SnapshotWithTabs, StatsResponse } from '../lib/api.ts';
 import { sparklinePath } from '../lib/spark.ts';
+import { ItemIcon } from './ItemIcon.tsx';
 import {
+  denominate,
   formatChaos,
+  formatDenominated,
   formatDivine,
   formatHours,
   formatRate,
@@ -28,9 +31,12 @@ const HEIGHT = 96;
 export function Hero({
   snapshots,
   stats,
+  prices,
 }: {
   snapshots: SnapshotWithTabs[];
   stats: StatsResponse | null;
+  /** Carries the two orb icons. Null before the first price set, which is a fine state to be in. */
+  prices: HealthResponse['prices'] | null;
 }) {
   const spark = useMemo(
     () => sparklinePath(snapshots.map((snapshot) => snapshot.totalChaos), WIDTH, HEIGHT),
@@ -38,6 +44,11 @@ export function Hero({
   );
 
   const gain = stats?.totalGainChaos ?? 0;
+
+  // Quoted in the orb a player would say it in: divine past one divine, chaos below. The unit
+  // decides which orb's art sits next to the figure, so the two can never disagree.
+  const worth = denominate(stats?.currentChaos ?? 0, stats?.divineRate ?? 0);
+  const icon = worth.unit === 'divine' ? prices?.divineIcon : prices?.chaosIcon;
 
   return (
     <section className="border-b border-ink-800 pb-5">
@@ -73,14 +84,25 @@ export function Hero({
 
       <div className="relative">
         <p className="text-[0.65rem] uppercase tracking-[0.2em] text-ink-400">Net worth</p>
-        <p className="num mt-1 !text-left text-5xl font-medium leading-none text-ink-100 tabular-nums">
-          {formatChaos(stats?.currentChaos ?? 0)}
-          <span className="ml-1 text-2xl text-ink-400">c</span>
+        <p className="mt-1 flex items-center gap-2">
+          <span className="num !text-left text-5xl font-medium leading-none text-ink-100 tabular-nums">
+            {formatDenominated(worth)}
+          </span>
+          {/* The orb itself rather than a letter. It is the unit players actually recognise, and
+              it is already on screen a dozen times in the table below. */}
+          <ItemIcon src={icon ?? undefined} size={6} />
+          <span className="text-2xl text-ink-400">{worth.unit === 'divine' ? 'div' : 'c'}</span>
         </p>
         <p className="mt-1.5 text-xs text-ink-400">
-          <span className="text-cool-500">{formatDivine(stats?.currentDivine ?? 0)} divine</span>
+          {/* The other denomination, always. Switching units is only safe if nothing is lost by
+              it, and someone comparing against a trade site needs the chaos figure regardless. */}
+          <span className={worth.unit === 'divine' ? 'text-ink-300' : 'text-cool-500'}>
+            {worth.otherUnit === 'divine'
+              ? `${formatDivine(worth.otherValue)} divine`
+              : `${formatChaos(worth.otherValue)}c`}
+          </span>
           {' at '}
-          {formatChaos(stats?.divineRate ?? 0)}c
+          {formatChaos(stats?.divineRate ?? 0)}c per divine
         </p>
       </div>
       </div>
