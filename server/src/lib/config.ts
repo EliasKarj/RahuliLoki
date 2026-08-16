@@ -5,7 +5,14 @@
  * The server boots even when GGG credentials are missing: history that is already in the
  * database stays viewable, and /api/health reports plainly why polling is off. Only the
  * poller requires credentials.
+ *
+ * It does *not* boot when the API would be reachable from outside this machine with nothing
+ * guarding it — see `resolveAuth`. That is the one misconfiguration whose blast radius is
+ * somebody else's, not the operator's.
  */
+
+import { validate as cronValidate } from 'node-cron';
+import { isLoopbackBind, MIN_TOKEN_LENGTH } from './auth.ts';
 
 /** poe.ninja categories that key cleanly by item name. Uniques/gems/maps are opt-in — see README. */
 export const DEFAULT_CURRENCY_CATEGORIES = ['Currency', 'Fragment'] as const;
@@ -39,6 +46,18 @@ export interface AppConfig {
   userAgent: string;
   port: number;
   host: string;
+  /** Shared API token, or null when the operator opted into an open API. */
+  authToken: string | null;
+  /** True when ALLOW_UNAUTHENTICATED was set. Only meaningful when `authToken` is null. */
+  allowUnauthenticated: boolean;
+  /** Host header values accepted besides the loopback names, in token-less mode. */
+  allowedHosts: string[];
+  /** Whether X-Forwarded-* may be believed. Off unless a proxy really is in front. */
+  trustProxy: boolean;
+  /** PriceSet rows kept per league; older ones are pruned after each fetch. 0 disables. */
+  priceSetRetention: number;
+  /** Ceiling on a single outbound request to GGG or poe.ninja. */
+  requestTimeoutMs: number;
   /** Directory of the built SPA, or null when the API runs headless (dev, tests). */
   webDist: string | null;
   logLevel: string;
@@ -74,13 +93,59 @@ function readList(env: NodeJS.ProcessEnv, key: string, fallback: readonly string
 }
 
 /**
- * A cron expression is five or six space-separated fields. node-cron throws on a bad
- * expression only when scheduling, which would mean discovering it long after boot.
+ * Validate against node-cron's own parser rather than a shape guess. The previous hand-rolled
+ * check passed anything built from the right character classes, so `abc def ghi jkl mno` was
+ * accepted at boot and only blew up when the scheduler tried to use it.
  */
 export function isValidCron(expression: string): boolean {
   const fields = expression.trim().split(/\s+/);
   if (fields.length < 5 || fields.length > 6) return false;
-  return fields.every((field) => /^[0-9*,/\-a-zA-Z]+$/.test(field));
+  return cronValidate(expression);
+}
+
+function readBool(env: NodeJS.ProcessEnv, key: string): boolean {
+  const raw = env[key]?.trim().toLowerCase();
+  return raw === '1' || raw === 'true' || raw === 'yes';
+}
+
+/**
+ * Decide how the API is protected, and refuse to start in the one combination that is simply
+ * unsafe: reachable from outside this machine, with nothing in front of it.
+ *
+ * Binding loopback-only is the default, so `pnpm dev` and a compose file that publishes to
+ * 127.0.0.1 keep working with no token. Anything wider is a deliberate act — a container with
+ * HOST=0.0.0.0, a Fly deployment — and has to come with either a token or a written-down
+ * acknowledgement that something else is doing the authenticating.
+ */
+export function resolveAuth(
+  env: NodeJS.ProcessEnv,
+  host: string,
+): { authToken: string | null; allowUnauthenticated: boolean; allowedHosts: string[] } {
+  const raw = env.AUTH_TOKEN?.trim() ?? '';
+  const allowUnauthenticated = readBool(env, 'ALLOW_UNAUTHENTICATED');
+  const allowedHosts = readList(env, 'ALLOWED_HOSTS', []);
+
+  if (raw !== '') {
+    if (raw.length < MIN_TOKEN_LENGTH) {
+      throw new ConfigError(
+        `AUTH_TOKEN must be at least ${MIN_TOKEN_LENGTH} characters; generate one with ` +
+          '`openssl rand -hex 32`',
+      );
+    }
+    return { authToken: raw, allowUnauthenticated: false, allowedHosts };
+  }
+
+  const loopbackOnly = isLoopbackBind(host);
+  if (!loopbackOnly && !allowUnauthenticated) {
+    throw new ConfigError(
+      `refusing to serve an unauthenticated API on ${host}. This exposes the full wealth ` +
+        'history of the account and a POST /api/poll that spends its GGG rate-limit budget. ' +
+        'Set AUTH_TOKEN (`openssl rand -hex 32`), or bind HOST=127.0.0.1, or set ' +
+        'ALLOW_UNAUTHENTICATED=1 if something in front of it is already authenticating.',
+    );
+  }
+
+  return { authToken: null, allowUnauthenticated, allowedHosts };
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): ConfigResult {
@@ -93,7 +158,23 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ConfigResult {
   const priceTtlMinutes = readInt(env, 'PRICE_TTL_MINUTES', 60);
   if (priceTtlMinutes <= 0) throw new ConfigError('PRICE_TTL_MINUTES must be positive');
 
+  const port = readInt(env, 'PORT', 3000);
+  if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+    throw new ConfigError(`PORT must be a whole number between 1 and 65535, got "${String(port)}"`);
+  }
+
+  const priceSetRetention = readInt(env, 'PRICE_SET_RETENTION', 48);
+  if (priceSetRetention < 0) throw new ConfigError('PRICE_SET_RETENTION cannot be negative');
+
+  const requestTimeoutMs = readInt(env, 'REQUEST_TIMEOUT_MS', 30_000);
+  if (requestTimeoutMs <= 0) throw new ConfigError('REQUEST_TIMEOUT_MS must be positive');
+
   const contact = env.POE_CONTACT?.trim() || 'valuuttaloki (self-hosted, single user)';
+
+  // Default to loopback. The previous default of 0.0.0.0 meant that anything that started the
+  // server — a laptop on café wifi, a VPS with no firewall — published it to its whole network.
+  const host = env.HOST?.trim() || '127.0.0.1';
+  const { authToken, allowUnauthenticated, allowedHosts } = resolveAuth(env, host);
 
   const config: AppConfig = {
     poesessid: env.POESESSID?.trim() ?? '',
@@ -107,8 +188,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ConfigResult {
     priceTtlMs: priceTtlMinutes * 60_000,
     // GGG asks for a User-Agent they can identify and contact. Give them one.
     userAgent: `valuuttaloki/${VERSION} (+https://github.com/EliasKarj/RahuliLoki) ${contact}`,
-    port: readInt(env, 'PORT', 3000),
-    host: env.HOST?.trim() || '0.0.0.0',
+    port,
+    host,
+    authToken,
+    allowUnauthenticated,
+    allowedHosts,
+    trustProxy: readBool(env, 'TRUST_PROXY'),
+    priceSetRetention,
+    requestTimeoutMs,
     webDist: env.WEB_DIST?.trim() || null,
     logLevel: env.LOG_LEVEL?.trim() || 'info',
   };
@@ -135,5 +222,7 @@ export function publicConfig(config: AppConfig, missing: string[]) {
     configured: missing.length === 0,
     missing,
     version: VERSION,
+    /** Lets the UI say whether it is behind a token or relying on the network for safety. */
+    authRequired: config.authToken !== null,
   };
 }

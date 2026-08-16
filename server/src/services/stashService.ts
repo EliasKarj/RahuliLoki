@@ -13,6 +13,7 @@
 
 import { scrub, silentLogger, type Logger } from '../lib/logger.ts';
 import type { RateLimiter } from '../lib/rateLimiter.ts';
+import { readJsonCapped } from '../lib/http.ts';
 
 /** Only the fields valuation actually reads. GGG sends a great deal more. */
 export interface StashItem {
@@ -57,6 +58,8 @@ export interface StashServiceOptions {
   baseUrl?: string;
   /** Tab names to value; empty means every tab. */
   trackedTabs?: string[];
+  /** Ceiling on one tab's JSON. A quad tab is large; unbounded is a different thing. */
+  maxBytes?: number;
 }
 
 interface StashResponse {
@@ -136,6 +139,11 @@ export class StashService {
         accept: 'application/json',
         'user-agent': this.#options.userAgent,
       },
+      // Never follow a redirect on a request that carries the account credential. The fetch
+      // spec does strip Cookie when the hop crosses origins, but that is one implementation
+      // detail standing between POESESSID and a host GGG's DNS was talked into pointing at.
+      // A redirect here is not a thing this API does; treat it as the anomaly it is.
+      redirect: 'error',
     });
 
     if (response.status === 403 || response.status === 401) {
@@ -158,9 +166,18 @@ export class StashService {
     }
 
     try {
-      return (await response.json()) as StashResponse;
-    } catch {
-      throw new StashError(`GGG returned unparseable JSON for tab ${tabIndex}`, response.status);
+      return (await readJsonCapped(
+        response,
+        this.#options.maxBytes,
+        `GGG tab ${tabIndex}`,
+      )) as StashResponse;
+    } catch (error) {
+      // The message is worth keeping: "over the ceiling" and "not valid JSON" send an operator
+      // to completely different places.
+      throw new StashError(
+        `GGG returned an unusable response for tab ${tabIndex}: ${(error as Error).message}`,
+        response.status,
+      );
     }
   }
 

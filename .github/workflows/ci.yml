@@ -5,6 +5,12 @@ on:
     branches: ['**']
   pull_request:
 
+# Least privilege. This workflow only reads the checkout — it never comments, tags or pushes —
+# while the default token is repo-writable in many configurations. A compromised package in
+# `pnpm install` runs with whatever this grants.
+permissions:
+  contents: read
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -38,3 +44,9 @@ jobs:
         env:
           DATABASE_URL: file:./ci.db
         run: pnpm exec prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --shadow-database-url file:./shadow.db --exit-code
+
+      # A known-vulnerable dependency should fail the build here rather than be discovered on
+      # the volume holding a league's history. This app serves an authenticated HTTP surface
+      # and holds an account credential, so "moderate" is the right floor.
+      - name: Audit dependencies
+        run: pnpm audit --audit-level moderate

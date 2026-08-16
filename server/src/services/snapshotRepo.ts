@@ -80,8 +80,10 @@ function asBreakdown(value: unknown): Breakdown {
 }
 
 function asPrices(value: unknown): Record<string, number> {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) return {};
-  const out: Record<string, number> = {};
+  // Null-prototype, matching how PriceService builds a fresh set: these keys came out of a
+  // remote payload, and a lookup for `constructor` has to miss rather than return a function.
+  const out: Record<string, number> = Object.create(null) as Record<string, number>;
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return out;
   for (const [name, price] of Object.entries(value as Record<string, unknown>)) {
     if (typeof price === 'number' && Number.isFinite(price)) out[name] = price;
   }
@@ -169,9 +171,21 @@ export class PrismaSnapshotStore implements SnapshotStore {
 
 export class PrismaPriceSetStore implements PriceSetStore {
   readonly #prisma: PrismaClient;
+  readonly #retention: number;
 
-  constructor(prisma: PrismaClient) {
+  /**
+   * `retention` caps how many price sets are kept per league. Each row holds a full name →
+   * chaos map — thousands of entries, hundreds of kilobytes — and one is written every time the
+   * hourly TTL lapses. Kept forever, that is a few hundred megabytes over a league on a volume
+   * the deployment provisions at one gigabyte, and SQLite's first symptom of a full disk is a
+   * failed write in the middle of a poll.
+   *
+   * 48 is two days of history, which is all the depth anything actually reads: the newest set
+   * at boot, and the odd look back at what an old snapshot was valued against.
+   */
+  constructor(prisma: PrismaClient, retention = 48) {
     this.#prisma = prisma;
+    this.#retention = retention;
   }
 
   async latest(league: string): Promise<PriceSet | null> {
@@ -192,6 +206,22 @@ export class PrismaPriceSetStore implements PriceSetStore {
   async save(set: PriceSet): Promise<void> {
     await this.#prisma.priceSet.create({
       data: { league: set.league, fetchedAt: set.fetchedAt, prices: set.prices as object },
+    });
+    await this.#prune(set.league);
+  }
+
+  /** Drop everything past the retention window for this league. */
+  async #prune(league: string): Promise<void> {
+    if (this.#retention <= 0) return;
+    const keep = await this.#prisma.priceSet.findMany({
+      where: { league },
+      orderBy: { fetchedAt: 'desc' },
+      take: this.#retention,
+      select: { id: true },
+    });
+    if (keep.length < this.#retention) return;
+    await this.#prisma.priceSet.deleteMany({
+      where: { league, id: { notIn: keep.map((row) => row.id) } },
     });
   }
 }

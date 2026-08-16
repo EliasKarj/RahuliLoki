@@ -85,6 +85,7 @@ export interface ConfigResponse {
   missing: string[];
   version: string;
   leagues: string[];
+  authRequired: boolean;
 }
 
 export interface HealthResponse {
@@ -129,8 +130,54 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * The API token, when the server is running with one.
+ *
+ * sessionStorage rather than localStorage: it dies with the tab. This dashboard gets opened on
+ * whatever machine is to hand, and a token that outlives the session is a credential left
+ * behind on a shared computer.
+ *
+ * It travels in an `Authorization` header, never in a query string (which lands in proxy logs
+ * and browser history) and never in a cookie (which the browser would attach to a cross-site
+ * request automatically, re-opening the CSRF hole the server's origin check exists to close).
+ */
+const TOKEN_KEY = 'valuuttaloki.token';
+
+let token: string | null = readStoredToken();
+
+function readStoredToken(): string | null {
+  try {
+    return window.sessionStorage.getItem(TOKEN_KEY);
+  } catch {
+    // Private mode, or storage disabled. The app still works; it just asks again on reload.
+    return null;
+  }
+}
+
+export function setToken(value: string | null): void {
+  token = value === null || value.trim() === '' ? null : value.trim();
+  try {
+    if (token === null) window.sessionStorage.removeItem(TOKEN_KEY);
+    else window.sessionStorage.setItem(TOKEN_KEY, token);
+  } catch {
+    // Keep the in-memory copy: this session works even when nothing can be persisted.
+  }
+}
+
+export function hasToken(): boolean {
+  return token !== null;
+}
+
+function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  return {
+    accept: 'application/json',
+    ...(token === null ? {} : { authorization: `Bearer ${token}` }),
+    ...extra,
+  };
+}
+
 async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const response = await fetch(path, { signal: signal ?? null, headers: { accept: 'application/json' } });
+  const response = await fetch(path, { signal: signal ?? null, headers: authHeaders() });
   if (!response.ok) {
     // The server answers errors as { error }. Fall back to the status when it did not.
     const body = (await response.json().catch(() => null)) as { error?: string } | null;
@@ -173,7 +220,7 @@ export const api = {
   health: (signal?: AbortSignal) => get<HealthResponse>('/api/health', signal),
 
   poll: async (): Promise<{ ok: boolean; error?: string }> => {
-    const response = await fetch('/api/poll', { method: 'POST' });
+    const response = await fetch('/api/poll', { method: 'POST', headers: authHeaders() });
     const body = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
     if (!response.ok) throw new ApiError(body?.error ?? `poll failed with HTTP ${response.status}`, response.status);
     return { ok: true, ...(body?.error !== undefined ? { error: body.error } : {}) };

@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ApiError,
   api,
   type ConfigResponse,
   type HealthResponse,
@@ -29,6 +30,8 @@ export interface Dashboard {
 export interface UseSnapshots extends Dashboard {
   loading: boolean;
   error: string | null;
+  /** The server wants a token this tab does not have. App renders the gate instead of an error. */
+  unauthorized: boolean;
   refreshedAt: number | null;
   refresh: () => void;
 }
@@ -43,6 +46,7 @@ export function useSnapshots(
   const [data, setData] = useState<Dashboard>(EMPTY);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [unauthorized, setUnauthorized] = useState(false);
   const [refreshedAt, setRefreshedAt] = useState<number | null>(null);
   const [nonce, setNonce] = useState(0);
 
@@ -75,10 +79,18 @@ export function useSnapshots(
         if (controller.signal.aborted) return;
         setData({ snapshots: snapshots.snapshots, stats, latest, config, health });
         setError(null);
+        setUnauthorized(false);
         setRefreshedAt(Date.now());
         loadedKey.current = key;
       } catch (caught) {
         if (controller.signal.aborted) return;
+        // A 401 is not an error to show in a banner over a blank dashboard — it is a request
+        // for the token, and App answers it with the gate.
+        if (caught instanceof ApiError && caught.status === 401) {
+          setUnauthorized(true);
+          setError(null);
+          return;
+        }
         setError(caught instanceof Error ? caught.message : String(caught));
       } finally {
         if (!controller.signal.aborted) setLoading(false);
@@ -94,5 +106,5 @@ export function useSnapshots(
     };
   }, [league, range, refreshMs, nonce]);
 
-  return { ...data, loading, error, refreshedAt, refresh };
+  return { ...data, loading, error, unauthorized, refreshedAt, refresh };
 }

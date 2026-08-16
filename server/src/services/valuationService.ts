@@ -176,14 +176,17 @@ export function valueTabs(tabs: ValuationInput[], options: ValuationOptions): Va
     }
   }
 
-  const breakdown: Breakdown = {};
+  // Null-prototype: the keys here are stash tab names and item names. A player can name a tab
+  // `__proto__`, and on an ordinary object literal that assignment replaces the prototype
+  // instead of adding a tab — the tab then vanishes from every chart that reads the breakdown.
+  const breakdown: Breakdown = Object.create(null) as Breakdown;
   let totalChaos = 0;
   let itemCount = 0;
   let droppedBelowThreshold = 0;
   let droppedChaos = 0;
 
   for (const [tabName, entries] of aggregated) {
-    const kept: Record<string, ValuedEntry> = {};
+    const kept: Record<string, ValuedEntry> = Object.create(null) as Record<string, ValuedEntry>;
     for (const [name, { qty, chaosEach }] of entries) {
       const chaosTotal = round2(qty * chaosEach);
       if (chaosTotal < minItemChaos) {
@@ -219,7 +222,7 @@ export function valueTabs(tabs: ValuationInput[], options: ValuationOptions): Va
 
 /** Per-tab chaos totals — what the stacked-area chart needs, without the item detail. */
 export function tabTotals(breakdown: Breakdown): Record<string, number> {
-  const totals: Record<string, number> = {};
+  const totals: Record<string, number> = Object.create(null) as Record<string, number>;
   for (const [tabName, entries] of Object.entries(breakdown)) {
     let sum = 0;
     for (const entry of Object.values(entries)) sum += entry.chaosTotal;

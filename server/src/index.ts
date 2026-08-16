@@ -38,12 +38,15 @@ function findWebDist(configured: string | null): string | null {
 async function main(): Promise<void> {
   const { config, missing, leagueDefaulted } = loadConfig();
 
-  // Before anything can log, teach the logger what must never appear in its output.
+  // Before anything can log, teach the logger what must never appear in its output. The API
+  // token belongs on that list too: it is the one string that turns a stranger into the
+  // operator, and a stack trace from a bad request is exactly where it would surface.
   registerSecret(config.poesessid);
+  registerSecret(config.authToken);
 
   const prisma = new PrismaClient();
   const store = new PrismaSnapshotStore(prisma);
-  const priceStore = new PrismaPriceSetStore(prisma);
+  const priceStore = new PrismaPriceSetStore(prisma, config.priceSetRetention);
   const startedAt = new Date();
   const webDist = findWebDist(config.webDist);
 
@@ -70,7 +73,7 @@ async function main(): Promise<void> {
   const app = await buildApp(deps, { webDist, logLevel: config.logLevel });
   const log = app.log;
 
-  limiter = new RateLimiter({ log });
+  limiter = new RateLimiter({ log, timeoutMs: config.requestTimeoutMs });
   prices = new PriceService({
     league: config.league,
     currencyCategories: config.currencyCategories,
@@ -78,6 +81,7 @@ async function main(): Promise<void> {
     ttlMs: config.priceTtlMs,
     store: priceStore,
     userAgent: config.userAgent,
+    timeoutMs: config.requestTimeoutMs,
     log,
   });
   const stash = new StashService({
@@ -110,6 +114,15 @@ async function main(): Promise<void> {
   if (leagueDefaulted) {
     log.warn('POE_LEAGUE is unset — tracking Standard. Set it before the league starts.');
   }
+  if (config.authToken === null) {
+    // Reachable only via a loopback bind or an explicit ALLOW_UNAUTHENTICATED — loadConfig
+    // refuses anything else. Still worth saying out loud once per boot, because "I put it
+    // behind Tailscale" and "I forgot" produce identical configuration.
+    log.warn(
+      { host: config.host, allowedHosts: config.allowedHosts },
+      'no AUTH_TOKEN: anyone who can reach this port can read the wealth history and trigger polls',
+    );
+  }
   if (webDist === null) {
     log.warn('no built SPA found; serving the API only. Run `pnpm build` to bundle the frontend.');
   }
@@ -131,7 +144,7 @@ async function main(): Promise<void> {
     if (shuttingDown) return;
     shuttingDown = true;
     log.info({ signal }, 'shutting down');
-    task.stop();
+    await task.stop();
     await app.close();
     await prisma.$disconnect();
     process.exit(0);

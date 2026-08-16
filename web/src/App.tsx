@@ -6,6 +6,8 @@ import { TabAreaChart, TopItemsTable } from './components/TabBreakdown.tsx';
 import { SnapshotTable } from './components/SnapshotTable.tsx';
 import { PollerStatus } from './components/PollerStatus.tsx';
 import { Empty, Panel, RangeToggle, StatTile } from './components/ui.tsx';
+import { TokenGate } from './components/TokenGate.tsx';
+import { hasToken } from './lib/api.ts';
 import {
   formatAgo,
   formatChaos,
@@ -21,8 +23,12 @@ export default function App() {
   const [range, setRange] = useState<RangeKey>('24h');
   const [league, setLeague] = useState<string | undefined>(undefined);
 
-  const { snapshots, stats, latest, config, health, loading, error, refreshedAt, refresh } =
+  const { snapshots, stats, latest, config, health, loading, error, unauthorized, refreshedAt, refresh } =
     useSnapshots(league, range);
+
+  // A 401 while this tab already held a token means the token is wrong, not merely missing —
+  // worth saying so, rather than silently showing the same empty box again.
+  if (unauthorized) return <TokenGate onUnlock={refresh} rejected={hasToken()} />;
 
   const intervals = stats?.intervals ?? [];
   const wide = range !== '24h';

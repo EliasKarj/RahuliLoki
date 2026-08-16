@@ -54,6 +54,7 @@ function service(options: {
   store?: PriceSetStore;
   now?: () => number;
   ttlMs?: number;
+  maxBytes?: number;
 } = {}) {
   return new PriceService({
     league: 'Settlers',
@@ -63,6 +64,7 @@ function service(options: {
     store: options.store ?? memoryStore().store,
     fetchFn: options.fetchFn ?? fixtureFetch(),
     now: options.now ?? (() => 0),
+    ...(options.maxBytes === undefined ? {} : { maxBytes: options.maxBytes }),
   });
 }
 
@@ -208,7 +210,30 @@ describe('PriceService', () => {
     const fetchFn = vi.fn(
       async () => new Response('<html>rate limited</html>', { status: 200 }),
     ) as unknown as typeof fetch;
-    await expect(service({ fetchFn }).getPrices()).rejects.toThrow(/unparseable JSON/);
+    await expect(service({ fetchFn }).getPrices()).rejects.toThrow(/not valid JSON/);
+  });
+
+  it('refuses an oversized overview on its declared length, before buffering it', async () => {
+    const fetchFn = vi.fn(
+      async () =>
+        new Response('{"lines":[]}', {
+          status: 200,
+          headers: { 'content-length': String(64 * 1024 * 1024) },
+        }),
+    ) as unknown as typeof fetch;
+    await expect(service({ fetchFn, maxBytes: 1024 }).getPrices()).rejects.toThrow(/ceiling/);
+  });
+
+  it('stops reading a chunked overview once it passes the ceiling', async () => {
+    // No content-length, so the ceiling has to be enforced while the body streams.
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('x'.repeat(4096)));
+        controller.close();
+      },
+    });
+    const fetchFn = vi.fn(async () => new Response(body, { status: 200 })) as unknown as typeof fetch;
+    await expect(service({ fetchFn, maxBytes: 1024 }).getPrices()).rejects.toThrow(/ceiling/);
   });
 
   it('reports staleness for /api/health', async () => {

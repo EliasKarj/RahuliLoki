@@ -15,6 +15,7 @@
  */
 
 import { describeError, silentLogger, type Logger } from '../lib/logger.ts';
+import { readJsonCapped, timeoutSignal } from '../lib/http.ts';
 
 export interface PriceSet {
   league: string;
@@ -51,6 +52,9 @@ export interface PriceServiceOptions {
   log?: Logger;
   userAgent?: string;
   baseUrl?: string;
+  /** Ceiling on one overview request. Without it a hung poe.ninja never releases the poll. */
+  timeoutMs?: number;
+  maxBytes?: number;
 }
 
 export class PriceFetchError extends Error {}
@@ -168,7 +172,11 @@ export class PriceService {
 
   async #fetchAll(): Promise<PriceSet> {
     const { league, currencyCategories, itemCategories } = this.#options;
-    const prices: Record<string, number> = {};
+    // Null-prototype: every key here is an item name straight out of a remote payload. On a
+    // normal object `prices['toString']` is a function rather than undefined, so the
+    // "have I seen this name already" check below would silently discard a real price — and
+    // `prices['__proto__'] = …` would reassign the prototype instead of storing anything.
+    const prices: Record<string, number> = Object.create(null) as Record<string, number>;
 
     for (const type of currencyCategories) {
       const payload = await this.#getJson(`${this.#baseUrl}/currencyoverview`, league, type);
@@ -185,7 +193,7 @@ export class PriceService {
     // poe.ninja quotes everything in chaos, so chaos itself is never in the payload.
     prices[CHAOS] = 1;
 
-    const divineRate = prices[DIVINE];
+    const divineRate = Object.hasOwn(prices, DIVINE) ? prices[DIVINE] : undefined;
     if (divineRate === undefined) {
       throw new PriceFetchError(
         `poe.ninja returned no "${DIVINE}" price for league "${league}"; refusing to value a ` +
@@ -208,14 +216,15 @@ export class PriceService {
         accept: 'application/json',
         ...(this.#options.userAgent ? { 'user-agent': this.#options.userAgent } : {}),
       },
+      signal: timeoutSignal(this.#options.timeoutMs ?? 30_000),
     });
     if (!response.ok) {
       throw new PriceFetchError(`poe.ninja ${type} returned HTTP ${response.status}`);
     }
     try {
-      return await response.json();
+      return await readJsonCapped(response, this.#options.maxBytes, `poe.ninja ${type}`);
     } catch (error) {
-      throw new PriceFetchError(`poe.ninja ${type} returned unparseable JSON: ${describeError(error).message}`);
+      throw new PriceFetchError(`poe.ninja ${type} was unusable: ${describeError(error).message}`);
     }
   }
 }

@@ -8,11 +8,17 @@ coverage/
 .env.*
 !.env.example
 
-# SQLite database + backups
+# SQLite database + backups. The -wal and -shm sidecars hold committed rows that have not
+# been checkpointed back into the main file yet, so they are as sensitive as the .db itself.
 /data/
+data/
 *.db
 *.db-journal
+*.db-wal
+*.db-shm
 *.sqlite
+*.sqlite-wal
+*.sqlite-shm
 
 .DS_Store
 *.log
