@@ -17,6 +17,7 @@
 import { describeError, silentLogger, type Logger } from '../lib/logger.ts';
 import { readJsonCapped, timeoutSignal } from '../lib/http.ts';
 import { mergeUniqueOverview, uniqueKey, type UniqueIndex } from './uniques.ts';
+import { harvestLeagueNames, matchLeagueName } from './ninjaLeague.ts';
 
 export interface PriceSet {
   league: string;
@@ -93,12 +94,25 @@ export interface PriceServiceOptions {
   log?: Logger;
   userAgent?: string;
   baseUrl?: string;
+  /**
+   * The name poe.ninja indexes this league under, when it differs from GGG's and the automatic
+   * lookup cannot work it out. Set from POE_NINJA_LEAGUE. Null means "resolve it".
+   */
+  ninjaLeague?: string | null;
   /** Ceiling on one overview request. Without it a hung poe.ninja never releases the poll. */
   timeoutMs?: number;
   maxBytes?: number;
 }
 
 export class PriceFetchError extends Error {}
+
+/**
+ * poe.ninja answered 404: it does not index a league by that name.
+ *
+ * Its own subclass because it is the one failure with a second thing to try — see
+ * services/ninjaLeague.ts. Everything else is a plain PriceFetchError and simply fails.
+ */
+export class LeagueNotIndexedError extends PriceFetchError {}
 
 const DIVINE = 'Divine Orb';
 const CHAOS = 'Chaos Orb';
@@ -176,6 +190,11 @@ export class PriceService {
   #cached: PriceSet | null = null;
   /** Collapses concurrent callers onto one refetch. */
   #inFlight: Promise<PriceSet> | null = null;
+  /**
+   * The name poe.ninja turned out to know this league by, once a 404 forced us to look it up.
+   * Cached for the life of the process: it cannot change without the league changing.
+   */
+  #resolvedLeague: string | null = null;
 
   constructor(options: PriceServiceOptions) {
     this.#options = options;
@@ -237,8 +256,80 @@ export class PriceService {
     }
   }
 
+  /**
+   * Fetch a set, and on "no such league" look up what poe.ninja calls it and try once more.
+   *
+   * The retry is bounded to a single extra attempt and only ever fires on a 404, so the normal
+   * path — the two vocabularies agreeing, which is every permanent league — is unchanged and
+   * costs no extra request. Once a name resolves it is remembered, so the lookup happens at
+   * most once per process rather than once per TTL lapse.
+   */
   async #fetchAll(): Promise<PriceSet> {
-    const { league, currencyCategories, itemCategories } = this.#options;
+    const configured = this.#options.league;
+    const first = this.#options.ninjaLeague?.trim() || this.#resolvedLeague || configured;
+
+    try {
+      return await this.#fetchWith(first);
+    } catch (error) {
+      // An explicit override is the operator's decision; second-guessing it would only make the
+      // error harder to read. An already-resolved name that stopped working is equally final.
+      if (
+        !(error instanceof LeagueNotIndexedError) ||
+        first !== configured ||
+        (this.#options.ninjaLeague?.trim() ?? '') !== ''
+      ) {
+        throw error;
+      }
+
+      const resolved = await this.#resolveLeague(configured, error);
+      const set = await this.#fetchWith(resolved);
+      // Remembered only once it has actually produced a price set, so a name that resolved but
+      // did not work leaves the next attempt free to resolve again.
+      this.#resolvedLeague = resolved;
+      return set;
+    }
+  }
+
+  /**
+   * Ask poe.ninja what it indexes and pick this league out of the answer.
+   *
+   * Every failure here rethrows the original 404 rather than its own: the operator's problem is
+   * "no prices for my league", and "getindexstate returned HTTP 500" would bury that behind an
+   * endpoint they have never heard of. What the listing does buy, when it works, is a message
+   * naming the leagues poe.ninja actually has — which turns a dead end into a choice.
+   */
+  async #resolveLeague(configured: string, notIndexed: LeagueNotIndexedError): Promise<string> {
+    let indexed: string[];
+    try {
+      const payload = await this.#getJsonAt(`${this.#baseUrl}/getindexstate`, 'league index');
+      indexed = harvestLeagueNames(payload);
+    } catch (error) {
+      this.#log.warn(
+        { err: error },
+        'poe.ninja rejected this league and its league index could not be read either',
+      );
+      throw notIndexed;
+    }
+
+    const match = matchLeagueName(configured, indexed);
+    if (match === null) {
+      const known = indexed.slice(0, 30).join(', ');
+      throw new PriceFetchError(
+        `${notIndexed.message} poe.ninja's own league list has no entry matching ` +
+          `"${configured}"${known === '' ? '' : `; it currently indexes: ${known}`}. Set ` +
+          'POE_NINJA_LEAGUE to the name it uses if you can see the right one there.',
+      );
+    }
+
+    this.#log.info(
+      { configured, ninjaLeague: match.name, how: match.how, indexed: indexed.length },
+      'poe.ninja indexes this league under a different name',
+    );
+    return match.name;
+  }
+
+  async #fetchWith(league: string): Promise<PriceSet> {
+    const { currencyCategories, itemCategories } = this.#options;
     // Null-prototype: every key here is an item name straight out of a remote payload. On a
     // normal object `prices['toString']` is a function rather than undefined, so the
     // "have I seen this name already" check below would silently discard a real price — and
@@ -287,7 +378,10 @@ export class PriceService {
     }
 
     const set: PriceSet = {
-      league,
+      // The configured league, never the poe.ninja spelling. This is the key the store and the
+      // snapshots are filed under; writing poe.ninja's name here would strand the persisted set
+      // where `hydrate()` cannot find it, and quietly split the history in two.
+      league: this.#options.league,
       fetchedAt: new Date(this.#now()),
       prices,
       divineRate,
@@ -296,7 +390,8 @@ export class PriceService {
     };
     this.#log.info(
       {
-        league,
+        league: this.#options.league,
+        ...(league === this.#options.league ? {} : { ninjaLeague: league }),
         entries: Object.keys(prices).length,
         uniques: Object.keys(uniques).length,
         icons: Object.keys(icons).length,
@@ -309,6 +404,10 @@ export class PriceService {
 
   async #getJson(base: string, league: string, type: string): Promise<unknown> {
     const url = `${base}?league=${encodeURIComponent(league)}&type=${encodeURIComponent(type)}`;
+    return this.#getJsonAt(url, type, league);
+  }
+
+  async #getJsonAt(url: string, type: string, league?: string): Promise<unknown> {
     const response = await this.#fetch(url, {
       headers: {
         accept: 'application/json',
@@ -320,8 +419,8 @@ export class PriceService {
       // The URL belongs in the message. "poe.ninja Currency returned HTTP 404" tells an
       // operator nothing they can act on; the same line with the address is something they can
       // paste into a browser and see for themselves in five seconds.
-      if (response.status === 404) {
-        throw new PriceFetchError(
+      if (response.status === 404 && league !== undefined) {
+        throw new LeagueNotIndexedError(
           `poe.ninja has no ${type} data for league "${league}" (HTTP 404 from ${url}). ` +
             'poe.ninja indexes leagues under its own names and only once it has data for them, ' +
             'so this is usually a league that is brand new, an event or private league it does ' +

@@ -85,6 +85,15 @@ export interface AppConfig {
    */
   poeNinjaUrl: string;
   /**
+   * The name poe.ninja indexes this league under, when it is not the one GGG uses.
+   *
+   * Normally null: the price service asks poe.ninja what it calls the league and works it out.
+   * This is the escape hatch for when it cannot — an event league, a name poe.ninja spells in a
+   * way no rule would connect to GGG's — so that being wrong about the mapping costs a setting
+   * rather than a release.
+   */
+  poeNinjaLeague: string | null;
+  /**
    * Where the database lives, read here rather than left to Prisma's own env lookup.
    *
    * PrismaClient reads `process.env.DATABASE_URL` at construction. That is invisible to any
@@ -233,6 +242,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ConfigResult {
     priceSetRetention,
     requestTimeoutMs,
     poeNinjaUrl: env.POE_NINJA_URL?.trim() || 'https://poe.ninja/api/data',
+    poeNinjaLeague: env.POE_NINJA_LEAGUE?.trim() || null,
     databaseUrl: env.DATABASE_URL?.trim() || undefined,
     webDist: env.WEB_DIST?.trim() || null,
     logLevel: env.LOG_LEVEL?.trim() || 'info',

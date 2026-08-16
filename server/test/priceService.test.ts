@@ -55,17 +55,43 @@ function service(options: {
   now?: () => number;
   ttlMs?: number;
   maxBytes?: number;
+  league?: string;
+  ninjaLeague?: string | null;
 } = {}) {
   return new PriceService({
-    league: 'Settlers',
+    league: options.league ?? 'Settlers',
     currencyCategories: ['Currency', 'Fragment'],
     itemCategories: ['DivinationCard', 'Scarab'],
     ttlMs: options.ttlMs ?? 3_600_000,
     store: options.store ?? memoryStore().store,
     fetchFn: options.fetchFn ?? fixtureFetch(),
     now: options.now ?? (() => 0),
+    ...(options.ninjaLeague === undefined ? {} : { ninjaLeague: options.ninjaLeague }),
     ...(options.maxBytes === undefined ? {} : { maxBytes: options.maxBytes }),
   });
+}
+
+/**
+ * A poe.ninja that only answers for `indexedAs`, plus a getindexstate listing it.
+ *
+ * Everything else 404s, which is exactly what the real API does for a league name it does not
+ * recognise — the failure this whole path exists to recover from.
+ */
+function pickyFetch(indexedAs: string, indexPayload?: unknown) {
+  const calls: string[] = [];
+  const fetchFn = vi.fn(async (input: string | URL | Request) => {
+    const url = new URL(String(input));
+    calls.push(url.pathname + url.search);
+    if (url.pathname.endsWith('/getindexstate')) {
+      if (indexPayload === undefined) return new Response('not found', { status: 404 });
+      return jsonResponse(indexPayload);
+    }
+    if (url.searchParams.get('league') !== indexedAs) {
+      return new Response('not found', { status: 404 });
+    }
+    return fixtureFetch()(input);
+  }) as unknown as typeof fetch;
+  return { fetchFn, calls };
 }
 
 describe('icon collection', () => {
@@ -316,4 +342,92 @@ describe('PriceService', () => {
     now = 3_600_001;
     expect(subject.isStale()).toBe(true);
   });
+});
+
+describe('resolving the name poe.ninja indexes the league under', () => {
+  const indexState = {
+    economyLeagues: [{ name: 'Allflame', url: 'allflame' }, { name: 'AllflameHC' }],
+  };
+
+  it('asks nothing extra when the two names already agree', async () => {
+    // The common case, and the whole reason resolution is a recovery step rather than a
+    // preflight: four category requests, no listing lookup.
+    const { calls } = pickyFetch('Settlers');
+    const fetchFn = fixtureFetch();
+    await service({ fetchFn }).getPrices();
+    expect(calls).toHaveLength(0);
+    expect(
+      (fetchFn as unknown as { mock: { calls: unknown[] } }).mock.calls.length,
+    ).toBe(4);
+  });
+
+  it("retries under poe.ninja's own name after a 404", async () => {
+    const { fetchFn, calls } = pickyFetch('Allflame', indexState);
+    const set = await service({ fetchFn, league: 'Allflame Ember' }).getPrices();
+
+    expect(set.divineRate).toBe(218.4);
+    expect(calls.some((call) => call.includes('/getindexstate'))).toBe(true);
+    expect(calls.some((call) => call.includes('league=Allflame&'))).toBe(true);
+  });
+
+  it('files the set under the configured league, not poe.ninja\'s name', async () => {
+    // The store and every snapshot key on this. Writing "Allflame" for a league configured as
+    // "Allflame Ember" would strand the row where hydrate() cannot find it.
+    const { store, saved } = memoryStore();
+    const { fetchFn } = pickyFetch('Allflame', indexState);
+    await service({ fetchFn, store, league: 'Allflame Ember' }).getPrices();
+    expect(saved[0]?.league).toBe('Allflame Ember');
+  });
+
+  it('resolves once and reuses the name on later refetches', async () => {
+    const { fetchFn, calls } = pickyFetch('Allflame', indexState);
+    let now = 0;
+    const subject = service({ fetchFn, league: 'Allflame Ember', now: () => now });
+
+    await subject.getPrices();
+    now = 2 * 3_600_000;
+    await subject.getPrices();
+
+    expect(calls.filter((call) => call.includes('/getindexstate'))).toHaveLength(1);
+  });
+
+  it('skips resolution entirely when POE_NINJA_LEAGUE says what to use', async () => {
+    const { fetchFn, calls } = pickyFetch('Allflame', indexState);
+    const set = await service({
+      fetchFn,
+      league: 'Allflame Ember',
+      ninjaLeague: 'Allflame',
+    }).getPrices();
+
+    expect(set.divineRate).toBe(218.4);
+    expect(calls.some((call) => call.includes('/getindexstate'))).toBe(false);
+  });
+
+  it('names the leagues poe.ninja does index when none of them fit', async () => {
+    const { fetchFn } = pickyFetch('Allflame', indexState);
+    await expect(service({ fetchFn, league: 'Phrecia' }).getPrices()).rejects.toThrow(
+      /it currently indexes: Allflame, allflame, AllflameHC/,
+    );
+  });
+
+  it('reports the original 404 when the listing cannot be read either', async () => {
+    // "getindexstate returned HTTP 404" would bury the operator's actual problem behind an
+    // endpoint they have never heard of.
+    const { fetchFn } = pickyFetch('Allflame');
+    await expect(service({ fetchFn, league: 'Phrecia' }).getPrices()).rejects.toThrow(
+      /no Currency data for league "Phrecia"/,
+    );
+  });
+
+  it('does not go looking when the failure is not a 404', async () => {
+    const { calls } = pickyFetch('Settlers');
+    const fetchFn = vi.fn(async (input: string | URL | Request) => {
+      calls.push(String(input));
+      return new Response('nope', { status: 503 });
+    }) as unknown as typeof fetch;
+
+    await expect(service({ fetchFn }).getPrices()).rejects.toThrow(/HTTP 503/);
+    expect(calls.some((call) => call.includes('getindexstate'))).toBe(false);
+  });
+
 });
