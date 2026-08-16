@@ -1,0 +1,30 @@
+{
+  "name": "@valuuttaloki/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "pnpm build && electron .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "package": "pnpm build && electron-builder --config electron-builder.yml",
+    "package:dir": "pnpm build && electron-builder --config electron-builder.yml --dir"
+  },
+  "dependencies": {
+    "@valuuttaloki/server": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.1",
+    "electron": "^38.8.6",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.7.3"
+  },
+  "description": "Self-hosted Path of Exile wealth tracker, as a desktop application.",
+  "author": "EliasKarj",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/EliasKarj/RahuliLoki.git"
+  }
+}

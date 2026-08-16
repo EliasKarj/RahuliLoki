@@ -21,6 +21,7 @@
  */
 
 import { describeError, silentLogger, type Logger } from './logger.ts';
+import { timeoutSignal } from './http.ts';
 
 export interface RateLimitPolicy {
   hits: number;
@@ -58,6 +59,10 @@ export interface RateLimiterOptions {
   maxBackoffMs?: number;
   /** Never fire two requests closer together than this, even with an empty bucket. */
   minIntervalMs?: number;
+  /** Ceiling on a single attempt. Without one, a hung socket stops the poller permanently. */
+  timeoutMs?: number;
+  /** Ceiling on any wait this class will sit through, however long a header asks for. */
+  maxWaitMs?: number;
 }
 
 export class RateLimitError extends Error {
@@ -154,6 +159,8 @@ export class RateLimiter {
   readonly #minBackoffMs: number;
   readonly #maxBackoffMs: number;
   readonly #minIntervalMs: number;
+  readonly #timeoutMs: number;
+  readonly #maxWaitMs: number;
 
   #limits: RateLimitPolicy[] = [];
   #states: RateLimitPolicy[] = [];
@@ -175,6 +182,11 @@ export class RateLimiter {
     this.#minBackoffMs = options.minBackoffMs ?? 10_000;
     this.#maxBackoffMs = options.maxBackoffMs ?? 30 * 60_000;
     this.#minIntervalMs = options.minIntervalMs ?? 1_000;
+    this.#timeoutMs = options.timeoutMs ?? 30_000;
+    // A restrictedSeconds of 999999999 — a garbled header, a proxy inventing one — would
+    // otherwise put the poller to sleep for thirty years. An hour is longer than any real
+    // GGG timeout and short enough that the next poll still gets a turn.
+    this.#maxWaitMs = options.maxWaitMs ?? 60 * 60_000;
   }
 
   /** Run `task` with nothing else in flight. Used for anything that must not race a request. */
@@ -202,7 +214,10 @@ export class RateLimiter {
 
       let response: Response;
       try {
-        response = await this.#fetch(url, init);
+        response = await this.#fetch(url, {
+          ...init,
+          signal: timeoutSignal(this.#timeoutMs, init.signal),
+        });
       } catch (error) {
         // A transport failure still consumed a slot as far as we know. Keep the pacing.
         this.#nextRequestAt = this.#now() + this.#minIntervalMs;
@@ -254,7 +269,15 @@ export class RateLimiter {
   async #waitForSlot(): Promise<void> {
     const delay = computeDelayMs(this.#limits, this.#states, { minIntervalMs: this.#minIntervalMs });
     const readyAt = Math.max(this.#nextRequestAt, this.#restrictedUntil ?? 0);
-    const wait = Math.max(readyAt - this.#now(), 0, this.#observedAt === null ? 0 : delay);
+    const wanted = Math.max(readyAt - this.#now(), 0, this.#observedAt === null ? 0 : delay);
+    const wait = Math.min(wanted, this.#maxWaitMs);
+
+    if (wanted > this.#maxWaitMs) {
+      this.#log.warn(
+        { wantedMs: wanted, cappedToMs: wait },
+        'a rate-limit header asked for an implausible wait; capping it',
+      );
+    }
 
     if (wait > 0) {
       if (wait > 5_000) this.#log.info({ waitMs: wait }, 'holding off to stay inside the rate limit');

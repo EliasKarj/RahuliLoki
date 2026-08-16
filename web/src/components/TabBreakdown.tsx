@@ -12,6 +12,7 @@ import type { SnapshotWithTabs, TopItem } from '../lib/api.ts';
 import { sortRows, tabNames, tabRows, type SortDirection } from '../lib/series.ts';
 import { formatChaos, formatCount, formatDateTime, formatDay, formatTime } from '../lib/format.ts';
 import { Empty, TooltipCard } from './ui.tsx';
+import { ItemIcon } from './ItemIcon.tsx';
 
 const AXIS = { stroke: '#6b7787', fontSize: 11 };
 
@@ -116,7 +117,14 @@ const COLUMNS: Column[] = [
   { key: 'chaosTotal', label: 'Total', numeric: true },
 ];
 
-export function TopItemsTable({ items }: { items: TopItem[] }) {
+export function TopItemsTable({
+  items,
+  onSelect,
+}: {
+  items: TopItem[];
+  /** Given, each name becomes a button that opens that item's history. */
+  onSelect?: (name: string) => void;
+}) {
   const [sort, setSort] = useState<{ key: Column['key']; direction: SortDirection }>({
     key: 'chaosTotal',
     direction: 'desc',
@@ -168,7 +176,22 @@ export function TopItemsTable({ items }: { items: TopItem[] }) {
         <tbody>
           {rows.map((row) => (
             <tr key={`${row.tab}/${row.name}`} className="border-b border-ink-850 last:border-0">
-              <td className="py-1.5 pr-3 text-ink-100">{row.name}</td>
+              <td className="py-1.5 pr-3 text-ink-100">
+                <span className="flex items-center gap-2">
+                  <ItemIcon src={row.icon} />
+                  {onSelect ? (
+                    <button
+                      type="button"
+                      onClick={() => onSelect(row.name)}
+                      className="text-left underline decoration-ink-700 underline-offset-2 transition-colors hover:decoration-accent-500"
+                    >
+                      {row.name}
+                    </button>
+                  ) : (
+                    row.name
+                  )}
+                </span>
+              </td>
               <td className="py-1.5 pr-3 text-ink-400">{row.tab}</td>
               <td className="num py-1.5 pr-3 text-ink-200">{formatCount(row.qty)}</td>
               <td className="num py-1.5 pr-3 text-ink-400">{formatChaos(row.chaosEach)}</td>

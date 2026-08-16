@@ -16,7 +16,15 @@ services:
     environment:
       # Overrides .env: inside the container the database always lives on the volume.
       DATABASE_URL: file:/data/valuuttaloki.db
+      # The container has to bind every interface to be reachable through the port mapping at
+      # all, so the server's own "refuse an open API on a wide bind" check would fire. It is
+      # answered here rather than disabled: the mapping below publishes only to 127.0.0.1, so
+      # nothing off this machine can reach the port. Change that mapping and you must set
+      # AUTH_TOKEN in .env — remove this line and the server will tell you so at boot.
+      ALLOW_UNAUTHENTICATED: '1'
     ports:
+      # Host-side 127.0.0.1 is load-bearing. '3000:3000' would publish the whole wealth
+      # history, and a POST /api/poll that spends the GGG rate-limit budget, to the network.
       - '127.0.0.1:3000:3000'
     volumes:
       - valuuttaloki-data:/data

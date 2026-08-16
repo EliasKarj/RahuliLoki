@@ -58,3 +58,57 @@ describe('loggerOptions', () => {
     expect(options.level).toBe('info');
   });
 });
+
+describe('describeError', () => {
+  it('follows the cause chain, which is where fetch hides the real reason', () => {
+    // Every transport failure arrives as a bare "fetch failed". Without the cause, a DNS
+    // failure, a refused connection and an expired certificate all read identically.
+    const error = new TypeError('fetch failed', {
+      cause: new Error('getaddrinfo ENOTFOUND poe.ninja'),
+    });
+    expect(describeError(error).message).toBe('fetch failed: getaddrinfo ENOTFOUND poe.ninja');
+  });
+
+  it('walks more than one link deep', () => {
+    const root = new Error('connect ECONNREFUSED 1.2.3.4:443');
+    const middle = new Error('socket failure', { cause: root });
+    const outer = new TypeError('fetch failed', { cause: middle });
+    expect(describeError(outer).message).toBe(
+      'fetch failed: socket failure: connect ECONNREFUSED 1.2.3.4:443',
+    );
+  });
+
+  it('does not repeat a cause that merely echoes its wrapper', () => {
+    const error = new Error('same', { cause: new Error('same') });
+    expect(describeError(error).message).toBe('same');
+  });
+
+  it('survives a circular cause chain', () => {
+    const a = new Error('a') as Error & { cause?: unknown };
+    const b = new Error('b', { cause: a });
+    a.cause = b;
+    expect(describeError(a).message).toBe('a: b');
+  });
+
+  it('describes a thrown plain object by its fields, not as [object Object]', () => {
+    expect(describeError({ code: 'ENOTFOUND', hostname: 'poe.ninja' }).message).toBe(
+      'code=ENOTFOUND hostname=poe.ninja',
+    );
+  });
+
+  it('falls back to JSON for an object with no recognised fields', () => {
+    expect(describeError({ weird: 1 }).message).toBe('{"weird":1}');
+  });
+
+  it('still handles primitives and null', () => {
+    expect(describeError('plain string').message).toBe('plain string');
+    expect(describeError(null).message).toBe('null');
+    expect(describeError(undefined).message).toBe('undefined');
+  });
+
+  it('scrubs secrets out of a cause, not just the top-level message', () => {
+    registerSecret('supersecretsession');
+    const error = new Error('outer', { cause: new Error('cookie was supersecretsession') });
+    expect(describeError(error).message).toBe('outer: cookie was [redacted]');
+  });
+});

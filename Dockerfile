@@ -56,6 +56,11 @@ RUN mkdir -p /data && chown node:node /data
 ENV NODE_ENV=production
 ENV DATABASE_URL=file:/data/valuuttaloki.db
 ENV PORT=3000
+# A container has to bind every interface to be reachable through a port mapping at all. That
+# is a wide bind, so the server refuses to start unless the operator supplies AUTH_TOKEN — or
+# sets ALLOW_UNAUTHENTICATED to say something else is doing the authenticating (a port mapping
+# published only to 127.0.0.1, a proxy with its own auth). Neither is baked in: the image
+# cannot know which is true, and a guess would be wrong in the direction that exposes data.
 ENV HOST=0.0.0.0
 ENV WEB_DIST=/app/public
 VOLUME ["/data"]

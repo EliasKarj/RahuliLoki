@@ -17,7 +17,9 @@
     "build": "pnpm --filter @valuuttaloki/web build && pnpm --filter @valuuttaloki/server build",
     "start": "pnpm --filter @valuuttaloki/server start",
     "test": "pnpm -r test",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "desktop": "pnpm --filter @valuuttaloki/server build && pnpm --filter @valuuttaloki/web build && pnpm --filter @valuuttaloki/desktop start",
+    "desktop:package": "pnpm build && pnpm --filter @valuuttaloki/desktop package"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"
@@ -26,6 +28,8 @@
     "onlyBuiltDependencies": [
       "@prisma/client",
       "@prisma/engines",
+      "electron",
+      "electron-winstaller",
       "esbuild",
       "prisma"
     ]

@@ -17,6 +17,8 @@
  * caller. A silent zero is the failure mode this design exists to avoid.
  */
 
+import { linkCount, pickCandidate, uniqueKey, type UniqueIndex } from './uniques.ts';
+
 export interface ValuedEntry {
   qty: number;
   chaosEach: number;
@@ -54,6 +56,8 @@ export interface ValuationInput {
     stackSize?: number;
     frameType?: number;
     identified?: boolean;
+    corrupted?: boolean;
+    sockets?: Array<{ group?: unknown }>;
   }>;
 }
 
@@ -61,9 +65,11 @@ export interface ValuationOptions {
   prices: Record<string, number>;
   divineRate: number;
   minItemChaos: number;
+  /** Per-variant unique lines. Omit to price uniques by name only, as before. */
+  uniques?: UniqueIndex;
 }
 
-const FRAME_UNIQUE = 3;
+export const FRAME_UNIQUE = 3;
 const FRAME_GEM = 4;
 const FRAME_DIVINATION = 6;
 
@@ -135,8 +141,30 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+/**
+ * Price one unique against the variant index, or null when it is not a unique / has no line.
+ *
+ * The returned key carries the links and corruption so the breakdown keeps a 6-linked item
+ * apart from a plain one — merging them would hide the whole reason a number moved.
+ */
+export function resolveUnique(
+  item: ValuationInput['items'][number],
+  uniques: UniqueIndex,
+): { key: string; chaos: number } | null {
+  if (item.frameType !== FRAME_UNIQUE) return null;
+  const name = text(item.name);
+  if (name === null || !Object.hasOwn(uniques, name)) return null;
+
+  const links = linkCount(item.sockets);
+  const corrupted = item.corrupted === true;
+  const picked = pickCandidate(uniques[name] ?? [], links, corrupted);
+  if (picked === null) return null;
+
+  return { key: uniqueKey(name, links, corrupted), chaos: picked.chaos };
+}
+
 export function valueTabs(tabs: ValuationInput[], options: ValuationOptions): ValuationResult {
-  const { prices, minItemChaos } = options;
+  const { prices, minItemChaos, uniques } = options;
 
   // Aggregate before applying the threshold. A hundred separate stacks of alterations are one
   // pile of alterations to the player, and thresholding each stack would throw the pile away.
@@ -157,14 +185,18 @@ export function valueTabs(tabs: ValuationInput[], options: ValuationOptions): Va
         continue;
       }
 
-      const key = resolvePriceKey(item, prices);
+      // Uniques take the variant-aware path: the same name is several prices depending on
+      // links and corruption, so the flat name map cannot answer for them.
+      const unique = uniques === undefined ? null : resolveUnique(item, uniques);
+
+      const key = unique?.key ?? resolvePriceKey(item, prices);
       if (key === null) {
         const label = priceKeyCandidates(item)[0] ?? '(unnamed item)';
         unresolved.set(label, (unresolved.get(label) ?? 0) + 1);
         continue;
       }
 
-      const chaosEach = prices[key] as number;
+      const chaosEach = unique?.chaos ?? (prices[key] as number);
       const qty =
         typeof item.stackSize === 'number' && Number.isFinite(item.stackSize) && item.stackSize > 0
           ? Math.floor(item.stackSize)
@@ -176,14 +208,17 @@ export function valueTabs(tabs: ValuationInput[], options: ValuationOptions): Va
     }
   }
 
-  const breakdown: Breakdown = {};
+  // Null-prototype: the keys here are stash tab names and item names. A player can name a tab
+  // `__proto__`, and on an ordinary object literal that assignment replaces the prototype
+  // instead of adding a tab — the tab then vanishes from every chart that reads the breakdown.
+  const breakdown: Breakdown = Object.create(null) as Breakdown;
   let totalChaos = 0;
   let itemCount = 0;
   let droppedBelowThreshold = 0;
   let droppedChaos = 0;
 
   for (const [tabName, entries] of aggregated) {
-    const kept: Record<string, ValuedEntry> = {};
+    const kept: Record<string, ValuedEntry> = Object.create(null) as Record<string, ValuedEntry>;
     for (const [name, { qty, chaosEach }] of entries) {
       const chaosTotal = round2(qty * chaosEach);
       if (chaosTotal < minItemChaos) {
@@ -219,7 +254,7 @@ export function valueTabs(tabs: ValuationInput[], options: ValuationOptions): Va
 
 /** Per-tab chaos totals — what the stacked-area chart needs, without the item detail. */
 export function tabTotals(breakdown: Breakdown): Record<string, number> {
-  const totals: Record<string, number> = {};
+  const totals: Record<string, number> = Object.create(null) as Record<string, number>;
   for (const [tabName, entries] of Object.entries(breakdown)) {
     let sum = 0;
     for (const entry of Object.values(entries)) sum += entry.chaosTotal;
@@ -228,15 +263,40 @@ export function tabTotals(breakdown: Breakdown): Record<string, number> {
   return totals;
 }
 
-/** The latest snapshot's biggest holdings, flattened across tabs. */
+export interface TopItem {
+  tab: string;
+  name: string;
+  qty: number;
+  chaosEach: number;
+  chaosTotal: number;
+  /** poe.ninja's icon, when the current price set knows one for this name. */
+  icon?: string;
+}
+
+/**
+ * The latest snapshot's biggest holdings, flattened across tabs.
+ *
+ * `icons` is joined in here rather than stored on the snapshot: the breakdown is written once
+ * per poll and read rarely, while an icon URL is the same string every time. Looking it up at
+ * read time also means an item that only got an icon later picks one up without a rewrite.
+ */
 export function topItems(
   breakdown: Breakdown,
   limit = 100,
-): Array<{ tab: string; name: string; qty: number; chaosEach: number; chaosTotal: number }> {
-  const rows: Array<{ tab: string; name: string; qty: number; chaosEach: number; chaosTotal: number }> = [];
+  icons: Record<string, string> = {},
+): TopItem[] {
+  const rows: TopItem[] = [];
   for (const [tab, entries] of Object.entries(breakdown)) {
     for (const [name, entry] of Object.entries(entries)) {
-      rows.push({ tab, name, qty: entry.qty, chaosEach: entry.chaosEach, chaosTotal: entry.chaosTotal });
+      const icon = Object.hasOwn(icons, name) ? icons[name] : undefined;
+      rows.push({
+        tab,
+        name,
+        qty: entry.qty,
+        chaosEach: entry.chaosEach,
+        chaosTotal: entry.chaosTotal,
+        ...(icon === undefined ? {} : { icon }),
+      });
     }
   }
   rows.sort((a, b) => b.chaosTotal - a.chaosTotal || a.name.localeCompare(b.name));

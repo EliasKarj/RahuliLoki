@@ -172,6 +172,34 @@ describe('StashService', () => {
     const fetchFn = stashFetch({
       list: () => new Response('<html>maintenance</html>', { status: 200 }),
     });
-    await expect(service(fetchFn).listTabs()).rejects.toThrow(/unparseable JSON/);
+    await expect(service(fetchFn).listTabs()).rejects.toThrow(/not valid JSON/);
+  });
+
+  it('never follows a redirect on a request carrying POESESSID', async () => {
+    const fetchFn = stashFetch();
+    await service(fetchFn).listTabs();
+    const init = (fetchFn as unknown as { mock: { calls: [string, RequestInit][] } }).mock.calls[0]?.[1];
+    // A redirect would hand the session cookie to whatever host the Location points at.
+    expect(init?.redirect).toBe('error');
+  });
+
+  it('refuses a tab larger than the ceiling rather than buffering it', async () => {
+    const fetchFn = stashFetch({
+      list: () =>
+        new Response('{"tabs":[]}', {
+          status: 200,
+          headers: { 'content-length': String(64 * 1024 * 1024) },
+        }),
+    });
+    const limiter = new RateLimiter({ fetchFn, now: () => 0, sleep: async () => {}, minIntervalMs: 0 });
+    const stash = new StashService({
+      accountName: 'Exile#1234',
+      league: 'Settlers',
+      poesessid: SESSION,
+      userAgent: 'valuuttaloki/test',
+      limiter,
+      maxBytes: 1024,
+    });
+    await expect(stash.listTabs()).rejects.toThrow(/ceiling/);
   });
 });

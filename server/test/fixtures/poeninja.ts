@@ -74,6 +74,39 @@ export const scarabOverview = {
   ],
 };
 
+/**
+ * A unique overview. The point of this fixture is the same name appearing several times with
+ * different `links` and `corrupted` — which is exactly why uniques cannot be keyed by name.
+ */
+export const uniqueArmourOverview = {
+  lines: [
+    {
+      id: 100,
+      name: "Bronn's Lithe",
+      baseType: 'Cutthroat\'s Garb',
+      icon: 'https://web.poecdn.com/bronns.png',
+      links: 0,
+      chaosValue: 5.2,
+      variant: null,
+    },
+    { id: 101, name: "Bronn's Lithe", links: 5, chaosValue: 41, icon: 'https://web.poecdn.com/bronns.png' },
+    { id: 102, name: "Bronn's Lithe", links: 6, chaosValue: 210.5, icon: 'https://web.poecdn.com/bronns.png' },
+    {
+      id: 103,
+      name: "Bronn's Lithe",
+      links: 6,
+      corrupted: true,
+      chaosValue: 180,
+      icon: 'https://web.poecdn.com/bronns.png',
+    },
+    // No links anywhere on it; a belt cannot have any.
+    { id: 110, name: 'Headhunter', links: 0, chaosValue: 12500, icon: 'https://web.poecdn.com/hh.png' },
+    // Two variants of one name, indistinguishable from stash data. The cheaper must win.
+    { id: 120, name: "Shavronne's Wrappings", links: 0, variant: 'Pre 3.0.0', chaosValue: 900 },
+    { id: 121, name: "Shavronne's Wrappings", links: 0, variant: 'Current', chaosValue: 30 },
+  ],
+};
+
 /** poe.ninja answers 200 with an empty `lines` array for a league it has never heard of. */
 export const emptyOverview = { lines: [] };
 

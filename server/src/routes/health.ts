@@ -5,6 +5,12 @@
  * /api/health always answers 200 while the process is up. `status` carries the verdict:
  * a halted poller is not something a container restart fixes, and flapping a health check
  * over an expired POESESSID would just restart-loop the container for a day.
+ *
+ * It is also the one endpoint reachable without a token, because Docker and Fly have to call
+ * it before anyone can hand them one. So it answers in two registers: an unauthenticated
+ * caller learns only that the process is serving, while an authenticated one also gets the
+ * poller's error messages, the account's position in GGG's rate limiter and the price state.
+ * Those are diagnostics about a named account; a liveness probe has no use for them.
  */
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
@@ -24,7 +30,13 @@ export function healthStatus(deps: ApiDeps): HealthStatus {
 }
 
 export async function healthRoutes(app: FastifyInstance, deps: ApiDeps): Promise<void> {
-  app.get('/health', async (_request: FastifyRequest, reply: FastifyReply) => {
+  app.get('/health', async (request: FastifyRequest, reply: FastifyReply) => {
+    // Enough for `HEALTHCHECK` and Fly's http_service check — 200 means it is serving — and
+    // nothing an anonymous caller can learn about the account from.
+    if (!request.authenticated) {
+      return reply.send({ status: 'up' });
+    }
+
     const priceSet = deps.prices.cached;
     return reply.send({
       status: healthStatus(deps),

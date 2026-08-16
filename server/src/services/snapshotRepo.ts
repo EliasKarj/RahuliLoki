@@ -11,10 +11,11 @@
  * somebody has actually asked for it.
  */
 
-import type { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '../../generated/prisma/index.js';
 import type { Breakdown } from './valuationService.ts';
 import { tabTotals } from './valuationService.ts';
 import type { PriceSet, PriceSetStore } from './priceService.ts';
+import type { UniqueIndex } from './uniques.ts';
 
 export interface SnapshotMeta {
   id: number;
@@ -58,6 +59,8 @@ export interface SnapshotStore {
   listTabTotals(query: SnapshotQuery): Promise<SnapshotWithTabs[]>;
   listFull(query: SnapshotQuery): Promise<SnapshotWithBreakdown[]>;
   latest(league: string): Promise<SnapshotWithBreakdown | null>;
+  /** The oldest and newest snapshot in a range, with breakdowns. Two rows, not the range. */
+  bounds(query: SnapshotQuery): Promise<{ first: SnapshotWithBreakdown; last: SnapshotWithBreakdown } | null>;
   create(input: CreateSnapshotInput): Promise<SnapshotMeta>;
   leagues(): Promise<string[]>;
 }
@@ -79,9 +82,21 @@ function asBreakdown(value: unknown): Breakdown {
   return value as Breakdown;
 }
 
+/** Same narrowing as asPrices, for the icon map. Unknown-shaped entries are dropped. */
+function asIcons(value: unknown): Record<string, string> {
+  const out: Record<string, string> = Object.create(null) as Record<string, string>;
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return out;
+  for (const [name, icon] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof icon === 'string' && icon !== '') out[name] = icon;
+  }
+  return out;
+}
+
 function asPrices(value: unknown): Record<string, number> {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) return {};
-  const out: Record<string, number> = {};
+  // Null-prototype, matching how PriceService builds a fresh set: these keys came out of a
+  // remote payload, and a lookup for `constructor` has to miss rather than return a function.
+  const out: Record<string, number> = Object.create(null) as Record<string, number>;
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return out;
   for (const [name, price] of Object.entries(value as Record<string, unknown>)) {
     if (typeof price === 'number' && Number.isFinite(price)) out[name] = price;
   }
@@ -140,6 +155,24 @@ export class PrismaSnapshotStore implements SnapshotStore {
     return row === null ? null : { ...row, breakdown: asBreakdown(row.breakdown) };
   }
 
+  /**
+   * The two endpoints of a range, read as two rows rather than by pulling the range and taking
+   * its ends. A month of ten-minute snapshots is ~4000 breakdown blobs; the diff needs two.
+   */
+  async bounds(
+    query: SnapshotQuery,
+  ): Promise<{ first: SnapshotWithBreakdown; last: SnapshotWithBreakdown } | null> {
+    const [first, last] = await Promise.all([
+      this.#prisma.snapshot.findFirst({ where: where(query), orderBy: { takenAt: 'asc' } }),
+      this.#prisma.snapshot.findFirst({ where: where(query), orderBy: { takenAt: 'desc' } }),
+    ]);
+    if (first === null || last === null || first.id === last.id) return null;
+    return {
+      first: { ...first, breakdown: asBreakdown(first.breakdown) },
+      last: { ...last, breakdown: asBreakdown(last.breakdown) },
+    };
+  }
+
   async create(input: CreateSnapshotInput): Promise<SnapshotMeta> {
     return this.#prisma.snapshot.create({
       data: {
@@ -169,9 +202,21 @@ export class PrismaSnapshotStore implements SnapshotStore {
 
 export class PrismaPriceSetStore implements PriceSetStore {
   readonly #prisma: PrismaClient;
+  readonly #retention: number;
 
-  constructor(prisma: PrismaClient) {
+  /**
+   * `retention` caps how many price sets are kept per league. Each row holds a full name →
+   * chaos map — thousands of entries, hundreds of kilobytes — and one is written every time the
+   * hourly TTL lapses. Kept forever, that is a few hundred megabytes over a league on a volume
+   * the deployment provisions at one gigabyte, and SQLite's first symptom of a full disk is a
+   * failed write in the middle of a poll.
+   *
+   * 48 is two days of history, which is all the depth anything actually reads: the newest set
+   * at boot, and the odd look back at what an old snapshot was valued against.
+   */
+  constructor(prisma: PrismaClient, retention = 48) {
     this.#prisma = prisma;
+    this.#retention = retention;
   }
 
   async latest(league: string): Promise<PriceSet | null> {
@@ -186,12 +231,41 @@ export class PrismaPriceSetStore implements PriceSetStore {
       fetchedAt: row.fetchedAt,
       prices,
       divineRate: prices['Divine Orb'] ?? 0,
+      // Null on rows written before the icons column existed. An empty map is the right
+      // reading: the UI falls back to no icon, and the next fetch fills it in.
+      icons: asIcons(row.icons),
+      // Not persisted. A restored set exists so a restart does not refetch immediately, and
+      // the very next poll refreshes it; carrying the unique index through the database would
+      // multiply the row size for a window measured in minutes. Uniques go unpriced until
+      // then, which the unresolved log makes visible rather than silent.
+      uniques: Object.create(null) as UniqueIndex,
     };
   }
 
   async save(set: PriceSet): Promise<void> {
     await this.#prisma.priceSet.create({
-      data: { league: set.league, fetchedAt: set.fetchedAt, prices: set.prices as object },
+      data: {
+        league: set.league,
+        fetchedAt: set.fetchedAt,
+        prices: set.prices as object,
+        icons: set.icons as object,
+      },
+    });
+    await this.#prune(set.league);
+  }
+
+  /** Drop everything past the retention window for this league. */
+  async #prune(league: string): Promise<void> {
+    if (this.#retention <= 0) return;
+    const keep = await this.#prisma.priceSet.findMany({
+      where: { league },
+      orderBy: { fetchedAt: 'desc' },
+      take: this.#retention,
+      select: { id: true },
+    });
+    if (keep.length < this.#retention) return;
+    await this.#prisma.priceSet.deleteMany({
+      where: { league, id: { notIn: keep.map((row) => row.id) } },
     });
   }
 }

@@ -54,6 +54,7 @@ function service(options: {
   store?: PriceSetStore;
   now?: () => number;
   ttlMs?: number;
+  maxBytes?: number;
 } = {}) {
   return new PriceService({
     league: 'Settlers',
@@ -63,8 +64,58 @@ function service(options: {
     store: options.store ?? memoryStore().store,
     fetchFn: options.fetchFn ?? fixtureFetch(),
     now: options.now ?? (() => 0),
+    ...(options.maxBytes === undefined ? {} : { maxBytes: options.maxBytes }),
   });
 }
+
+describe('icon collection', () => {
+  it('reads currency icons out of currencyDetails, not the lines', () => {
+    // currencyoverview puts icons in a sibling array keyed by the same display name.
+    const prices: Record<string, number> = {};
+    const icons: Record<string, string> = {};
+    mergeCurrencyOverview(currencyOverview, prices, icons);
+    expect(icons['Divine Orb']).toBe('https://web.poecdn.com/divine.png');
+  });
+
+  it('reads item icons off the line itself', () => {
+    const prices: Record<string, number> = {};
+    const icons: Record<string, string> = {};
+    mergeItemOverview(divinationCardOverview, prices, icons);
+    expect(icons['The Doctor']).toBe('https://web.poecdn.com/doctor.png');
+  });
+
+  it('leaves a line with no icon out rather than inventing one', () => {
+    const prices: Record<string, number> = {};
+    const icons: Record<string, string> = {};
+    mergeItemOverview(scarabOverview, prices, icons);
+    // The scarab fixture carries prices but no icons; the prices still land.
+    expect(Object.keys(icons)).toHaveLength(0);
+    expect(prices['Gilded Bestiary Scarab']).toBe(88.2);
+  });
+
+  it('refuses an icon URL that is not https on a poecdn host', () => {
+    // The field comes from a remote payload and ends up in an <img src>. A javascript: or
+    // data: URL there, or a host that is not GGG's CDN, is not an icon.
+    const hostile = {
+      lines: [
+        { name: 'A', chaosValue: 1, icon: 'javascript:alert(1)' },
+        { name: 'B', chaosValue: 1, icon: 'http://web.poecdn.com/b.png' },
+        { name: 'C', chaosValue: 1, icon: 'https://evil.example/c.png' },
+        { name: 'D', chaosValue: 1, icon: 'https://web.poecdn.com/d.png' },
+      ],
+    };
+    const prices: Record<string, number> = {};
+    const icons: Record<string, string> = {};
+    mergeItemOverview(hostile, prices, icons);
+    expect(icons).toEqual({ D: 'https://web.poecdn.com/d.png' });
+  });
+
+  it('carries icons through a fetch onto the price set', async () => {
+    const set = await service().getPrices();
+    expect(set.icons['Divine Orb']).toBe('https://web.poecdn.com/divine.png');
+    expect(set.icons['The Doctor']).toBe('https://web.poecdn.com/doctor.png');
+  });
+});
 
 describe('mergeCurrencyOverview', () => {
   it('keys by currencyTypeName and chaosEquivalent', () => {
@@ -163,6 +214,8 @@ describe('PriceService', () => {
       fetchedAt: new Date(0),
       prices: { 'Chaos Orb': 1, 'Divine Orb': 200 },
       divineRate: 200,
+      icons: {},
+      uniques: {},
     };
     const fetchFn = fixtureFetch();
     const subject = service({ fetchFn, store: memoryStore(stored).store, now: () => 60_000 });
@@ -208,7 +261,30 @@ describe('PriceService', () => {
     const fetchFn = vi.fn(
       async () => new Response('<html>rate limited</html>', { status: 200 }),
     ) as unknown as typeof fetch;
-    await expect(service({ fetchFn }).getPrices()).rejects.toThrow(/unparseable JSON/);
+    await expect(service({ fetchFn }).getPrices()).rejects.toThrow(/not valid JSON/);
+  });
+
+  it('refuses an oversized overview on its declared length, before buffering it', async () => {
+    const fetchFn = vi.fn(
+      async () =>
+        new Response('{"lines":[]}', {
+          status: 200,
+          headers: { 'content-length': String(64 * 1024 * 1024) },
+        }),
+    ) as unknown as typeof fetch;
+    await expect(service({ fetchFn, maxBytes: 1024 }).getPrices()).rejects.toThrow(/ceiling/);
+  });
+
+  it('stops reading a chunked overview once it passes the ceiling', async () => {
+    // No content-length, so the ceiling has to be enforced while the body streams.
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('x'.repeat(4096)));
+        controller.close();
+      },
+    });
+    const fetchFn = vi.fn(async () => new Response(body, { status: 200 })) as unknown as typeof fetch;
+    await expect(service({ fetchFn, maxBytes: 1024 }).getPrices()).rejects.toThrow(/ceiling/);
   });
 
   it('reports staleness for /api/health', async () => {

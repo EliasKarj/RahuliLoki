@@ -15,6 +15,8 @@
  */
 
 import { describeError, silentLogger, type Logger } from '../lib/logger.ts';
+import { readJsonCapped, timeoutSignal } from '../lib/http.ts';
+import { mergeUniqueOverview, uniqueKey, type UniqueIndex } from './uniques.ts';
 
 export interface PriceSet {
   league: string;
@@ -23,6 +25,23 @@ export interface PriceSet {
   prices: Record<string, number>;
   /** Chaos per divine, straight out of the Currency set. */
   divineRate: number;
+  /**
+   * Display-name → poe.ninja icon URL, for the names it gave one.
+   *
+   * Kept on the price set rather than on each snapshot's breakdown: an icon URL is a property
+   * of the item, not of a moment in time. Copying ~40 bytes per line into every snapshot blob
+   * would grow the column that already dominates the database, 144 times a day, to store the
+   * same string over and over.
+   */
+  icons: Record<string, string>;
+  /**
+   * Unique lines kept per name, not flattened into `prices`.
+   *
+   * They cannot be flattened: the same name has several prices depending on links and
+   * corruption, and which one applies is a property of the item in the stash, not of the
+   * price set. See services/uniques.ts.
+   */
+  uniques: UniqueIndex;
 }
 
 export interface PriceSetStore {
@@ -38,12 +57,35 @@ interface CurrencyLine {
 interface ItemLine {
   name?: unknown;
   chaosValue?: unknown;
+  icon?: unknown;
+}
+
+/** The two payload shapes put the icon in different places — see the merge functions. */
+interface CurrencyDetail {
+  name?: unknown;
+  icon?: unknown;
+}
+
+/** poe.ninja serves icons off GGG's CDN. Anything else in that field is not an icon. */
+export function iconUrl(value: unknown): string | null {
+  if (typeof value !== 'string' || value === '') return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== 'https:') return null;
+  const host = parsed.hostname.toLowerCase();
+  return host === 'web.poecdn.com' || host.endsWith('.poecdn.com') ? value : null;
 }
 
 export interface PriceServiceOptions {
   league: string;
   currencyCategories: string[];
   itemCategories: string[];
+  /** poe.ninja itemoverview types whose lines are uniques. Priced per variant, not by name. */
+  uniqueCategories?: string[];
   ttlMs: number;
   store: PriceSetStore;
   fetchFn?: typeof fetch;
@@ -51,6 +93,9 @@ export interface PriceServiceOptions {
   log?: Logger;
   userAgent?: string;
   baseUrl?: string;
+  /** Ceiling on one overview request. Without it a hung poe.ninja never releases the poll. */
+  timeoutMs?: number;
+  maxBytes?: number;
 }
 
 export class PriceFetchError extends Error {}
@@ -64,8 +109,18 @@ function finitePositive(value: unknown): number | null {
   return value;
 }
 
-/** Merge one currencyoverview payload into `into`. Returns how many lines were usable. */
-export function mergeCurrencyOverview(payload: unknown, into: Record<string, number>): number {
+/**
+ * Merge one currencyoverview payload into `into`. Returns how many lines were usable.
+ *
+ * Icons are not on the lines here. currencyoverview carries them in a sibling
+ * `currencyDetails` array keyed by the same display name, so they are collected separately —
+ * a line with no matching detail simply has no icon, which is not an error.
+ */
+export function mergeCurrencyOverview(
+  payload: unknown,
+  into: Record<string, number>,
+  icons: Record<string, string> = Object.create(null) as Record<string, string>,
+): number {
   const lines = (payload as { lines?: unknown })?.lines;
   if (!Array.isArray(lines)) return 0;
   let merged = 0;
@@ -76,11 +131,25 @@ export function mergeCurrencyOverview(payload: unknown, into: Record<string, num
     into[name] = value;
     merged += 1;
   }
+
+  const details = (payload as { currencyDetails?: unknown })?.currencyDetails;
+  if (Array.isArray(details)) {
+    for (const raw of details as CurrencyDetail[]) {
+      const name = typeof raw?.name === 'string' ? raw.name : null;
+      const icon = iconUrl(raw?.icon);
+      if (name === null || icon === null) continue;
+      icons[name] = icon;
+    }
+  }
   return merged;
 }
 
-/** Merge one itemoverview payload into `into`. */
-export function mergeItemOverview(payload: unknown, into: Record<string, number>): number {
+/** Merge one itemoverview payload into `into`. Here the icon is on the line itself. */
+export function mergeItemOverview(
+  payload: unknown,
+  into: Record<string, number>,
+  icons: Record<string, string> = Object.create(null) as Record<string, string>,
+): number {
   const lines = (payload as { lines?: unknown })?.lines;
   if (!Array.isArray(lines)) return 0;
   let merged = 0;
@@ -91,6 +160,8 @@ export function mergeItemOverview(payload: unknown, into: Record<string, number>
     // First category wins. Categories do not overlap in practice, and when they do the
     // earlier (more specific) list is the one the operator put first on purpose.
     if (into[name] === undefined) into[name] = value;
+    const icon = iconUrl(raw?.icon);
+    if (icon !== null && icons[name] === undefined) icons[name] = icon;
     merged += 1;
   }
   return merged;
@@ -168,24 +239,46 @@ export class PriceService {
 
   async #fetchAll(): Promise<PriceSet> {
     const { league, currencyCategories, itemCategories } = this.#options;
-    const prices: Record<string, number> = {};
+    // Null-prototype: every key here is an item name straight out of a remote payload. On a
+    // normal object `prices['toString']` is a function rather than undefined, so the
+    // "have I seen this name already" check below would silently discard a real price — and
+    // `prices['__proto__'] = …` would reassign the prototype instead of storing anything.
+    const prices: Record<string, number> = Object.create(null) as Record<string, number>;
+    const icons: Record<string, string> = Object.create(null) as Record<string, string>;
+    const uniques: UniqueIndex = Object.create(null) as UniqueIndex;
 
     for (const type of currencyCategories) {
       const payload = await this.#getJson(`${this.#baseUrl}/currencyoverview`, league, type);
-      const merged = mergeCurrencyOverview(payload, prices);
+      const merged = mergeCurrencyOverview(payload, prices, icons);
       this.#log.debug({ type, merged }, 'merged currency overview');
     }
 
     for (const type of itemCategories) {
       const payload = await this.#getJson(`${this.#baseUrl}/itemoverview`, league, type);
-      const merged = mergeItemOverview(payload, prices);
+      const merged = mergeItemOverview(payload, prices, icons);
       this.#log.debug({ type, merged }, 'merged item overview');
+    }
+
+    for (const type of this.#options.uniqueCategories ?? []) {
+      const payload = await this.#getJson(`${this.#baseUrl}/itemoverview`, league, type);
+      const merged = mergeUniqueOverview(payload, uniques, iconUrl);
+      this.#log.debug({ type, merged }, 'merged unique overview');
+    }
+
+    // Icons for uniques are registered under the same display key the breakdown will use, so
+    // the UI needs no rule for turning "Bronn's Lithe (6L)" back into an icon lookup.
+    for (const entries of Object.values(uniques)) {
+      for (const entry of entries) {
+        if (entry.icon === null) continue;
+        const key = uniqueKey(entry.name, entry.links, entry.corrupted);
+        if (icons[key] === undefined) icons[key] = entry.icon;
+      }
     }
 
     // poe.ninja quotes everything in chaos, so chaos itself is never in the payload.
     prices[CHAOS] = 1;
 
-    const divineRate = prices[DIVINE];
+    const divineRate = Object.hasOwn(prices, DIVINE) ? prices[DIVINE] : undefined;
     if (divineRate === undefined) {
       throw new PriceFetchError(
         `poe.ninja returned no "${DIVINE}" price for league "${league}"; refusing to value a ` +
@@ -193,9 +286,22 @@ export class PriceService {
       );
     }
 
-    const set: PriceSet = { league, fetchedAt: new Date(this.#now()), prices, divineRate };
+    const set: PriceSet = {
+      league,
+      fetchedAt: new Date(this.#now()),
+      prices,
+      divineRate,
+      icons,
+      uniques,
+    };
     this.#log.info(
-      { league, entries: Object.keys(prices).length, divineRate },
+      {
+        league,
+        entries: Object.keys(prices).length,
+        uniques: Object.keys(uniques).length,
+        icons: Object.keys(icons).length,
+        divineRate,
+      },
       'fetched a fresh price set',
     );
     return set;
@@ -208,14 +314,15 @@ export class PriceService {
         accept: 'application/json',
         ...(this.#options.userAgent ? { 'user-agent': this.#options.userAgent } : {}),
       },
+      signal: timeoutSignal(this.#options.timeoutMs ?? 30_000),
     });
     if (!response.ok) {
       throw new PriceFetchError(`poe.ninja ${type} returned HTTP ${response.status}`);
     }
     try {
-      return await response.json();
+      return await readJsonCapped(response, this.#options.maxBytes, `poe.ninja ${type}`);
     } catch (error) {
-      throw new PriceFetchError(`poe.ninja ${type} returned unparseable JSON: ${describeError(error).message}`);
+      throw new PriceFetchError(`poe.ninja ${type} was unusable: ${describeError(error).message}`);
     }
   }
 }

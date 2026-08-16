@@ -1,113 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import type { FastifyInstance } from 'fastify';
-import { buildApp } from '../src/app.ts';
-import { loadConfig } from '../src/lib/config.ts';
 import { clearSecrets, registerSecret } from '../src/lib/logger.ts';
 import { QueryError, parseQuery } from '../src/routes/snapshots.ts';
-import { PollerBusyError, PollerHaltedError, type PollOutcome, type PollerHealth } from '../src/jobs/pollJob.ts';
-import type { ApiDeps, PollerLike } from '../src/routes/deps.ts';
-import { MemorySnapshotStore } from './helpers/memoryStore.ts';
-import type { RateLimitView } from '../src/lib/rateLimiter.ts';
-
-const SESSION = 'deadbeef'.repeat(4);
-const START = Date.parse('2026-01-01T00:00:00Z');
-
-const idleHealth: PollerHealth = {
-  running: false,
-  halted: false,
-  haltReason: null,
-  disabledReason: null,
-  consecutiveFailures: 0,
-  lastSuccessAt: '2026-01-01T02:00:00.000Z',
-  lastAttemptAt: '2026-01-01T02:00:00.000Z',
-  lastError: null,
-  nextAttemptAfter: null,
-  totalPolls: 12,
-  totalFailures: 0,
-  lastOutcome: null,
-};
-
-const rateLimitView: RateLimitView = {
-  buckets: [
-    { limit: { hits: 45, periodSeconds: 60, restrictedSeconds: 120 }, state: { hits: 3, periodSeconds: 60, restrictedSeconds: 0 }, remaining: 42 },
-  ],
-  observedAt: '2026-01-01T02:00:00.000Z',
-  restrictedUntil: null,
-  consecutive429: 0,
-  nextRequestAt: '2026-01-01T02:00:01.000Z',
-  totalRequests: 36,
-  total429: 0,
-};
-
-class FakePoller implements PollerLike {
-  health: PollerHealth = { ...idleHealth };
-  outcome: PollOutcome | Error = new Error('not configured');
-
-  async runNow(): Promise<PollOutcome> {
-    if (this.outcome instanceof Error) throw this.outcome;
-    return this.outcome;
-  }
-}
-
-function seeded(store: MemorySnapshotStore): MemorySnapshotStore {
-  store.seed({
-    takenAt: new Date(START),
-    totalChaos: 1000,
-    itemCount: 500,
-    breakdown: { Currency: { 'Chaos Orb': { qty: 1000, chaosEach: 1, chaosTotal: 1000 } }, Dump: {} },
-  });
-  store.seed({
-    takenAt: new Date(START + 3_600_000),
-    totalChaos: 1600,
-    itemCount: 520,
-    breakdown: {
-      Currency: { 'Chaos Orb': { qty: 1000, chaosEach: 1, chaosTotal: 1000 } },
-      Dump: { 'The Doctor': { qty: 1, chaosEach: 600, chaosTotal: 600 } },
-    },
-  });
-  store.seed({ takenAt: new Date(START + 7_200_000), totalChaos: 1600.2, itemCount: 520 });
-  store.seed({ league: 'Standard', takenAt: new Date(START), totalChaos: 42 });
-  return store;
-}
-
-async function makeApp(overrides: Partial<ApiDeps> = {}): Promise<{
-  app: FastifyInstance;
-  store: MemorySnapshotStore;
-  poller: FakePoller;
-}> {
-  const { config, missing } = loadConfig({
-    POESESSID: SESSION,
-    POE_ACCOUNT_NAME: 'Exile#1234',
-    POE_LEAGUE: 'Settlers',
-  } as NodeJS.ProcessEnv);
-
-  const store = seeded(new MemorySnapshotStore());
-  const poller = new FakePoller();
-
-  const app = await buildApp(
-    {
-      config,
-      missing,
-      store,
-      poller,
-      prices: {
-        cached: {
-          league: 'Settlers',
-          fetchedAt: new Date(START),
-          prices: { 'Chaos Orb': 1, 'Divine Orb': 218.4 },
-          divineRate: 218.4,
-        },
-        isStale: () => false,
-      },
-      rateLimit: () => rateLimitView,
-      startedAt: new Date(START),
-      ...overrides,
-    },
-    { logger: false },
-  );
-
-  return { app, store, poller };
-}
+import { PollerBusyError, PollerHaltedError, type PollOutcome } from '../src/jobs/pollJob.ts';
+import { SESSION, START, idleHealth, makeApp } from './helpers/app.ts';
 
 afterEach(() => clearSecrets());
 
@@ -218,10 +113,82 @@ describe('GET /api/snapshots/latest', () => {
     expect(body.topItems[0]).toMatchObject({ name: 'Chaos Orb', tab: 'Currency', chaosTotal: 1000 });
   });
 
+  it('joins the icon in from the price set, and omits it where there is none', async () => {
+    const { app, store } = await makeApp();
+    const index = store.rows.findIndex((row) => row.totalChaos === 1600.2);
+    store.rows.splice(index, 1);
+
+    const body = (await app.inject({ method: 'GET', url: '/api/snapshots/latest' })).json();
+    const rows = body.topItems as Array<{ name: string; icon?: string }>;
+
+    // The fake price set knows an icon for The Doctor and none for Chaos Orb.
+    expect(rows.find((row) => row.name === 'The Doctor')?.icon).toBe(
+      'https://web.poecdn.com/doctor.png',
+    );
+    expect(rows.find((row) => row.name === 'Chaos Orb')).not.toHaveProperty('icon');
+  });
+
   it('answers 404 before the first poll rather than an empty object', async () => {
     const { app } = await makeApp();
     const response = await app.inject({ method: 'GET', url: '/api/snapshots/latest?league=Ancestor' });
     expect(response.statusCode).toBe(404);
+  });
+});
+
+describe('GET /api/changes', () => {
+  it('diffs the ends of the range and joins icons in', async () => {
+    const { app } = await makeApp();
+    const body = (await app.inject({ method: 'GET', url: '/api/changes' })).json();
+
+    // The seed goes 1000c of chaos, then chaos plus a Doctor, then an empty breakdown.
+    // Ends of the range: everything present at the start is gone by the end.
+    expect(body.from).not.toBeNull();
+    expect(body.changes.map((c: { name: string }) => c.name)).toContain('Chaos Orb');
+    expect(body.lostChaos).toBeLessThan(0);
+  });
+
+  it('says why rather than returning an empty diff when there is only one snapshot', async () => {
+    const { app } = await makeApp();
+    const body = (await app.inject({ method: 'GET', url: '/api/changes?league=Standard' })).json();
+
+    expect(body.changes).toEqual([]);
+    expect(body.reason).toMatch(/at least two/);
+  });
+
+  it('rejects a nonsense minChaos', async () => {
+    const { app } = await makeApp();
+    const response = await app.inject({ method: 'GET', url: '/api/changes?minChaos=-4' });
+    expect(response.statusCode).toBe(400);
+  });
+});
+
+describe('GET /api/item-history', () => {
+  it('returns one point per snapshot in the range', async () => {
+    const { app } = await makeApp();
+    const body = (
+      await app.inject({ method: 'GET', url: '/api/item-history?name=Chaos%20Orb' })
+    ).json();
+
+    expect(body.name).toBe('Chaos Orb');
+    expect(body.points).toHaveLength(3);
+    expect(body.points[0].qty).toBe(1000);
+    // The trailing seeded snapshot has an empty breakdown: absence reads as zero.
+    expect(body.points[2].qty).toBe(0);
+  });
+
+  it('carries the icon when the price set knows one', async () => {
+    const { app } = await makeApp();
+    const body = (
+      await app.inject({ method: 'GET', url: '/api/item-history?name=The%20Doctor' })
+    ).json();
+    expect(body.icon).toBe('https://web.poecdn.com/doctor.png');
+  });
+
+  it('requires a name rather than silently answering for nothing', async () => {
+    const { app } = await makeApp();
+    const response = await app.inject({ method: 'GET', url: '/api/item-history' });
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toMatch(/name is required/);
   });
 });
 

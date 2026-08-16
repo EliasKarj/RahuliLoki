@@ -4,6 +4,8 @@
  *   GET /api/snapshots         list; breakdown omitted unless ?full=1, per-tab sums on ?tabs=1
  *   GET /api/snapshots/latest  the newest snapshot, with its full breakdown and top items
  *   GET /api/stats             total gain, chaos-per-hour (active and wall-clock), best hour
+ *   GET /api/changes           what moved between the ends of the range, per item
+ *   GET /api/item-history      one item's quantity and value across the range
  *
  * `league` defaults to the configured one. It is a query parameter rather than an assumption
  * because a league rollover leaves the previous league's series sitting in the same database,
@@ -13,6 +15,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { ApiDeps } from './deps.ts';
 import { computeStats } from '../lib/series.ts';
+import { diffBreakdowns, itemHistory } from '../lib/changes.ts';
 import { tabTotals, topItems } from '../services/valuationService.ts';
 import type { SnapshotQuery } from '../services/snapshotRepo.ts';
 
@@ -106,7 +109,95 @@ export async function snapshotRoutes(app: FastifyInstance, deps: ApiDeps): Promi
     return reply.send({
       snapshot,
       tabs: tabTotals(snapshot.breakdown),
-      topItems: topItems(snapshot.breakdown, 200),
+      // Icons are joined in from the current price set, the only place they are stored.
+      topItems: topItems(snapshot.breakdown, 200, deps.prices.cached?.icons ?? {}),
+    });
+  });
+
+  /**
+   * What changed between the ends of the range.
+   *
+   * Two snapshots, not a running total: the question this answers is "what happened over this
+   * stretch", and summing every ten-minute step would just reproduce the c/h chart.
+   */
+  app.get('/changes', async (request: FastifyRequest, reply: FastifyReply) => {
+    let query: ParsedQuery;
+    try {
+      query = parseQuery(request.query as Record<string, unknown>, deps.config.league);
+    } catch (error) {
+      return badRequest(reply, error);
+    }
+
+    const raw = request.query as Record<string, unknown>;
+    const minChaos = raw.minChaos === undefined ? 1 : Number(raw.minChaos);
+    if (!Number.isFinite(minChaos) || minChaos < 0) {
+      return badRequest(reply, new QueryError(`minChaos must be a non-negative number`));
+    }
+
+    const { full: _full, tabs: _tabs, ...storeQuery } = query;
+    const ends = await deps.store.bounds(storeQuery);
+    if (ends === null) {
+      // One snapshot cannot be a diff, and saying so beats an empty list that reads like
+      // "nothing happened".
+      return reply.send({
+        league: query.league,
+        from: null,
+        to: null,
+        changes: [],
+        gainedChaos: 0,
+        lostChaos: 0,
+        netChaos: 0,
+        reason: 'need at least two snapshots in this range',
+      });
+    }
+
+    const summary = diffBreakdowns(ends.first.breakdown, ends.last.breakdown, minChaos);
+    const icons = deps.prices.cached?.icons ?? {};
+
+    return reply.send({
+      league: query.league,
+      from: ends.first.takenAt.toISOString(),
+      to: ends.last.takenAt.toISOString(),
+      ...summary,
+      changes: summary.changes.slice(0, 200).map((change) => {
+        const icon = Object.hasOwn(icons, change.name) ? icons[change.name] : undefined;
+        return { ...change, ...(icon === undefined ? {} : { icon }) };
+      }),
+    });
+  });
+
+  /**
+   * One item's quantity and value over the range.
+   *
+   * This is the expensive endpoint: answering it means reading every breakdown in the range,
+   * which is the column deliberately left out of every other list response. `parseQuery` is
+   * given `full` so the heavy limit applies, and the range is what bounds the cost — a
+   * league-wide query on a busy stash is thousands of blobs.
+   */
+  app.get('/item-history', async (request: FastifyRequest, reply: FastifyReply) => {
+    const raw = request.query as Record<string, unknown>;
+    const name = typeof raw.name === 'string' ? raw.name.trim() : '';
+    if (name === '') {
+      return badRequest(reply, new QueryError('name is required'));
+    }
+
+    let query: ParsedQuery;
+    try {
+      query = parseQuery({ ...raw, full: '1' }, deps.config.league);
+    } catch (error) {
+      return badRequest(reply, error);
+    }
+
+    const { full: _full, tabs: _tabs, ...storeQuery } = query;
+    const snapshots = await deps.store.listFull(storeQuery);
+    const icons = deps.prices.cached?.icons ?? {};
+    const icon = Object.hasOwn(icons, name) ? icons[name] : undefined;
+
+    return reply.send({
+      league: query.league,
+      name,
+      ...(icon === undefined ? {} : { icon }),
+      points: itemHistory(snapshots, name),
     });
   });
 
