@@ -353,6 +353,8 @@ Kaikki `.env`-tiedostossa; `.env.example` on malli.
 | `PRICE_TTL_MINUTES` | `60` | Kuinka vanhaa hintasettiä käytetään ennen uutta hakua. |
 | `PRICE_CURRENCY_CATEGORIES` | `Currency,Fragment` | poe.ninjan `currencyoverview`-tyypit. |
 | `PRICE_ITEM_CATEGORIES` | ks. alla | poe.ninjan `itemoverview`-tyypit. |
+| `POE_NINJA_URL` | `https://poe.ninja/api/data` | poe.ninjan API-juuri. Vain jos se siirtyy. |
+| `POE_NINJA_LEAGUE` | tyhjä | Nimi, jolla poe.ninja indeksoi liigan, jos se ei ole GGG:n nimi. Ks. alla. |
 | `POE_CONTACT` | — | Yhteystieto, joka liitetään `User-Agent`iin. |
 | `DATABASE_URL` | `file:./data/valuuttaloki.db` | SQLite-tiedosto. |
 | `PORT` / `HOST` | `3000` / `127.0.0.1` | HTTP. Oletus on silmukkaosoite, ei kaikki verkkoliitännät. |
@@ -386,6 +388,23 @@ Incubator, Artifact, Vial, Omen, Tattoo`.
 > 3.0:aa edeltävän Shavronne's Wrappingsin nykyisestä, eikä aarrekaapin datassa ole mitään
 > mikä kertoisi kumpi sinulla on. Kun rivit eroavat vain variantilta, käytetään **halvinta**.
 > Molemmat suunnat ovat väärin, mutta yliarvio näkyy kaaviossa tuottona jota ei tullut.
+
+> **▸ Miksi liigalla voi olla kaksi nimeä:** GGG ja poe.ninja eivät ole samaa mieltä siitä,
+> miksi liigaa kutsutaan. GGG antaa virallisen nimen; poe.ninja indeksoi talouden omalla,
+> yleensä lyhyemmällä nimellään — heidän oma dokumentaationsa pyytää `league=Keepers` liigalle,
+> jonka GGG kirjoittaa "Keepers of the Flame". Nimen välittäminen sellaisenaan tuottaa siis
+> 404:n, joka näyttää katkokselta mutta on sanastoero.
+>
+> Tätä ei tarvitse yleensä tehdä itse. Ensimmäinen pyyntö menee GGG:n nimellä — kun nimet
+> täsmäävät, mikä on kaikkien pysyvien liigojen tilanne, ylimääräistä pyyntöä ei tule. Vasta
+> 404:n jälkeen kysytään poe.ninjalta mitä se indeksoi ja etsitään liiga sieltä. Nimi
+> ratkaistaan kerran prosessia kohti.
+>
+> Sovitus on tahallaan varovainen: kandidaatti kelpaa vain jos hardcore-, SSF- ja
+> ruthless-määreet ovat identtiset. **Väärä osuma olisi pahempi kuin 404** — hardcore-hinnat
+> softcore-arkkuun antaisivat kaavion, joka on yksinkertaisesti väärässä eikä näytä siltä.
+> Jos mikään ei sovi, virheilmoitus luettelee ne liigat jotka poe.ninjalla on, ja
+> `POE_NINJA_LEAGUE` on käsivalinta niiden joukosta.
 
 ---
 
