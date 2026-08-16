@@ -127,6 +127,7 @@ export async function startServer(options: StartOptions = {}): Promise<RunningSe
     store: priceStore,
     userAgent: config.userAgent,
     timeoutMs: config.requestTimeoutMs,
+    baseUrl: config.poeNinjaUrl,
     log,
   });
   const stash = new StashService({
