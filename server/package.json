@@ -6,7 +6,7 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "node --env-file-if-exists=../.env --watch --experimental-strip-types src/index.ts",
-    "build": "tsc -p tsconfig.build.json",
+    "build": "prisma generate && tsc -p tsconfig.build.json",
     "start": "node --env-file-if-exists=../.env dist/index.js",
     "db:migrate": "node ../scripts/with-env.mjs prisma migrate dev",
     "db:deploy": "node ../scripts/with-env.mjs prisma migrate deploy",
@@ -15,7 +15,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "verify:migrator": "node tools/verify-migrator.mjs"
+    "verify:migrator": "node tools/verify-migrator.mjs",
+    "generate": "prisma generate"
   },
   "dependencies": {
     "@fastify/static": "^10.1.3",

@@ -1,0 +1,5 @@
+
+
+# PowerShell is happiest with CRLF; the shell script must stay LF or bash chokes on \r.
+*.ps1 text eol=crlf
+*.sh  text eol=lf

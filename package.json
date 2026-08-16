@@ -19,7 +19,8 @@
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
     "desktop": "pnpm --filter @valuuttaloki/server build && pnpm --filter @valuuttaloki/web build && pnpm --filter @valuuttaloki/desktop start",
-    "desktop:package": "pnpm build && pnpm --filter @valuuttaloki/desktop package"
+    "desktop:package": "pnpm build && pnpm --filter @valuuttaloki/desktop package",
+    "postinstall": "pnpm --filter @valuuttaloki/server generate"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"
