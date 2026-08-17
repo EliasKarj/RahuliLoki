@@ -14,7 +14,7 @@ importers:
 
   desktop:
     dependencies:
-      '@valuuttaloki/server':
+      '@whatremains/server':
         specifier: workspace:*
         version: link:../server
     devDependencies:

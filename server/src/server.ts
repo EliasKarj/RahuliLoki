@@ -1,5 +1,5 @@
 /**
- * Starting valuuttaloki, as a function.
+ * Starting What Remains, as a function.
  *
  * `index.ts` used to own all of this, which was fine while the only way to run the app was
  * `node dist/index.js`. The desktop shell needs the same server inside its own process, on a
@@ -213,7 +213,7 @@ export async function startServer(options: StartOptions = {}): Promise<RunningSe
 
   log.info(
     { league: config.league, cron: config.pollCron, webDist, port: boundPort },
-    'valuuttaloki is up',
+    'What Remains is up',
   );
 
   let closing: Promise<void> | null = null;

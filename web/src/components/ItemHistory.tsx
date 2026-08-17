@@ -25,8 +25,7 @@ import { formatCount, formatDateTime, formatDay, formatInUnit, formatTime } from
 import { usePrices } from '../lib/denomination.tsx';
 import { Empty, TooltipCard } from './ui.tsx';
 import { ItemIcon } from './ItemIcon.tsx';
-
-const AXIS = { stroke: '#6b7787', fontSize: 11 };
+import { AXIS, PALETTE } from '../lib/palette.ts';
 
 export function ItemHistory({
   name,
@@ -103,7 +102,7 @@ export function ItemHistory({
         <div className="h-56 w-full">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-              <CartesianGrid stroke="#232a34" vertical={false} />
+              <CartesianGrid stroke={PALETTE.grid} vertical={false} />
               <XAxis
                 dataKey="t"
                 type="number"
@@ -137,7 +136,7 @@ export function ItemHistory({
               />
 
               <Tooltip
-                cursor={{ stroke: '#333c49' }}
+                cursor={{ stroke: PALETTE.edge }}
                 content={({ active, payload }) => {
                   const row = payload?.[0]?.payload as (typeof rows)[number] | undefined;
                   if (!active || !row) return null;
@@ -158,9 +157,9 @@ export function ItemHistory({
                 yAxisId="total"
                 type="monotone"
                 dataKey="chaosTotal"
-                stroke="#e0a458"
+                stroke={PALETTE.gold}
                 strokeWidth={1.5}
-                fill="#e0a458"
+                fill={PALETTE.gold}
                 fillOpacity={0.18}
                 isAnimationActive={false}
               />
@@ -168,7 +167,7 @@ export function ItemHistory({
                 yAxisId="each"
                 type="monotone"
                 dataKey="chaosEach"
-                stroke="#7aa2f7"
+                stroke={PALETTE.violet}
                 strokeWidth={1}
                 dot={false}
                 isAnimationActive={false}

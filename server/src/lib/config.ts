@@ -205,7 +205,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ConfigResult {
   const requestTimeoutMs = readInt(env, 'REQUEST_TIMEOUT_MS', 30_000);
   if (requestTimeoutMs <= 0) throw new ConfigError('REQUEST_TIMEOUT_MS must be positive');
 
-  const contact = env.POE_CONTACT?.trim() || 'valuuttaloki (self-hosted, single user)';
+  const contact = env.POE_CONTACT?.trim() || 'What Remains (self-hosted, single user)';
 
   // Default to loopback. The previous default of 0.0.0.0 meant that anything that started the
   // server — a laptop on café wifi, a VPS with no firewall — published it to its whole network.
@@ -224,7 +224,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ConfigResult {
     uniqueCategories: readList(env, 'PRICE_UNIQUE_CATEGORIES', DEFAULT_UNIQUE_CATEGORIES),
     priceTtlMs: priceTtlMinutes * 60_000,
     // GGG asks for a User-Agent they can identify and contact. Give them one.
-    userAgent: `valuuttaloki/${VERSION} (+https://github.com/EliasKarj/RahuliLoki) ${contact}`,
+    userAgent: `what-remains/${VERSION} (+https://github.com/EliasKarj/RahuliLoki) ${contact}`,
     port,
     host,
     authToken,

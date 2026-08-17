@@ -1,5 +1,5 @@
 {
-  "name": "valuuttaloki",
+  "name": "what-remains",
   "version": "0.1.0",
   "private": true,
   "description": "Self-hosted Path of Exile wealth tracker: scheduled stash snapshots valued against poe.ninja.",
@@ -10,17 +10,17 @@
   "packageManager": "pnpm@10.33.0",
   "scripts": {
     "dev": "concurrently -n server,web -c cyan,magenta \"pnpm dev:server\" \"pnpm dev:web\"",
-    "dev:server": "pnpm --filter @valuuttaloki/server dev",
-    "dev:web": "pnpm --filter @valuuttaloki/web dev",
-    "db:migrate": "pnpm --filter @valuuttaloki/server db:migrate",
-    "db:studio": "pnpm --filter @valuuttaloki/server db:studio",
-    "build": "pnpm --filter @valuuttaloki/web build && pnpm --filter @valuuttaloki/server build",
-    "start": "pnpm --filter @valuuttaloki/server start",
+    "dev:server": "pnpm --filter @whatremains/server dev",
+    "dev:web": "pnpm --filter @whatremains/web dev",
+    "db:migrate": "pnpm --filter @whatremains/server db:migrate",
+    "db:studio": "pnpm --filter @whatremains/server db:studio",
+    "build": "pnpm --filter @whatremains/web build && pnpm --filter @whatremains/server build",
+    "start": "pnpm --filter @whatremains/server start",
     "test": "pnpm -r test",
-    "typecheck": "pnpm --filter @valuuttaloki/server build && pnpm -r typecheck",
-    "desktop": "pnpm --filter @valuuttaloki/server build && pnpm --filter @valuuttaloki/web build && pnpm --filter @valuuttaloki/desktop start",
-    "desktop:package": "pnpm build && pnpm --filter @valuuttaloki/desktop package",
-    "postinstall": "pnpm --filter @valuuttaloki/server generate"
+    "typecheck": "pnpm --filter @whatremains/server build && pnpm -r typecheck",
+    "desktop": "pnpm --filter @whatremains/server build && pnpm --filter @whatremains/web build && pnpm --filter @whatremains/desktop start",
+    "desktop:package": "pnpm build && pnpm --filter @whatremains/desktop package",
+    "postinstall": "pnpm --filter @whatremains/server generate"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

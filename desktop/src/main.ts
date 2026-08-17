@@ -17,11 +17,12 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
 
-import { migrate } from '@valuuttaloki/server/dist/lib/migrate.js';
-import { startServer, type RunningServer } from '@valuuttaloki/server/dist/server.js';
+import { migrate } from '@whatremains/server/dist/lib/migrate.js';
+import { startServer, type RunningServer } from '@whatremains/server/dist/server.js';
 
 import { loadSettings, missingFrom, saveSettings, toEnv, type Settings } from './settings.js';
 import { clearLoginSession, loginForSession } from './login.js';
+import { adoptOldData } from './adoptOldData.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -31,7 +32,14 @@ let tray: Tray | null = null;
 let quitting = false;
 
 const userData = app.getPath('userData');
-const databaseFile = join(userData, 'valuuttaloki.db');
+const databaseFile = join(userData, 'what-remains.db');
+/**
+ * Where this app's data lived when it was called valuuttaloki.
+ *
+ * Electron builds `userData` from appData plus the application name, so the rename moved the
+ * folder out from under every existing install. See adoptOldData.ts.
+ */
+const legacyUserData = join(app.getPath('appData'), 'valuuttaloki');
 // Migrations ship as SQL next to the server build; see server/src/lib/migrate.ts for why the
 // Prisma CLI is not involved.
 const migrationsDir = join(here, '..', '..', 'server', 'prisma', 'migrations');
@@ -112,7 +120,7 @@ function createWindow(): void {
     height: 820,
     minWidth: 900,
     minHeight: 600,
-    title: 'valuuttaloki',
+    title: 'What Remains',
     backgroundColor: '#12161c',
     autoHideMenuBar: true,
     webPreferences: {
@@ -157,7 +165,7 @@ function buildTray(): void {
     'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
   );
   tray = new Tray(icon);
-  tray.setToolTip('valuuttaloki');
+  tray.setToolTip('What Remains');
   refreshTray();
   tray.on('click', showWindow);
 }
@@ -178,7 +186,7 @@ function refreshTray(): void {
 
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: `valuuttaloki — ${status}`, enabled: false },
+      { label: `What Remains — ${status}`, enabled: false },
       { type: 'separator' },
       { label: 'Open', click: showWindow },
       {
@@ -260,6 +268,19 @@ ipcMain.handle('session:forget', async () => {
 // ── boot ────────────────────────────────────────────────────────────────────────
 
 async function boot(): Promise<void> {
+  // Before anything reads the settings: an install that predates the rename keeps its session,
+  // its account and its history rather than waking up as a fresh one.
+  try {
+    const adopted = adoptOldData({ from: legacyUserData, to: userData });
+    if (adopted.copied.length > 0) {
+      console.error(`adopted ${adopted.copied.join(', ')} from ${legacyUserData}`);
+    }
+  } catch (error) {
+    // Not fatal. The app still starts; it starts empty, which is exactly what it would have
+    // done without this, and the old folder is untouched either way.
+    console.error(`could not adopt the old data directory: ${(error as Error).message}`);
+  }
+
   const settings = loadSettings(userData);
   app.setLoginItemSettings({ openAtLogin: settings.launchAtLogin });
 
@@ -270,7 +291,7 @@ async function boot(): Promise<void> {
     }
   } catch (error) {
     dialog.showErrorBox(
-      'valuuttaloki could not prepare its database',
+      'What Remains could not prepare its database',
       `${(error as Error).message}\n\nDatabase: ${databaseFile}`,
     );
     app.quit();
@@ -280,7 +301,7 @@ async function boot(): Promise<void> {
   try {
     await restartServer(settings);
   } catch (error) {
-    dialog.showErrorBox('valuuttaloki could not start', (error as Error).message);
+    dialog.showErrorBox('What Remains could not start', (error as Error).message);
     app.quit();
     return;
   }
@@ -296,13 +317,13 @@ async function boot(): Promise<void> {
 /**
  * A test seam, not a feature.
  *
- * `VALUUTTALOKI_SMOKE=<path>` waits for the dashboard to finish loading, writes a screenshot
+ * `WHAT_REMAINS_SMOKE=<path>` waits for the dashboard to finish loading, writes a screenshot
  * there, and exits with a status that says whether the renderer logged any errors. It exists
  * because "the server returned 200" and "the window actually rendered" are different claims,
  * and only one of them can be read off a log.
  */
 async function maybeSmokeTest(): Promise<void> {
-  const target = process.env.VALUUTTALOKI_SMOKE;
+  const target = process.env.WHAT_REMAINS_SMOKE;
   if (target === undefined || target === '' || mainWindow === null) return;
 
   const errors: string[] = [];

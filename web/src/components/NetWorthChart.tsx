@@ -25,8 +25,7 @@ import { annotationPoints, netWorthRows } from '../lib/series.ts';
 import { formatChaos, formatDateTime, formatDay, formatDivine, formatInUnit, formatTime } from '../lib/format.ts';
 import { usePrices } from '../lib/denomination.tsx';
 import { Empty, TooltipCard } from './ui.tsx';
-
-const AXIS = { stroke: '#6b7787', fontSize: 11 };
+import { AXIS, PALETTE } from '../lib/palette.ts';
 
 interface Props {
   snapshots: SnapshotWithTabs[];
@@ -53,12 +52,12 @@ export function NetWorthChart({ snapshots, intervals, wide }: Props) {
         <ComposedChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
           <defs>
             <linearGradient id="chaosFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#e0a458" stopOpacity={0.35} />
-              <stop offset="100%" stopColor="#e0a458" stopOpacity={0.02} />
+              <stop offset="0%" stopColor={PALETTE.gold} stopOpacity={0.35} />
+              <stop offset="100%" stopColor={PALETTE.gold} stopOpacity={0.02} />
             </linearGradient>
           </defs>
 
-          <CartesianGrid stroke="#232a34" vertical={false} />
+          <CartesianGrid stroke={PALETTE.grid} vertical={false} />
           <XAxis
             dataKey="t"
             type="number"
@@ -91,7 +90,7 @@ export function NetWorthChart({ snapshots, intervals, wide }: Props) {
           />
 
           <Tooltip
-            cursor={{ stroke: '#333c49' }}
+            cursor={{ stroke: PALETTE.edge }}
             content={({ active, payload }) => {
               const row = payload?.[0]?.payload as ReturnType<typeof netWorthRows>[number] | undefined;
               if (!active || !row) return null;
@@ -113,7 +112,7 @@ export function NetWorthChart({ snapshots, intervals, wide }: Props) {
             yAxisId="chaos"
             type="monotone"
             dataKey="chaos"
-            stroke="#e0a458"
+            stroke={PALETTE.gold}
             strokeWidth={1.75}
             fill="url(#chaosFill)"
             isAnimationActive={false}
@@ -123,7 +122,7 @@ export function NetWorthChart({ snapshots, intervals, wide }: Props) {
             yAxisId="divine"
             type="monotone"
             dataKey="divineRate"
-            stroke="#7aa2f7"
+            stroke={PALETTE.violet}
             strokeWidth={1}
             strokeDasharray="4 3"
             dot={false}
@@ -137,8 +136,8 @@ export function NetWorthChart({ snapshots, intervals, wide }: Props) {
               x={mark.t}
               y={mark.chaos}
               r={4}
-              fill={mark.deltaChaos >= 0 ? '#e0a458' : '#6b7787'}
-              stroke="#0f1216"
+              fill={mark.deltaChaos >= 0 ? PALETTE.gold : PALETTE.dust}
+              stroke={PALETTE.surface}
               strokeWidth={1.5}
               isFront
             />

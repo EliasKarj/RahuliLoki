@@ -24,7 +24,7 @@
  */
 
 import { BrowserWindow, session, type Session } from 'electron';
-import { fetchProfile } from '@valuuttaloki/server/dist/services/profileService.js';
+import { fetchProfile } from '@whatremains/server/dist/services/profileService.js';
 import { awaitVerifiedSession } from './sessionWait.js';
 import { allowedHost } from './loginHosts.js';
 
@@ -55,7 +55,7 @@ export interface LoginResult {
  */
 export async function loginForSession(
   parent?: BrowserWindow,
-  userAgent = 'valuuttaloki (desktop)',
+  userAgent = 'what-remains (desktop)',
 ): Promise<LoginResult> {
   const loginSession = session.fromPartition(PARTITION);
 

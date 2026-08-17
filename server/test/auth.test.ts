@@ -51,7 +51,7 @@ describe('isLoopbackHost', () => {
   });
 
   it('does not mistake a public name for one', () => {
-    for (const host of ['valuuttaloki.fly.dev', 'localhost.evil.com', '10.0.0.5']) {
+    for (const host of ['what-remains.fly.dev', 'localhost.evil.com', '10.0.0.5']) {
       expect(isLoopbackHost(host), host).toBe(false);
     }
   });
@@ -111,7 +111,7 @@ describe('resolveAuth', () => {
 });
 
 describe('the API behind a token', () => {
-  const env = { AUTH_TOKEN: TOKEN, ALLOWED_HOSTS: 'valuuttaloki.fly.dev' } as NodeJS.ProcessEnv;
+  const env = { AUTH_TOKEN: TOKEN, ALLOWED_HOSTS: 'what-remains.fly.dev' } as NodeJS.ProcessEnv;
   const auth = { authorization: `Bearer ${TOKEN}` };
 
   it('refuses to serve wealth data without one', async () => {

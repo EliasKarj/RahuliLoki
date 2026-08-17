@@ -77,7 +77,7 @@ describe('loadConfig', () => {
 
   it('puts a contact in the User-Agent so GGG can reach the operator', () => {
     const { config } = loadConfig({ ...base, POE_CONTACT: 'me@example.com' } as NodeJS.ProcessEnv);
-    expect(config.userAgent).toContain('valuuttaloki/');
+    expect(config.userAgent).toContain('what-remains/');
     expect(config.userAgent).toContain('me@example.com');
   });
 });

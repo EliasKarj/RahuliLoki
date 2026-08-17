@@ -76,7 +76,7 @@ function world(overrides: Parameters<typeof worldFetch>[0] = {}) {
         accountName: 'Exile#1234',
         league: 'Settlers',
         poesessid: 'x'.repeat(32),
-        userAgent: 'valuuttaloki/test',
+        userAgent: 'what-remains/test',
         limiter,
       }),
       now: () => Date.parse('2026-01-01T00:00:00Z'),

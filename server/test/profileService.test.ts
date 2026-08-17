@@ -19,7 +19,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 const SESSION = 'f00dcafe'.repeat(4);
 
 function options(fetchFn: typeof fetch, poesessid = SESSION) {
-  return { poesessid, userAgent: 'valuuttaloki/test', fetchFn };
+  return { poesessid, userAgent: 'what-remains/test', fetchFn };
 }
 
 describe('parseProfile', () => {

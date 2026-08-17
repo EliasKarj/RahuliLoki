@@ -50,7 +50,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 function service(options: { fetchFn?: typeof fetch; known?: string[] } = {}) {
   return new LeagueService({
-    userAgent: 'valuuttaloki/test',
+    userAgent: 'what-remains/test',
     knownLeagues: async () => options.known ?? [],
     fetchFn: options.fetchFn ?? (vi.fn(async () => jsonResponse(gggResponse)) as unknown as typeof fetch),
     now: () => 0,
@@ -164,7 +164,7 @@ describe('LeagueService', () => {
 
   it('survives the snapshot store failing while building the fallback', async () => {
     const subject = new LeagueService({
-      userAgent: 'valuuttaloki/test',
+      userAgent: 'what-remains/test',
       knownLeagues: async () => {
         throw new Error('database is gone');
       },

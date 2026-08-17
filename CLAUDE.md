@@ -1,4 +1,4 @@
-# CLAUDE.md — valuuttaloki
+# CLAUDE.md — What Remains
 
 Path of Exile wealth tracker. Polls stash tabs on a schedule, values them against poe.ninja
 prices, stores snapshots, and charts currency accumulation over time.
@@ -171,7 +171,7 @@ POE_LEAGUE=
 POLL_CRON=*/10 * * * *
 MIN_ITEM_CHAOS=2
 TRACKED_TABS=          # comma-separated tab names; empty = all
-DATABASE_URL=file:./data/valuuttaloki.db
+DATABASE_URL=file:./data/what-remains.db
 ```
 
 `POESESSID` is a full account credential — it is not a scoped API key. Never log it, never

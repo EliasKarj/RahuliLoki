@@ -1,44 +1,58 @@
 @import 'tailwindcss';
 
 /**
- * Dark, two accents, everything else neutral.
+ * The Citadel at the End of Time.
+ *
+ * A stash tracker is a ledger of what is left after a league has burned through: what you kept,
+ * what it is worth now, and what the currency did to it while you were not looking. That is the
+ * mood the palette is after — the last structure standing in the dark, lit by something that is
+ * going out.
+ *
+ * So: a void that is not quite black and not quite neutral (there is violet in it), gold that
+ * reads as the only light in the room, and violet for time itself.
  *
  *   accent  — chaos. The colour of the orb, and of every "wealth" quantity in the app.
- *   cool    — divine. Used for the divine-rate overlay and divine-denominated numbers only,
- *             so that "is this a real gain or is divine just inflating?" is answerable by eye.
+ *   cool    — divine. The divine-rate overlay and divine-denominated numbers only, so that
+ *             "is this a real gain or is divine just inflating?" is answerable by eye.
  *
  * Losses are drawn in a neutral rather than a third hue: a red would be a new colour for a
  * quantity that is already distinguishable by direction.
  *
+ * The chart colours live in lib/palette.ts, because SVG takes colours as props rather than as
+ * classes. Those two files are the whole palette; change both or neither.
+ *
  * JetBrains Mono is not bundled — this app ships as a single self-hosted container and should
  * not fetch fonts from anyone. Install it locally for the intended look; the stack falls back
- * to the platform's monospace otherwise.
+ * to the platform's monospace otherwise. The display face is deliberately whatever serif the
+ * platform already has: a wordmark in wide caps reads as carved in any of them.
  */
 
 @theme {
-  --color-ink-950: #0a0c10;
-  --color-ink-900: #0f1216;
-  --color-ink-850: #14181e;
-  --color-ink-800: #191e26;
-  --color-ink-700: #232a34;
-  --color-ink-600: #333c49;
-  --color-ink-400: #6b7787;
-  --color-ink-300: #8d99a9;
-  --color-ink-200: #b9c2ce;
-  --color-ink-100: #e4e8ee;
+  --color-ink-950: #070610;
+  --color-ink-900: #0c0a16;
+  --color-ink-850: #100d1a;
+  --color-ink-800: #171325;
+  --color-ink-700: #221c33;
+  --color-ink-600: #332a49;
+  --color-ink-400: #7a6f92;
+  --color-ink-300: #9e93b5;
+  --color-ink-200: #c6bcd8;
+  --color-ink-100: #ece7f4;
 
-  --color-accent-500: #e0a458;
-  --color-accent-400: #edb974;
-  --color-accent-600: #b8823c;
+  --color-accent-500: #e2a94f;
+  --color-accent-400: #f2c97e;
+  --color-accent-600: #a8762f;
 
-  --color-cool-500: #7aa2f7;
-  --color-cool-400: #9bbaf9;
-  --color-cool-600: #5b82d4;
+  --color-cool-500: #9d7bf0;
+  --color-cool-400: #bda3ff;
+  --color-cool-600: #6d4bc9;
 
   --font-mono:
     'JetBrains Mono', ui-monospace, 'SFMono-Regular', 'Menlo', 'Consolas', monospace;
   --font-sans:
     ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  --font-display:
+    'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
 }
 
 html {
@@ -46,12 +60,48 @@ html {
   background-color: var(--color-ink-950);
 }
 
+/**
+ * The void behind everything.
+ *
+ * Three fixed layers, none of which move or repaint while scrolling: violet bleeding in from
+ * above, an ember low and centred, and a vignette closing the corners. They are dim on purpose
+ * — this sits under a screen of small numbers, and anything strong enough to notice directly
+ * would be strong enough to read them through.
+ */
 body {
   margin: 0;
+  min-height: 100vh;
   background-color: var(--color-ink-950);
+  background-image:
+    radial-gradient(90rem 40rem at 50% -12rem, rgba(120, 86, 200, 0.18), transparent 70%),
+    radial-gradient(70rem 26rem at 50% 108%, rgba(226, 169, 79, 0.07), transparent 70%),
+    radial-gradient(120rem 90rem at 50% 40%, transparent 35%, rgba(2, 1, 6, 0.9) 100%);
+  background-attachment: fixed;
   color: var(--color-ink-100);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+}
+
+/**
+ * The wordmark: carved rather than typeset.
+ *
+ * Wide caps in a serif read as an inscription, and the gradient takes the light off the top of
+ * the letters the way it would off stone. `background-clip: text` needs a transparent fill,
+ * which is why the colour is given twice.
+ */
+.wordmark {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.26em;
+  background-image: linear-gradient(
+    180deg,
+    var(--color-accent-400) 0%,
+    var(--color-accent-500) 55%,
+    var(--color-accent-600) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 /** Every number in the app: monospaced, tabular, so columns line up and digits do not jitter. */
@@ -59,6 +109,18 @@ body {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   text-align: right;
+}
+
+/**
+ * The one figure the app exists to show, lit like metal.
+ *
+ * A glow this faint does nothing at small sizes and everything at seven rems — which is where
+ * it is used, and nowhere else.
+ */
+.ember {
+  text-shadow:
+    0 0 2.5rem rgba(226, 169, 79, 0.3),
+    0 0 0.75rem rgba(226, 169, 79, 0.12);
 }
 
 /** Recharts draws its own focus outline on every hover; suppress it. */

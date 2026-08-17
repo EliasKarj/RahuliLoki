@@ -162,7 +162,7 @@ export function registerAuth(
       if (exempt.has(path)) return;
       return reply
         .code(401)
-        .header('www-authenticate', 'Bearer realm="valuuttaloki"')
+        .header('www-authenticate', 'Bearer realm="What Remains"')
         .send({ error: 'authentication required' });
     }
   });

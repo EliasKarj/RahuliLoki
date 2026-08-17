@@ -14,7 +14,7 @@
 
 import { contextBridge, ipcRenderer } from 'electron';
 
-contextBridge.exposeInMainWorld('valuuttaloki', {
+contextBridge.exposeInMainWorld('whatRemains', {
   /** Settings minus the credential, plus `hasSession` and what is still missing. */
   readSettings: () => ipcRenderer.invoke('settings:read'),
 

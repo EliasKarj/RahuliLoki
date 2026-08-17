@@ -18,9 +18,9 @@ COPY server ./server
 COPY web ./web
 
 # The Prisma client is generated code; it has to exist before the server compiles.
-RUN pnpm --filter @valuuttaloki/server exec prisma generate
-RUN pnpm --filter @valuuttaloki/web build
-RUN pnpm --filter @valuuttaloki/server build
+RUN pnpm --filter @whatremains/server exec prisma generate
+RUN pnpm --filter @whatremains/web build
+RUN pnpm --filter @whatremains/server build
 
 # Ship only what runs: compiled server, built SPA, production dependencies, migrations.
 #
@@ -29,7 +29,7 @@ RUN pnpm --filter @valuuttaloki/server build
 # `pnpm deploy` reproduces, and the copied @prisma/client was the ungenerated stub with no
 # named ESM exports. schema.prisma now emits into server/generated, which removes the special
 # case entirely; the same change is what made the desktop package work.
-RUN pnpm --filter @valuuttaloki/server --prod deploy --legacy /runtime \
+RUN pnpm --filter @whatremains/server --prod deploy --legacy /runtime \
   && cp -r server/dist /runtime/dist \
   && cp -r server/generated /runtime/generated \
   && cp -r server/prisma /runtime/prisma \
@@ -54,7 +54,7 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 RUN mkdir -p /data && chown node:node /data
 
 ENV NODE_ENV=production
-ENV DATABASE_URL=file:/data/valuuttaloki.db
+ENV DATABASE_URL=file:/data/what-remains.db
 ENV PORT=3000
 # A container has to bind every interface to be reachable through a port mapping at all. That
 # is a wide bind, so the server refuses to start unless the operator supplies AUTH_TOKEN — or

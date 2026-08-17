@@ -35,13 +35,13 @@ export interface DesktopBridge {
 
 declare global {
   interface Window {
-    valuuttaloki?: DesktopBridge;
+    whatRemains?: DesktopBridge;
   }
 }
 
 /** The bridge when running inside the desktop shell, null in a browser. */
 export function bridge(): DesktopBridge | null {
-  return typeof window !== 'undefined' && window.valuuttaloki?.isDesktop === true
-    ? window.valuuttaloki
+  return typeof window !== 'undefined' && window.whatRemains?.isDesktop === true
+    ? window.whatRemains
     : null;
 }

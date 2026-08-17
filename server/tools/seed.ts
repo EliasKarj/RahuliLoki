@@ -6,7 +6,7 @@
  * everything around it. Waiting three days of wall-clock time to find out that the tooltip
  * overlaps the axis is not a workflow.
  *
- *   pnpm --filter @valuuttaloki/server seed -- --days 4 --league Settlers
+ *   pnpm --filter @whatremains/server seed -- --days 4 --league Settlers
  *
  * It refuses to touch a league that already has snapshots unless --force is passed, so it
  * cannot quietly bury real history under invented numbers.

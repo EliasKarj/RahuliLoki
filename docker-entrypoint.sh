@@ -8,7 +8,7 @@ set -eu
 DB_PATH="${DATABASE_URL#file:}"
 mkdir -p "$(dirname "$DB_PATH")"
 
-echo "valuuttaloki: applying migrations to $DB_PATH"
+echo "what-remains: applying migrations to $DB_PATH"
 ./node_modules/.bin/prisma migrate deploy --schema ./prisma/schema.prisma
 
 exec "$@"

@@ -23,7 +23,7 @@ export function TokenGate({ onUnlock, rejected }: { onUnlock: () => void; reject
 
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-4">
-      <h1 className="text-lg font-semibold tracking-tight text-ink-100">valuuttaloki</h1>
+      <h1 className="wordmark text-base font-semibold">What Remains</h1>
       <p className="mt-2 text-sm text-ink-400">
         This instance is protected by an API token. Paste the value of <code>AUTH_TOKEN</code> from
         the server&rsquo;s environment.

@@ -67,7 +67,9 @@ export default function App() {
       <header className="mb-6">
         <div className="flex flex-wrap items-baseline justify-between gap-3">
           <div className="flex items-baseline gap-3">
-            <h1 className="text-lg font-semibold tracking-tight text-ink-100">valuuttaloki</h1>
+            {/* Carved, not typeset — see .wordmark. The trailing letter's tracking is padding
+                on the right of the last glyph, so the league beside it needs no extra gap. */}
+            <h1 className="wordmark text-base font-semibold">What Remains</h1>
             {leagues.length > 1 ? (
               <select
                 value={activeLeague}
@@ -191,7 +193,7 @@ export default function App() {
       )}
 
       <footer className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-ink-800 pt-4 text-xs text-ink-400">
-        <span>valuuttaloki {config?.version ?? ''}</span>
+        <span>What Remains {config?.version ?? ''}</span>
         {config ? <span>items under {config.minItemChaos}c are not counted</span> : null}
         {config && config.trackedTabs.length > 0 ? (
           <span>tracking {config.trackedTabs.join(', ')}</span>

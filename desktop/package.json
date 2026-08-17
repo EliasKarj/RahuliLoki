@@ -1,5 +1,5 @@
 {
-  "name": "@valuuttaloki/desktop",
+  "name": "@whatremains/desktop",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -14,7 +14,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@valuuttaloki/server": "workspace:*"
+    "@whatremains/server": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.13.1",

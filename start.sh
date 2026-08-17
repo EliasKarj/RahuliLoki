@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# valuuttaloki — one command from a fresh clone to a running dashboard.
+# What Remains — one command from a fresh clone to a running dashboard.
 #
 #   ./start.sh              set up if needed, build, serve on http://127.0.0.1:3000
 #   ./start.sh --dev        hot-reloading server + Vite, for working on the code
@@ -59,7 +59,7 @@ note() { printf '    %s%s%s\n' "$DIM" "$1" "$RESET"; }
 # ── 1. prerequisites ──────────────────────────────────────────────────────────
 step "Checking what this machine has"
 
-command -v node >/dev/null 2>&1 || die "node is not installed. valuuttaloki needs Node 22 or newer."
+command -v node >/dev/null 2>&1 || die "node is not installed. What Remains needs Node 22 or newer."
 
 NODE_MAJOR=$(node -p 'process.versions.node.split(".")[0]')
 [ "$NODE_MAJOR" -ge 22 ] || die "Node $(node -v) is too old. This needs 22 or newer."
@@ -147,7 +147,7 @@ POE_LEAGUE=$LEAGUE_VALUE
 POLL_CRON=*/10 * * * *
 MIN_ITEM_CHAOS=2
 TRACKED_TABS=
-DATABASE_URL=file:./data/valuuttaloki.db
+DATABASE_URL=file:./data/what-remains.db
 PORT=3000
 $HOST_LINE
 $AUTH_LINE
@@ -184,11 +184,11 @@ pnpm install --frozen-lockfile >/dev/null 2>&1 || pnpm install
 ok "dependencies ready"
 
 step "Preparing the database"
-pnpm --filter @valuuttaloki/server exec prisma generate >/dev/null 2>&1
+pnpm --filter @whatremains/server exec prisma generate >/dev/null 2>&1
 ok "Prisma client generated"
 # Through the package script, which loads the root .env for the Prisma CLI — the CLI only looks
 # beside the schema and in its own cwd, and the one .env in this workspace is at the top.
-if ! MIGRATE_OUT=$(pnpm --filter @valuuttaloki/server db:deploy 2>&1); then
+if ! MIGRATE_OUT=$(pnpm --filter @whatremains/server db:deploy 2>&1); then
   printf '%s\n' "$MIGRATE_OUT" >&2
   die "Migrations failed. The database is not usable; nothing was started."
 fi
@@ -196,7 +196,7 @@ ok "migrations applied"
 
 if [ "$SEED" = 1 ]; then
   step "Seeding invented data"
-  pnpm --filter @valuuttaloki/server seed -- --days 3 --league "$LEAGUE" --force
+  pnpm --filter @whatremains/server seed -- --days 3 --league "$LEAGUE" --force
   warn "That data is fabricated. Delete server/prisma/data/*.db before trusting any chart."
 fi
 
@@ -230,9 +230,9 @@ ok "server and dashboard built"
 step "Starting"
 # The server logs structured JSON, one line per request. Interleaved with this script's output
 # it buries everything; in a file it is still there when something needs diagnosing.
-SERVER_LOG=${TMPDIR:-/tmp}/valuuttaloki.log
+SERVER_LOG=${TMPDIR:-/tmp}/what-remains.log
 : > "$SERVER_LOG"
-pnpm --filter @valuuttaloki/server start >>"$SERVER_LOG" 2>&1 &
+pnpm --filter @whatremains/server start >>"$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 # Without this the server keeps running in the background after Ctrl-C, holding the port and
 # quietly polling GGG with nothing on screen to say so.
@@ -307,7 +307,7 @@ fi
 # ── 6. what now ───────────────────────────────────────────────────────────────
 cat <<EOF
 
-$BOLD  valuuttaloki is up$RESET
+$BOLD  What Remains is up$RESET
 
     Dashboard   $URL
     League      $LEAGUE

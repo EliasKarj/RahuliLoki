@@ -31,7 +31,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       # The Prisma client is generated code the server imports; typecheck fails without it.
-      - run: pnpm --filter @valuuttaloki/server exec prisma generate
+      - run: pnpm --filter @whatremains/server exec prisma generate
 
       - run: pnpm typecheck
 
@@ -50,7 +50,7 @@ jobs:
       # The desktop build ships its own migrator instead of the Prisma CLI's 36 MB of engines.
       # That is only sound while the two produce identical databases, so CI asks Prisma itself.
       - name: Verify the standalone migrator matches Prisma
-        run: pnpm --filter @valuuttaloki/server verify:migrator
+        run: pnpm --filter @whatremains/server verify:migrator
 
       # A known-vulnerable dependency should fail the build here rather than be discovered on
       # the volume holding a league's history. This app serves an authenticated HTTP surface

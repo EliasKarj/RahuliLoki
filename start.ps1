@@ -1,4 +1,4 @@
-# valuuttaloki - one command from a fresh clone to a running dashboard, on Windows.
+# What Remains - one command from a fresh clone to a running dashboard, on Windows.
 #
 #   .\start.ps1              set up if needed, build, serve on http://127.0.0.1:3000
 #   .\start.ps1 -Desktop     build and launch the desktop application instead
@@ -116,7 +116,7 @@ function New-Configuration {
         "POLL_CRON=*/10 * * * *"
         "MIN_ITEM_CHAOS=2"
         "TRACKED_TABS="
-        "DATABASE_URL=file:./data/valuuttaloki.db"
+        "DATABASE_URL=file:./data/what-remains.db"
         "PORT=3000"
         "HOST=127.0.0.1"
         "AUTH_TOKEN="
@@ -163,20 +163,20 @@ if ($LASTEXITCODE -ne 0) { Stop-With "pnpm install failed." }
 Write-Ok "dependencies ready"
 
 Write-Step "Preparing the database"
-& pnpm --filter '@valuuttaloki/server' exec prisma generate | Out-Null
+& pnpm --filter '@whatremains/server' exec prisma generate | Out-Null
 if ($LASTEXITCODE -ne 0) { Stop-With "prisma generate failed." }
 Write-Ok "Prisma client generated"
 
 if (-not $Desktop) {
     # The desktop build migrates its own database in the user data directory at startup.
-    & pnpm --filter '@valuuttaloki/server' db:deploy | Out-Null
+    & pnpm --filter '@whatremains/server' db:deploy | Out-Null
     if ($LASTEXITCODE -ne 0) { Stop-With "Migrations failed. The database is not usable; nothing was started." }
     Write-Ok "migrations applied"
 }
 
 if ($Seed) {
     Write-Step "Seeding invented data"
-    & pnpm --filter '@valuuttaloki/server' seed -- --days 3 --force
+    & pnpm --filter '@whatremains/server' seed -- --days 3 --force
     Write-Warn "That data is fabricated. Delete server\prisma\data\*.db before trusting any chart."
 }
 
@@ -215,5 +215,5 @@ Write-Note "The first chart needs two snapshots, so give it twenty minutes - or 
 Write-Note "`"poll now`" on the page. Ctrl-C stops everything."
 Write-Host ""
 
-& pnpm --filter '@valuuttaloki/server' start
+& pnpm --filter '@whatremains/server' start
 exit $LASTEXITCODE

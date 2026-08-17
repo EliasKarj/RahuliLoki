@@ -27,7 +27,7 @@ const serverDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const migrations = join(serverDir, 'prisma', 'migrations');
 const schema = join(serverDir, 'prisma', 'schema.prisma');
 
-const work = mkdtempSync(join(tmpdir(), 'valuuttaloki-verify-'));
+const work = mkdtempSync(join(tmpdir(), 'what-remains-verify-'));
 const dbFile = join(work, 'verify.db');
 
 function prisma(args, env = {}) {

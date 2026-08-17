@@ -13,8 +13,7 @@ import { rateRows } from '../lib/series.ts';
 import { formatDateTime, formatDay, formatHours, formatInUnit, formatTime } from '../lib/format.ts';
 import { usePrices } from '../lib/denomination.tsx';
 import { Empty, TooltipCard } from './ui.tsx';
-
-const AXIS = { stroke: '#6b7787', fontSize: 11 };
+import { AXIS, PALETTE } from '../lib/palette.ts';
 
 export function RatePerHourChart({ intervals, wide }: { intervals: SeriesInterval[]; wide: boolean }) {
   const prices = usePrices();
@@ -31,7 +30,7 @@ export function RatePerHourChart({ intervals, wide }: { intervals: SeriesInterva
     <div className="h-64 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-          <CartesianGrid stroke="#232a34" vertical={false} />
+          <CartesianGrid stroke={PALETTE.grid} vertical={false} />
           <XAxis
             dataKey="t"
             type="number"
@@ -51,10 +50,10 @@ export function RatePerHourChart({ intervals, wide }: { intervals: SeriesInterva
             axisLine={false}
             width={56}
           />
-          <ReferenceLine y={0} stroke="#333c49" />
+          <ReferenceLine y={0} stroke={PALETTE.edge} />
 
           <Tooltip
-            cursor={{ fill: '#191e26' }}
+            cursor={{ fill: PALETTE.hairline }}
             content={({ active, payload }) => {
               const row = payload?.[0]?.payload as ReturnType<typeof rateRows>[number] | undefined;
               if (!active || !row) return null;
@@ -76,8 +75,8 @@ export function RatePerHourChart({ intervals, wide }: { intervals: SeriesInterva
             {rows.map((row) => (
               <Cell
                 key={row.to}
-                fill={row.idle ? '#333c49' : row.chaosPerHour >= 0 ? '#e0a458' : '#6b7787'}
-                stroke={row.annotated ? '#7aa2f7' : undefined}
+                fill={row.idle ? PALETTE.edge : row.chaosPerHour >= 0 ? PALETTE.gold : PALETTE.dust}
+                stroke={row.annotated ? PALETTE.violet : undefined}
                 strokeWidth={row.annotated ? 1.25 : 0}
               />
             ))}

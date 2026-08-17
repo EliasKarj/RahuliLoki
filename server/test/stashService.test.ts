@@ -43,7 +43,7 @@ function service(fetchFn: typeof fetch, trackedTabs: string[] = []) {
     accountName: 'Exile#1234',
     league: 'Settlers',
     poesessid: SESSION,
-    userAgent: 'valuuttaloki/test',
+    userAgent: 'what-remains/test',
     trackedTabs,
     limiter,
   });
@@ -101,7 +101,7 @@ describe('StashService', () => {
     ];
     expect(url).not.toContain(SESSION);
     expect((init.headers as Record<string, string>).cookie).toBe(`POESESSID=${SESSION}`);
-    expect((init.headers as Record<string, string>)['user-agent']).toBe('valuuttaloki/test');
+    expect((init.headers as Record<string, string>)['user-agent']).toBe('what-remains/test');
   });
 
   it('reuses the tab-list response for tab 0 instead of spending a second request', async () => {
@@ -257,7 +257,7 @@ describe('StashService', () => {
       accountName: 'Exile#1234',
       league: 'Settlers',
       poesessid: SESSION,
-      userAgent: 'valuuttaloki/test',
+      userAgent: 'what-remains/test',
       limiter,
       maxBytes: 1024,
     });

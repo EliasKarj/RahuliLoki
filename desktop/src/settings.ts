@@ -97,7 +97,7 @@ export function toEnv(settings: Settings, databaseFile: string): NodeJS.ProcessE
     HOST: '127.0.0.1',
     AUTH_TOKEN: '',
     ALLOW_UNAUTHENTICATED: '',
-    LOG_LEVEL: process.env.VALUUTTALOKI_LOG_LEVEL ?? 'info',
+    LOG_LEVEL: process.env.WHAT_REMAINS_LOG_LEVEL ?? 'info',
     // Passed through so an operator can redirect it without rebuilding the app.
     ...(process.env.POE_NINJA_URL ? { POE_NINJA_URL: process.env.POE_NINJA_URL } : {}),
   };

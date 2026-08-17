@@ -1,7 +1,7 @@
 # Fly.io deployment.
 #
 #   fly launch --no-deploy --copy-config
-#   fly volumes create valuuttaloki_data --size 1 --region arn
+#   fly volumes create what_remains_data --size 1 --region arn
 #   fly secrets set POESESSID=… POE_ACCOUNT_NAME='Exile#1234' POE_LEAGUE=Settlers \
 #     AUTH_TOKEN="$(openssl rand -hex 32)"
 #   fly deploy
@@ -15,7 +15,7 @@
 # server refuses to boot on a public bind without it — that refusal is the feature, so do not
 # reach for ALLOW_UNAUTHENTICATED to silence it.
 
-app = 'valuuttaloki'
+app = 'what-remains'
 primary_region = 'arn'
 
 [build]
@@ -28,12 +28,12 @@ primary_region = 'arn'
   # client-supplied and would put forged addresses in the logs.
   TRUST_PROXY = '1'
   HOST = '0.0.0.0'
-  DATABASE_URL = 'file:/data/valuuttaloki.db'
+  DATABASE_URL = 'file:/data/what-remains.db'
   POLL_CRON = '*/10 * * * *'
   MIN_ITEM_CHAOS = '2'
 
 [mounts]
-  source = 'valuuttaloki_data'
+  source = 'what_remains_data'
   destination = '/data'
 
 [http_service]

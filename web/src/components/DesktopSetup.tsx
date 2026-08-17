@@ -180,7 +180,7 @@ export function DesktopSetup({ onChanged }: { onChanged: () => void }) {
         >
           <div className="flex items-baseline justify-between gap-2">
             <h2 className="text-sm font-medium text-ink-100">
-              {configured ? 'Account' : 'Set up valuuttaloki'}
+              {configured ? 'Account' : 'Set up What Remains'}
             </h2>
             <button
               type="button"

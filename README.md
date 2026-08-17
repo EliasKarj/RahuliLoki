@@ -1,9 +1,11 @@
 <div align="center">
 
-# 💰 valuuttaloki
+# What Remains
 
 **Path of Exile -varallisuusseuranta, joka kerää itse. Ei nappia jota painaa, ei tiliä
 kolmannelle osapuolelle — oma kontti, oma tietokanta.**
+
+*Mitä liigasta jäi jäljelle, kun se paloi loppuun.*
 
 Ajastin lukee aarrearkun välilehdet, arvostaa ne poe.ninjan hinnoilla ja piirtää
 varallisuuden kertymisen liigan alusta loppuun.
@@ -21,7 +23,7 @@ varallisuuden kertymisen liigan alusta loppuun.
 - [POESESSID ja miksi siihen suhtaudutaan näin](#poesessid-ja-miksi-siihen-suhtaudutaan-näin) — sekä miksi GGG:n OAuth ei tähän käy
 - [Pääsynhallinta](#pääsynhallinta) — mitä token suojaa ja miksi palvelin kieltäytyy käynnistymästä
 - [Asetukset](#asetukset)
-- [Mitä sivu näyttää](#mitä-sivu-näyttää)
+- [Mitä sivu näyttää](#mitä-sivu-näyttää) — ja mihin ulkoasu nojaa
 - [Miten luvut lasketaan](#miten-luvut-lasketaan)
 - [Nopeusrajoitus](#nopeusrajoitus)
 - [Hinnoittelu ja nimien selvitys](#hinnoittelu-ja-nimien-selvitys)
@@ -29,6 +31,7 @@ varallisuuden kertymisen liigan alusta loppuun.
 - [Kehitys](#kehitys)
 - [Testit](#testit)
 - [Projektin rakenne](#projektin-rakenne)
+- [Päivitys valuuttalokista](#päivitys-valuuttalokista) — mikä siirtyy itse ja mikä ei
 - [Varmuuskopiot ja liigan vaihtuminen](#varmuuskopiot-ja-liigan-vaihtuminen)
 - [Mitä tämä ei tee](#mitä-tämä-ei-tee)
 
@@ -166,14 +169,14 @@ käynnistyy sen jälkeen uudelleen taustalla.
 ### Yksi komento (nopein)
 
 ```bash
-git clone https://github.com/EliasKarj/RahuliLoki.git valuuttaloki
-cd valuuttaloki
+git clone https://github.com/EliasKarj/RahuliLoki.git what-remains
+cd what-remains
 ./start.sh              # macOS, Linux
 ```
 
 ```powershell
-git clone https://github.com/EliasKarj/RahuliLoki.git valuuttaloki
-cd valuuttaloki
+git clone https://github.com/EliasKarj/RahuliLoki.git what-remains
+cd what-remains
 .\start.ps1            # Windows
 ```
 
@@ -207,8 +210,8 @@ osoitteessa <http://localhost:3000>.
 ### Docker (suositeltu palvelimelle)
 
 ```bash
-git clone https://github.com/EliasKarj/RahuliLoki.git valuuttaloki
-cd valuuttaloki
+git clone https://github.com/EliasKarj/RahuliLoki.git what-remains
+cd what-remains
 cp .env.example .env      # täytä POESESSID ja POE_ACCOUNT_NAME
 docker compose up -d
 ```
@@ -227,7 +230,7 @@ kieltäytyy käynnistymästä ja kertoo miksi. Ks. [Pääsynhallinta](#pääsynh
 
 ```bash
 fly launch --no-deploy --copy-config
-fly volumes create valuuttaloki_data --size 1 --region arn
+fly volumes create what_remains_data --size 1 --region arn
 fly secrets set POESESSID=… POE_ACCOUNT_NAME='Exile#1234' POE_LEAGUE=Settlers \
   AUTH_TOKEN="$(openssl rand -hex 32)"
 fly deploy
@@ -244,7 +247,7 @@ koko sovelluksen tarkoitus.
 
 ```bash
 pnpm install
-pnpm --filter @valuuttaloki/server exec prisma generate
+pnpm --filter @whatremains/server exec prisma generate
 pnpm db:migrate
 cp .env.example .env      # täytä tunnukset
 pnpm dev                  # palvelin :3000, selainpuoli :5173
@@ -297,7 +300,7 @@ käyttöön. Se olisi joka mittarilla parempi:
 **rekisteröity verkkotunnus jonka omistat**. IP-osoitteita ja `localhost`ia ei hyväksytä edes
 kehityksessä. Lisäksi sovellus pitää rekisteröidä ja saada hyväksytyksi.
 
-Tämä on suorassa ristiriidassa sen kanssa mitä valuuttaloki on. Se sitoutuu oletuksena
+Tämä on suorassa ristiriidassa sen kanssa mitä What Remains on. Se sitoutuu oletuksena
 silmukkaosoitteeseen, `docker compose` julkaisee portin vain `127.0.0.1`:een, ja koko premissi
 on yhden ihmisen itse isännöimä työkalu omalla koneellaan. Sellaisella ei ole verkkotunnusta,
 eikä sitä pitäisi tarvitakaan.
@@ -401,7 +404,7 @@ Kaikki `.env`-tiedostossa; `.env.example` on malli.
 | `PRICE_ITEM_CATEGORIES` | ks. alla | poe.ninjan `itemoverview`-tyypit. |
 | `POE_NINJA_URL` | `https://poe.ninja/poe1/api/economy/exchange/current` | poe.ninjan API-juuri. Vain jos se siirtyy taas. |
 | `POE_CONTACT` | — | Yhteystieto, joka liitetään `User-Agent`iin. |
-| `DATABASE_URL` | `file:./data/valuuttaloki.db` | SQLite-tiedosto. |
+| `DATABASE_URL` | `file:./data/what-remains.db` | SQLite-tiedosto. |
 | `PORT` / `HOST` | `3000` / `127.0.0.1` | HTTP. Oletus on silmukkaosoite, ei kaikki verkkoliitännät. |
 | `AUTH_TOKEN` | tyhjä | Jaettu API-token. Pakollinen kun sidos ei ole silmukkaosoite. |
 | `ALLOW_UNAUTHENTICATED` | tyhjä | Kuittaus siitä, että joku muu hoitaa tunnistuksen. |
@@ -450,6 +453,33 @@ Incubator, Artifact, Vial, Omen, Tattoo`.
 
 Sivu on **loki, ei korttitaulu**. Ei laatikoita eikä reunuksia: hiusviivat erottavat osiot,
 ja ainoat asiat joilla on reunat ovat luvut itse.
+
+### Ulkoasu: Citadel at the End of Time
+
+Tyhjyys joka ei ole aivan musta, kulta joka on ainoa valo siinä, ja violetti joka on aika
+itse. Nimike on leveään harvennettuja versaaleja päätteellisellä kirjasimella — kaiverrettu,
+ei ladottu — ja nettoarvon luvun takana palaa hiipuva hehku.
+
+| Rooli | Väri | Missä |
+|-------|------|-------|
+| **kulta** | `#e2a94f` | chaos ja kaikki varallisuus: nettoarvo, summat, nousut |
+| **violetti** | `#9d7bf0` | divine: kurssikäyrä ja divineinä ilmoitetut sarjat |
+| **tomu** | `#7a6f92` | se mikä tapahtui muttei liikuttanut lukua: tyhjät välit, tappiot |
+| **tyhjyys** | `#070610` | tausta, jossa on violettia sen verran ettei se ole neutraali |
+
+> **▸ Miksi tappiot eivät ole punaisia:** suunta luetaan jo etumerkistä. Punainen olisi kolmas
+> sävy asialle joka on jo erotettavissa, ja varaisi värin merkitykseen jota mikään muu kohta
+> sivulla ei käytä.
+>
+> **▸ Miksi kaavioiden värit ovat omassa tiedostossaan:** Recharts ottaa värit propseina eikä
+> luokkina, joten jokainen kaavio kantoi ennen omaa kopiotaan `#e0a458`:sta — kuusi tiedostoa
+> jotka olivat samaa mieltä sattumalta. Ne lakkasivat olemasta samaa mieltä sinä hetkenä kun
+> paletti vaihtui. Nyt värit ovat `web/src/lib/palette.ts`:ssä, ja paletti on kaksi tiedostoa
+> kahdeksan sijaan.
+>
+> **▸ Miksi taustan hehkut ovat noin himmeitä:** niiden alla on ruudullinen pieniä lukuja.
+> Mikä tahansa niin voimakas että sen huomaisi suoraan olisi myös niin voimakas että luvut
+> lukisi sen läpi.
 
 Ylinnä yksi hallitseva lukema — nettoarvo — ja sarja piirrettynä sen taakse. Lukema on siinä
 yksikössä jossa sen sanoisi ääneen: **alle divinen arvoinen arkku chaoksina, sen yli divineinä**,
@@ -756,7 +786,7 @@ kehityksessä, `tsc` vain tuottaa `dist`in julkaisua varten.
 ### Uskottavaa dataa ilman odottelua
 
 ```bash
-pnpm --filter @valuuttaloki/server seed -- --days 4 --league Settlers
+pnpm --filter @whatremains/server seed -- --days 4 --league Settlers
 ```
 
 Kolme päivää tilannekuvia nukkumisjaksoineen, ajelehtivine divine-kursseineen ja satunnaisine
@@ -824,25 +854,65 @@ pnpm test
     /services   priceService, stashService, valuationService, uniques, snapshotRepo
     /routes     snapshots, health, config
     /jobs       pollJob
-    /lib        rateLimiter, logger, series, changes, config, auth, http
+    /lib        rateLimiter, logger, series, changes, config, auth, http, schedule
     app.ts      Fastifyn kokoaminen (testattavissa ilman kuuntelevaa porttia)
-    index.ts    käynnistys, ajastin, staattinen sivusto
+    server.ts   palvelimen kokoaminen funktiona (työpöytäversio upottaa saman)
+    index.ts    komentorivikäärö: käynnistys ja siisti sammutus
   /prisma       schema.prisma + migraatiot
   /tools        seed.ts
 /desktop
-  /src          main (Electron), login (kirjautumisikkuna), settings, preload
+  /src          main (Electron), login (kirjautumisikkuna), settings, preload,
+                adoptOldData (vanhan nimen datahakemisto), sessionWait, loginHosts
 /scripts        with-env.mjs (lataa juuren .env Prisma CLI:lle)
 /web
   /src
-    /components NetWorthChart, RatePerHourChart, TabBreakdown, SnapshotTable, PollerStatus,
-                TokenGate, ChangesTable, ItemHistory, ItemIcon
+    /components Hero, NetWorthChart, RatePerHourChart, TabBreakdown, SnapshotTable,
+                PollerStatus, TokenGate, ChangesTable, ItemHistory, ItemIcon, DesktopSetup
     /hooks      useSnapshots
-    /lib        api, format, series
+    /lib        api, format, series, palette (kaavioiden värit), schedule (laskuri), spark
 ```
 
 Tilastot lasketaan palvelimella ja tulevat selaimeen valmiina. Jouten-sääntö ja piikkien
 merkintä ovat siis olemassa **tasan yhtenä toteutuksena** — kaksi rinnakkaista ehtisi erkaantua
 toisistaan ensimmäiseen muutokseen mennessä.
+
+---
+
+## Päivitys valuuttalokista
+
+Ohjelma oli aiemmin nimeltään **valuuttaloki**. Nimi vaihtui, ja nimi on osa muutamaa polkua.
+
+**Työpöytäversio hoitaa itse.** Electron johtaa data­hakemistonsa sovelluksen nimestä, joten
+nimenmuutos siirsi kansion vanhan asennuksen alta. Ensimmäisellä käynnistyksellä ohjelma
+**kopioi** vanhasta kansiosta `settings.json`in ja tietokannan uuteen — istunto, tili ja koko
+historia siirtyvät mukana. Vanhaa kansiota ei poisteta eikä muuteta.
+
+> **▸ Miksi kopio eikä siirto:** jos tässä siirrossa on jokin vika jota kukaan ei ole vielä
+> keksinyt, alkuperäinen on yhä tallella. Siirto käyttäisi ainoan kopion muutaman megatavun
+> säästämiseen.
+>
+> **▸ Miksi vain tyhjään kansioon:** jos uusi versio on jo käynnistetty ja siihen on
+> kirjauduttu, sen tila on tuoreempi kuin vanhan kansion. Kahdesti ajettu siirto palauttaisi
+> vanhentuneen istunnon tuoreen päälle.
+
+**Docker ja itse ylläpidetty asennus vaativat yhden käden liikkeen.** Tiedoston nimi
+`docker-compose.yml`:ssä ja `fly.toml`:ssa on nyt `what-remains.db`, samoin palvelun,
+kontin ja levyn nimet. Vanha data on yhä levyllä vanhalla nimellä, joten valitse jompikumpi:
+
+```bash
+# joko nimeä tiedosto levyllä uudelleen…
+docker compose stop
+docker compose run --rm what-remains mv /data/valuuttaloki.db /data/what-remains.db
+
+# …tai jätä DATABASE_URL osoittamaan vanhaan nimeen
+DATABASE_URL=file:/data/valuuttaloki.db
+```
+
+Kumpikin käy. Se mitä **ei** kannata tehdä on käynnistää uudella nimellä ja ihmetellä tyhjää
+kaaviota: tietokanta ei ole kadonnut, se on eri tiedostossa.
+
+Selaimen `sessionStorage`-avain vaihtui myös, joten tokenilla suojattu asennus kysyy tokenin
+kerran uudestaan.
 
 ---
 
@@ -852,7 +922,7 @@ Tietokanta on yksi tiedosto, ja rivejä vain lisätään — mitään ei päivit
 
 ```bash
 docker compose stop
-docker compose cp valuuttaloki:/data/valuuttaloki.db varmuuskopio.db
+docker compose cp what-remains:/data/what-remains.db varmuuskopio.db
 docker compose start
 ```
 

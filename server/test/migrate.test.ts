@@ -3,7 +3,7 @@
  * is indistinguishable from one the Prisma CLI migrated. The interesting assertions here are
  * about the bookkeeping, because that is what makes the two interchangeable.
  *
- * The strongest check of all lives outside vitest: `pnpm --filter @valuuttaloki/server
+ * The strongest check of all lives outside vitest: `pnpm --filter @whatremains/server
  * verify:migrator` applies migrations with this code and then asks the real Prisma CLI whether
  * it agrees. That runs in CI.
  */
@@ -19,7 +19,7 @@ const MIGRATIONS = new URL('../prisma/migrations', import.meta.url).pathname;
 const temps: string[] = [];
 
 function tempDb(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'valuuttaloki-migrate-'));
+  const dir = mkdtempSync(join(tmpdir(), 'what-remains-migrate-'));
   temps.push(dir);
   return join(dir, 'test.db');
 }
@@ -128,7 +128,7 @@ describe('migrate', () => {
     const file = tempDb();
     migrate(file, MIGRATIONS);
 
-    const broken = mkdtempSync(join(tmpdir(), 'valuuttaloki-broken-'));
+    const broken = mkdtempSync(join(tmpdir(), 'what-remains-broken-'));
     temps.push(broken);
     mkdirSync(join(broken, '99999999999999_bad'), { recursive: true });
     writeFileSync(join(broken, '99999999999999_bad', 'migration.sql'), 'THIS IS NOT SQL;');
@@ -141,9 +141,9 @@ describe('migrate', () => {
   });
 
   it('creates the parent directory rather than failing on a fresh install', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'valuuttaloki-nested-'));
+    const dir = mkdtempSync(join(tmpdir(), 'what-remains-nested-'));
     temps.push(dir);
-    const file = join(dir, 'does', 'not', 'exist', 'valuuttaloki.db');
+    const file = join(dir, 'does', 'not', 'exist', 'what-remains.db');
     expect(() => migrate(file, MIGRATIONS)).not.toThrow();
     expect(tables(file)).toEqual(expect.arrayContaining(['Snapshot']));
   });

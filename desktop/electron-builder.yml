@@ -2,8 +2,8 @@
 #
 # The database and settings live in the user data directory, never inside the app bundle, so
 # an update replaces the program and leaves a league's history alone.
-appId: fi.eliaskarj.valuuttaloki
-productName: valuuttaloki
+appId: fi.eliaskarj.whatremains
+productName: What Remains
 copyright: MIT
 
 directories:
@@ -33,7 +33,7 @@ extraResources:
 
 # asar off, deliberately.
 #
-# The workspace dependency on @valuuttaloki/server is a pnpm symlink out of desktop/, and
+# The workspace dependency on @whatremains/server is a pnpm symlink out of desktop/, and
 # electron-builder's asar packer refuses to unpack anything whose real path lies outside the
 # app directory — it fails with "server/dist/app.js must be under desktop/". asar is a
 # packaging convenience, not a security boundary (its contents are trivially readable), so
@@ -46,9 +46,9 @@ asar: false
 linux:
   target: [AppImage]
   category: Utility
-  # Without this the executable is named after the npm package — "@valuuttalokidesktop", scope
+  # Without this the executable is named after the npm package — "@whatremainsdesktop", scope
   # punctuation and all — rather than after the product.
-  executableName: valuuttaloki
+  executableName: what-remains
 mac:
   target: [dmg]
   category: public.app-category.utilities

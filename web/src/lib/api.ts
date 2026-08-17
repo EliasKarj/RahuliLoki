@@ -229,7 +229,7 @@ export class ApiError extends Error {
  * and browser history) and never in a cookie (which the browser would attach to a cross-site
  * request automatically, re-opening the CSRF hole the server's origin check exists to close).
  */
-const TOKEN_KEY = 'valuuttaloki.token';
+const TOKEN_KEY = 'what-remains.token';
 
 let token: string | null = readStoredToken();
 
