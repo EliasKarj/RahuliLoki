@@ -76,6 +76,15 @@ export interface PriceSet {
    * say "nothing here can be priced per variant".
    */
   uniques: UniqueIndex;
+  /**
+   * poe.ninja id → the category it was fetched under, e.g. `gilded-bestiary-scarab` → `Scarab`.
+   *
+   * Recorded here because this is the only moment it is known. The app asks poe.ninja one
+   * `type=` at a time and the payload says nothing about which one it answered, so the category
+   * exists only in the request. Working it out later from an item's name would be guesswork
+   * over a fact we already had in hand.
+   */
+  categories: Record<string, string>;
 }
 
 export interface PriceSetStore {
@@ -190,6 +199,8 @@ export function mergeOverview(
   payload: unknown,
   into: Record<string, number>,
   icons: Record<string, string> = Object.create(null) as Record<string, string>,
+  categories: Record<string, string> = Object.create(null) as Record<string, string>,
+  category = '',
 ): number {
   const primary = (payload as { core?: { primary?: unknown } })?.core?.primary;
   if (typeof primary === 'string' && primary !== CHAOS_ID) {
@@ -217,6 +228,9 @@ export function mergeOverview(
     // First category wins, matching the old behaviour: when two types carry the same id the
     // earlier (more specific) list is the one the operator put first on purpose.
     if (into[id] === undefined) into[id] = value;
+    // Same first-wins rule as the price. An id that appears under two types belongs to the
+    // earlier, more specific one — that is why the operator ordered the list the way they did.
+    if (category !== '' && categories[id] === undefined) categories[id] = category;
     merged += 1;
   }
   return merged;
@@ -350,12 +364,13 @@ export class PriceService {
     const prices: Record<string, number> = Object.create(null) as Record<string, number>;
     const icons: Record<string, string> = Object.create(null) as Record<string, string>;
     const uniques: UniqueIndex = Object.create(null) as UniqueIndex;
+    const categories: Record<string, string> = Object.create(null) as Record<string, string>;
 
     let divineRate: number | null = null;
 
     for (const type of [...currencyCategories, ...itemCategories]) {
       const payload = await this.#getJson(league, type);
-      const merged = mergeOverview(payload, prices, icons);
+      const merged = mergeOverview(payload, prices, icons, categories, type);
       divineRate ??= divineRateFrom(payload, prices);
       this.#log.debug({ type, merged }, 'merged overview');
 
@@ -406,6 +421,7 @@ export class PriceService {
       divineRate,
       icons,
       uniques,
+      categories,
     };
     this.#log.info(
       {

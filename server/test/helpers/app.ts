@@ -124,6 +124,7 @@ export async function makeApp(
             'Divine Orb': 'https://web.poecdn.com/divine.png',
           },
           uniques: {},
+          categories: {},
         },
         isStale: () => false,
       },

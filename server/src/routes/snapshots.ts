@@ -113,7 +113,12 @@ export async function snapshotRoutes(app: FastifyInstance, deps: ApiDeps): Promi
       // Raised from 200 now that the table is searchable and folds tabs together: a cap that
       // small hid most of a stash from the search box, which is the one place someone goes when
       // they want to know whether they still have a thing.
-      topItems: topItems(snapshot.breakdown, 2000, deps.prices.cached?.icons ?? {}),
+      topItems: topItems(
+        snapshot.breakdown,
+        2000,
+        deps.prices.cached?.icons ?? {},
+        deps.prices.cached?.categories ?? {},
+      ),
     });
   });
 

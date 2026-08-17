@@ -285,6 +285,7 @@ describe('PriceService', () => {
       divineRate: 200,
       icons: {},
       uniques: {},
+      categories: {},
     };
     const fetchFn = fixtureFetch();
     const subject = service({ fetchFn, store: memoryStore(stored).store, now: () => 60_000 });
@@ -306,6 +307,7 @@ describe('PriceService', () => {
       divineRate: 200,
       icons: {},
       uniques: {},
+      categories: {},
     };
     const subject = service({ store: memoryStore(stale).store, now: () => 0 });
 
@@ -481,5 +483,32 @@ describe('rememberIcons', () => {
   it('does nothing at all when there is no price set yet', async () => {
     const subject = service();
     expect(await subject.rememberIcons({ 'The Doctor': 'https://web.poecdn.com/doc.png' })).toBe(0);
+  });
+});
+
+describe('categories', () => {
+  it('records the type each id was fetched under', async () => {
+    // The payload says nothing about which category it answered — only the request knows. If it
+    // is not captured here it cannot be recovered later without guessing from an item's name.
+    const set = await service().getPrices();
+
+    expect(set.categories['alt']).toBe('Currency');
+    expect(set.categories['sacrifice-at-dusk']).toBe('Fragment');
+    expect(set.categories['the-doctor']).toBe('DivinationCard');
+    expect(set.categories['gilded-bestiary-scarab']).toBe('Scarab');
+  });
+
+  it('lets the first category win, matching how the price is merged', () => {
+    const prices: Record<string, number> = {};
+    const categories: Record<string, string> = {};
+    mergeOverview(currencyOverview, prices, {}, categories, 'Currency');
+    mergeOverview(currencyOverview, prices, {}, categories, 'Fragment');
+    expect(categories['alt']).toBe('Currency');
+  });
+
+  it('records nothing when no category was given', () => {
+    const categories: Record<string, string> = {};
+    mergeOverview(currencyOverview, {}, {}, categories);
+    expect(categories).toEqual({});
   });
 });

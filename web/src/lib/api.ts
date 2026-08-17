@@ -35,8 +35,15 @@ export interface TopItem {
   qty: number;
   chaosEach: number;
   chaosTotal: number;
-  /** poe.ninja icon URL. Absent when the current price set knows none for this name. */
+  /** GGG's artwork for this item. Absent until a poll has seen one. */
   icon?: string;
+  /**
+   * poe.ninja's category — `Currency`, `Scarab`, `DivinationCard`.
+   *
+   * Absent when nothing priced this item, which is why the filter files those under "Other"
+   * rather than putting them somewhere they do not belong.
+   */
+  category?: string;
 }
 
 export interface LatestResponse {

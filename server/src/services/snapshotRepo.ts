@@ -83,7 +83,8 @@ function asBreakdown(value: unknown): Breakdown {
   return value as Breakdown;
 }
 
-/** Same narrowing as asPrices, for the icon map. Unknown-shaped entries are dropped. */
+/** Narrows a string→string Json column. Unknown-shaped entries are dropped. Used for both the
+ *  icon map and the category map, which have the same shape and the same tolerances. */
 function asIcons(value: unknown): Record<string, string> {
   const out: Record<string, string> = Object.create(null) as Record<string, string>;
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return out;
@@ -239,6 +240,9 @@ export class PrismaPriceSetStore implements PriceSetStore {
       // Null on rows written before the icons column existed. An empty map is the right
       // reading: the UI falls back to no icon, and the next fetch fills it in.
       icons: asIcons(row.icons),
+      // Same narrowing as the icons, and the same reason for being nullable: a row written
+      // before this column existed simply has no categories, and the next fetch fills it in.
+      categories: asIcons(row.categories),
       // Not persisted. A restored set exists so a restart does not refetch immediately, and
       // the very next poll refreshes it; carrying the unique index through the database would
       // multiply the row size for a window measured in minutes. Uniques go unpriced until
@@ -254,6 +258,7 @@ export class PrismaPriceSetStore implements PriceSetStore {
         fetchedAt: set.fetchedAt,
         prices: set.prices as object,
         icons: set.icons as object,
+        categories: set.categories as object,
       },
     });
     await this.#prune(set.league);

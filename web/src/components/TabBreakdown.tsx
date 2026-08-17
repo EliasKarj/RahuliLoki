@@ -122,6 +122,15 @@ interface ItemRow {
   chaosEach: number;
   chaosTotal: number;
   icon?: string;
+  category: string;
+}
+
+/** What an item with no category is filed under. Not a category poe.ninja has. */
+export const UNCATEGORISED = 'Other';
+
+/** poe.ninja spells its types in PascalCase; a person reads them with spaces. */
+export function categoryLabel(category: string): string {
+  return category.replace(/([a-z])([A-Z])/g, '$1 $2');
 }
 
 export function groupByItem(items: TopItem[]): ItemRow[] {
@@ -135,6 +144,7 @@ export function groupByItem(items: TopItem[]): ItemRow[] {
         qty: item.qty,
         chaosTotal: item.chaosTotal,
         chaosEach: item.chaosEach,
+        category: item.category ?? UNCATEGORISED,
         ...(item.icon === undefined ? {} : { icon: item.icon }),
       });
       continue;
@@ -170,6 +180,28 @@ export function sortItemRows(rows: ItemRow[], key: SortKey, direction: SortDirec
 }
 
 /** Case- and punctuation-insensitive, so "assassins" finds "Assassin's Favour". */
+/**
+ * Each category present, with what it is worth, largest first.
+ *
+ * The totals are the point. "Scarab" on its own is a filter; "Scarab 3.2kc" answers the
+ * question that made someone reach for the filter in the first place.
+ */
+export function categoryTotals(rows: ItemRow[]): Array<{ category: string; chaos: number }> {
+  const totals = new Map<string, number>();
+  for (const row of rows) {
+    totals.set(row.category, (totals.get(row.category) ?? 0) + row.chaosTotal);
+  }
+  return [...totals.entries()]
+    .map(([category, chaos]) => ({ category, chaos: Math.round(chaos * 100) / 100 }))
+    // Uncategorised last whatever it is worth: it is a leftover pile, not a category, and
+    // letting it head the list would suggest it means something.
+    .sort((a, b) => {
+      if (a.category === UNCATEGORISED) return 1;
+      if (b.category === UNCATEGORISED) return -1;
+      return b.chaos - a.chaos;
+    });
+}
+
 export function matchesQuery(row: ItemRow, query: string): boolean {
   const needle = query.trim().toLowerCase();
   if (needle === '') return true;
@@ -190,12 +222,21 @@ export function TopItemsTable({
     direction: 'desc',
   });
   const [query, setQuery] = useState('');
+  /** Null means every category. A category that vanishes from the data falls back to that. */
+  const [category, setCategory] = useState<string | null>(null);
 
   const grouped = useMemo(() => groupByItem(items), [items]);
+  // Totals are computed before the category filter and after the search, so the chips keep
+  // showing what each category is worth while one of them is selected. Recomputing them from
+  // the filtered rows would leave every chip but the active one reading zero.
+  const searched = useMemo(() => grouped.filter((row) => matchesQuery(row, query)), [grouped, query]);
+  const totals = useMemo(() => categoryTotals(searched), [searched]);
+
   const rows = useMemo(() => {
-    const matching = grouped.filter((row) => matchesQuery(row, query));
+    const matching =
+      category === null ? searched : searched.filter((row) => row.category === category);
     return sortItemRows(matching, sort.key, sort.direction);
-  }, [grouped, sort, query]);
+  }, [searched, sort, category]);
 
   if (items.length === 0) {
     return <Empty>The latest snapshot holds nothing above the value threshold.</Empty>;
@@ -238,6 +279,24 @@ export function TopItemsTable({
           {' · '}
           {formatChaos(total)}c
         </span>
+      </div>
+
+      {/* Each category with what it is worth. The total is the point: "Scarab" alone is a
+          filter, "Scarab 3.2kc" answers the question that made someone reach for it. */}
+      <div className="mb-3 flex flex-wrap gap-1.5">
+        <Chip active={category === null} onClick={() => setCategory(null)}>
+          All <span className="num !text-left text-ink-400">{formatChaos(total)}c</span>
+        </Chip>
+        {totals.map((entry) => (
+          <Chip
+            key={entry.category}
+            active={category === entry.category}
+            onClick={() => setCategory(category === entry.category ? null : entry.category)}
+          >
+            {categoryLabel(entry.category)}{' '}
+            <span className="num !text-left text-ink-400">{formatChaos(entry.chaos)}c</span>
+          </Chip>
+        ))}
       </div>
 
       <div className="max-h-[32rem] overflow-auto">
@@ -325,5 +384,31 @@ export function TopItemsTable({
         ) : null}
       </div>
     </div>
+  );
+}
+
+/** One category toggle. Pressed state is the aria contract, not just a colour. */
+function Chip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
+        active
+          ? 'border-accent-600 bg-accent-600/15 text-ink-100'
+          : 'border-ink-800 text-ink-300 hover:border-ink-700 hover:text-ink-100'
+      }`}
+    >
+      {children}
+    </button>
   );
 }

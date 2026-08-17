@@ -320,8 +320,15 @@ export interface TopItem {
   qty: number;
   chaosEach: number;
   chaosTotal: number;
-  /** poe.ninja's icon, when the current price set knows one for this name. */
+  /** GGG's artwork for this item, when a poll has seen one. */
   icon?: string;
+  /**
+   * The poe.ninja category this item was priced under — `Currency`, `Scarab`, `DivinationCard`.
+   *
+   * Absent when nothing priced it, which is why the dashboard files those under "Other" rather
+   * than pretending they belong somewhere.
+   */
+  category?: string;
 }
 
 /**
@@ -335,11 +342,18 @@ export function topItems(
   breakdown: Breakdown,
   limit = 100,
   icons: Record<string, string> = {},
+  /** poe.ninja id → category. Keyed by id, so the join goes through `ninjaId` — see below. */
+  categories: Record<string, string> = {},
 ): TopItem[] {
   const rows: TopItem[] = [];
   for (const [tab, entries] of Object.entries(breakdown)) {
     for (const [name, entry] of Object.entries(entries)) {
       const icon = Object.hasOwn(icons, name) ? icons[name] : undefined;
+      // Icons are keyed by display name and categories by poe.ninja's id, because that is how
+      // each was collected: icons from the stash, which names things, and categories from the
+      // request, which does not. The name has to go back through `ninjaId` to find one.
+      const id = ninjaId(name);
+      const category = Object.hasOwn(categories, id) ? categories[id] : undefined;
       rows.push({
         tab,
         name,
@@ -347,6 +361,7 @@ export function topItems(
         chaosEach: entry.chaosEach,
         chaosTotal: entry.chaosTotal,
         ...(icon === undefined ? {} : { icon }),
+        ...(category === undefined ? {} : { category }),
       });
     }
   }

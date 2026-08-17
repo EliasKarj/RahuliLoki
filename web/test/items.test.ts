@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { groupByItem, matchesQuery, sortItemRows } from '../src/components/TabBreakdown.tsx';
+import {
+  UNCATEGORISED,
+  categoryLabel,
+  categoryTotals,
+  groupByItem,
+  matchesQuery,
+  sortItemRows,
+} from '../src/components/TabBreakdown.tsx';
 import type { TopItem } from '../src/lib/api.ts';
 
 const item = (over: Partial<TopItem>): TopItem => ({
@@ -108,5 +115,50 @@ describe('sortItemRows', () => {
     const before = rows.map((row) => row.name);
     sortItemRows(rows, 'name', 'desc');
     expect(rows.map((row) => row.name)).toEqual(before);
+  });
+});
+
+describe('categoryTotals', () => {
+  const rows = groupByItem([
+    item({ name: 'Chaos Orb', chaosTotal: 4130, category: 'Currency' }),
+    item({ name: 'Divine Orb', chaosTotal: 9020, category: 'Currency' }),
+    item({ name: 'Gilded Bestiary Scarab', chaosTotal: 288, category: 'Scarab' }),
+    item({ name: 'Headhunter', chaosTotal: 12500 }),
+  ]);
+
+  it('sums each category and puts the largest first', () => {
+    // The total is the whole point: "Scarab" alone is a filter, "Scarab 288c" is an answer.
+    const totals = categoryTotals(rows);
+    expect(totals[0]).toEqual({ category: 'Currency', chaos: 13150 });
+    expect(totals[1]).toEqual({ category: 'Scarab', chaos: 288 });
+  });
+
+  it('files an item with no category under Other', () => {
+    // Nothing priced it — a unique, most often. Putting it in a real category would be a claim
+    // the data does not support.
+    const totals = categoryTotals(rows);
+    expect(totals.find((entry) => entry.category === UNCATEGORISED)?.chaos).toBe(12500);
+  });
+
+  it('keeps Other last however much it is worth', () => {
+    // It is a leftover pile, not a category. Letting 12500c head the list would suggest it
+    // means something.
+    expect(categoryTotals(rows).at(-1)?.category).toBe(UNCATEGORISED);
+  });
+
+  it('returns nothing for no rows rather than a lone empty chip', () => {
+    expect(categoryTotals([])).toEqual([]);
+  });
+});
+
+describe('categoryLabel', () => {
+  it('spaces out the PascalCase poe.ninja uses', () => {
+    expect(categoryLabel('DivinationCard')).toBe('Divination Card');
+    expect(categoryLabel('DeliriumOrb')).toBe('Delirium Orb');
+  });
+
+  it('leaves a single word alone', () => {
+    expect(categoryLabel('Scarab')).toBe('Scarab');
+    expect(categoryLabel('Other')).toBe('Other');
   });
 });
