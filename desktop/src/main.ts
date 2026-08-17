@@ -40,6 +40,34 @@ const databaseFile = join(userData, 'what-remains.db');
  * folder out from under every existing install. See adoptOldData.ts.
  */
 const legacyUserData = join(app.getPath('appData'), 'valuuttaloki');
+const logFile = join(userData, 'logs', 'what-remains.log');
+
+/**
+ * Where the server's log goes, which is not the same question when packaged as when developing.
+ *
+ * An installed copy is a windowed program. On Windows a GUI process has no console attached at
+ * all, so every log line would be written into nothing — and the alternative, opening a console
+ * window beside the app to hold them, is a terminal nobody asked for sitting in the taskbar for
+ * the life of the session. So the packaged build writes to a file, and the tray menu opens it.
+ *
+ * Running from source keeps stdout, because that is the whole point of running from source.
+ */
+const logTarget = app.isPackaged ? { logFile } : {};
+
+/**
+ * Where the built dashboard is, told rather than discovered.
+ *
+ * The server can find the SPA on its own by looking next to itself, and that works in the
+ * workspace and in the container. It does not work here: `@whatremains/server` is a workspace
+ * dependency, so the packaged copy of the server that actually gets loaded lives under
+ * `resources/app/node_modules/@whatremains/server`, while the dashboard is copied to
+ * `resources/web/dist`. Nothing next to the server points at it.
+ *
+ * The symptom was a window with no dashboard in it and one warning line in a log the packaged
+ * app was not writing anywhere — the app started, served its API, and showed nothing. The shell
+ * knows its own layout, so it says where to look instead of hoping.
+ */
+const webDistOption = app.isPackaged ? { webDist: join(process.resourcesPath, 'web', 'dist') } : {};
 // Migrations ship as SQL next to the server build; see server/src/lib/migrate.ts for why the
 // Prisma CLI is not involved.
 const migrationsDir = join(here, '..', '..', 'server', 'prisma', 'migrations');
@@ -72,12 +100,12 @@ async function restartServer(settings: Settings): Promise<void> {
 
   const env = toEnv(settings, databaseFile);
   try {
-    server = await startServer({ env, port: boundPort ?? 0 });
+    server = await startServer({ env, port: boundPort ?? 0, ...logTarget, ...webDistOption });
   } catch (error) {
     // Something else grabbed the port in the gap between closing and re-listening. Rare, but
     // taking a different port beats failing to come back at all.
     if (boundPort === null) throw error;
-    server = await startServer({ env, port: 0 });
+    server = await startServer({ env, port: 0, ...logTarget, ...webDistOption });
   }
 
   const moved = boundPort !== null && boundPort !== server.port;
@@ -121,7 +149,8 @@ function createWindow(): void {
     minWidth: 900,
     minHeight: 600,
     title: 'What Remains',
-    backgroundColor: '#12161c',
+    // The void the dashboard paints on, so a slow first paint is not a flash of the wrong dark.
+    backgroundColor: '#070610',
     autoHideMenuBar: true,
     webPreferences: {
       preload: join(here, 'preload.cjs'),
@@ -159,12 +188,14 @@ function createWindow(): void {
 }
 
 function buildTray(): void {
-  // A 1x1 transparent image is a deliberate placeholder: shipping a wrong-looking icon is worse
-  // than shipping none, and the real asset belongs in a design pass, not in this file.
-  const icon = nativeImage.createFromDataURL(
-    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
-  );
-  tray = new Tray(icon);
+  // Packaged, the icon sits beside the app's resources; from source it is still in the build
+  // directory it was generated into. A path that cannot be read yields an empty image — which
+  // is what this shipped before there was an icon at all — so it is a cosmetic fallback and
+  // never a reason to fail to build the tray.
+  const iconFile = app.isPackaged
+    ? join(process.resourcesPath, 'tray.png')
+    : join(here, '..', 'build', 'tray.png');
+  tray = new Tray(nativeImage.createFromPath(iconFile));
   tray.setToolTip('What Remains');
   refreshTray();
   tray.on('click', showWindow);
@@ -194,6 +225,15 @@ function refreshTray(): void {
         enabled: server !== null && server.missing.length === 0,
         click: () => {
           void server?.poller.runNow().catch(() => undefined).then(refreshTray);
+        },
+      },
+      // The packaged app writes its log to a file because it has no console. That is only an
+      // improvement if the file can be found without knowing where Electron keeps user data.
+      {
+        label: 'Open log',
+        visible: app.isPackaged,
+        click: () => {
+          void shell.openPath(logFile);
         },
       },
       { type: 'separator' },

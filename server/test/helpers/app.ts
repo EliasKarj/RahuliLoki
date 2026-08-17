@@ -6,7 +6,7 @@
  */
 
 import type { FastifyInstance } from 'fastify';
-import { buildApp } from '../../src/app.ts';
+import { buildApp, type BuildOptions } from '../../src/app.ts';
 import { loadConfig } from '../../src/lib/config.ts';
 import type { PollOutcome, PollerHealth } from '../../src/jobs/pollJob.ts';
 import type { ApiDeps, PollerLike } from '../../src/routes/deps.ts';
@@ -96,6 +96,8 @@ export function seeded(store: MemorySnapshotStore): MemorySnapshotStore {
 export async function makeApp(
   overrides: Partial<ApiDeps> = {},
   env: NodeJS.ProcessEnv = {},
+  /** Build options. Silent by default; the logging test passes a stream to read back. */
+  build: BuildOptions = { logger: false },
 ): Promise<{ app: FastifyInstance; store: MemorySnapshotStore; poller: FakePoller }> {
   const { config, missing } = loadConfig({
     POESESSID: SESSION,
@@ -142,7 +144,7 @@ export async function makeApp(
       startedAt: new Date(START),
       ...overrides,
     },
-    { logger: false },
+    build,
   );
 
   return { app, store, poller };

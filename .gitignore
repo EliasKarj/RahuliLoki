@@ -3,6 +3,9 @@ dist/
 # Generated Prisma client (see schema.prisma). Recreated by `prisma generate`.
 server/generated/
 build/
+# …except the packaging assets, which are inputs rather than outputs: the icons the installer
+# needs, and the script that draws them. CI has no image library to regenerate them with.
+!desktop/build/
 coverage/
 release/
 

@@ -10,7 +10,7 @@
  * wrapper around it, and the desktop main process is another caller with different options.
  */
 
-import { existsSync } from 'node:fs';
+import { createWriteStream, existsSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { AddressInfo } from 'node:net';
@@ -49,6 +49,35 @@ export interface StartOptions {
   port?: number;
   /** Overrides SPA discovery. */
   webDist?: string | null;
+  /**
+   * Write the log to this file instead of stdout, creating it and its directory if need be.
+   *
+   * For the packaged desktop application, which has no console to write to — see
+   * BuildOptions.logDestination. A file that cannot be opened is not fatal: the app falls back
+   * to stdout and says so, because losing the log is not a reason to lose the app.
+   */
+  logFile?: string;
+}
+
+/**
+ * Open the log file, or explain why not.
+ *
+ * Appends rather than truncates: the interesting log is usually the one from the run that just
+ * went wrong, and a restart is exactly what someone does next. Nothing rotates it — this is one
+ * person's own machine, and a size cap that silently threw away the day's history would cost
+ * more than the disk it saved.
+ */
+function openLogFile(file: string | undefined): {
+  stream: NodeJS.WritableStream | null;
+  error: Error | null;
+} {
+  if (file === undefined || file.trim() === '') return { stream: null, error: null };
+  try {
+    mkdirSync(dirname(file), { recursive: true });
+    return { stream: createWriteStream(file, { flags: 'a' }), error: null };
+  } catch (error) {
+    return { stream: null, error: error as Error };
+  }
 }
 
 export interface RunningServer {
@@ -117,8 +146,18 @@ export async function startServer(options: StartOptions = {}): Promise<RunningSe
       }),
   };
 
-  const app = await buildApp(deps, { webDist, logLevel: config.logLevel });
+  const { stream: logDestination, error: logFileError } = openLogFile(options.logFile);
+
+  const app = await buildApp(deps, {
+    webDist,
+    logLevel: config.logLevel,
+    ...(logDestination ? { logDestination } : {}),
+  });
   const log = app.log;
+
+  if (logFileError !== null) {
+    log.warn({ file: options.logFile, err: logFileError }, 'could not open the log file; logging to stdout');
+  }
 
   limiter = new RateLimiter({ log, timeoutMs: config.requestTimeoutMs });
   leagues = new LeagueService({

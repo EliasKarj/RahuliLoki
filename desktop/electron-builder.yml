@@ -19,6 +19,9 @@ files:
   - '!**/*.map'
 
 extraResources:
+  # The tray icon, which is read at runtime rather than compiled in.
+  - from: build/tray.png
+    to: tray.png
   # The generated Prisma client, which schema.prisma emits here precisely so a packager can
   # find it. Left in node_modules/.prisma it is unreachable under pnpm, and the packaged app
   # gets the ungenerated stub and dies on `Named export 'PrismaClient' not found`.
@@ -43,18 +46,36 @@ extraResources:
 # disk at runtime and would need unpacking anyway.
 asar: false
 
+# One name per artifact, with the version in it, so a downloads folder holding two releases
+# is not two files called "What Remains Setup".
+artifactName: What-Remains-${version}-${os}-${arch}.${ext}
+
 linux:
   target: [AppImage]
   category: Utility
+  icon: build/icon.png
+  # Without this the desktop environment cannot tie a running window to its launcher entry,
+  # and the app shows up in the dock as a second, unnamed thing. The name itself is set in
+  # package.json, which is where electron-builder 26 reads it from.
+  syncDesktopName: true
+  synopsis: Path of Exile wealth tracker
   # Without this the executable is named after the npm package — "@whatremainsdesktop", scope
   # punctuation and all — rather than after the product.
   executableName: what-remains
 mac:
   target: [dmg]
   category: public.app-category.utilities
+  icon: build/icon.png
 win:
   target: [nsis]
+  icon: build/icon.ico
 
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
+  # A desktop shortcut and a start-menu entry named after the product rather than the package.
+  shortcutName: What Remains
+  createDesktopShortcut: true
+  # Per-user, so the installer needs no administrator prompt: everything it writes lives under
+  # the user's own profile, which is also where the database and the session already live.
+  perMachine: false

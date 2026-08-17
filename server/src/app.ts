@@ -16,6 +16,15 @@ export interface BuildOptions {
   webDist?: string | null;
   logLevel?: string;
   logger?: boolean;
+  /**
+   * Where log lines go. Defaults to stdout.
+   *
+   * The packaged desktop application has no stdout worth writing to: it is a windowed program,
+   * and on Windows a GUI process has no console attached at all, so every line would be
+   * written into nothing. Pointing this at a file is what keeps the log readable after a
+   * failure without opening a terminal window next to the app to hold it.
+   */
+  logDestination?: NodeJS.WritableStream;
 }
 
 /**
@@ -44,7 +53,13 @@ const CSP = [
 
 export async function buildApp(deps: ApiDeps, options: BuildOptions = {}): Promise<FastifyInstance> {
   const app = Fastify({
-    logger: options.logger === false ? false : loggerOptions(options.logLevel ?? 'info'),
+    logger:
+      options.logger === false
+        ? false
+        : {
+            ...loggerOptions(options.logLevel ?? 'info'),
+            ...(options.logDestination ? { stream: options.logDestination } : {}),
+          },
     // Off unless the operator says a proxy is really in front. Trusting X-Forwarded-For
     // unconditionally means any client can write whatever it likes into the `remoteAddress`
     // field of every log line about it.

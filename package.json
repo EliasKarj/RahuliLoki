@@ -1,6 +1,6 @@
 {
   "name": "what-remains",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Self-hosted Path of Exile wealth tracker: scheduled stash snapshots valued against poe.ninja.",
   "license": "MIT",

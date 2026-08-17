@@ -1,0 +1,90 @@
+name: Release
+
+# Tag a version and the installers build themselves.
+#
+#   pnpm version 1.0.1 --no-git-tag-version   # or edit the four package.json files
+#   git tag v1.0.1 && git push origin v1.0.1
+#
+# Each platform's installer has to be built on that platform: an NSIS installer needs Windows
+# tooling and a dmg needs macOS, and cross-building either from Linux means wine and a stack of
+# caveats. A matrix of three runners is the cheap way to have all three be real builds.
+on:
+  push:
+    tags: ['v*']
+  # Buildable on demand too, so a broken release can be re-run without inventing a tag.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      # One platform failing should not throw away the two that worked; the release can be
+      # completed by re-running the one that broke.
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: What-Remains-windows
+          - os: macos-latest
+            artifact: What-Remains-macos
+          - os: ubuntu-latest
+            artifact: What-Remains-linux
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @whatremains/server exec prisma generate
+
+      # The installer is only worth building if the code in it passes. A release is the worst
+      # place to find out that a test was red.
+      - run: pnpm typecheck
+      - run: pnpm test
+
+      # Builds the dashboard and the server, then packages the shell around them.
+      - run: pnpm desktop:package
+        env:
+          # electron-builder publishes to GitHub Releases by itself when it finds a token. It
+          # should not: the release is assembled once, below, from all three platforms' output.
+          GH_TOKEN: ''
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          # Installers only. The unpacked directory is half a gigabyte of the same thing.
+          path: |
+            desktop/release/*.exe
+            desktop/release/*.dmg
+            desktop/release/*.AppImage
+            desktop/release/*.zip
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    # Only a tag becomes a release. A manual run builds the installers and leaves them as
+    # workflow artifacts, which is what "does it still package?" wants and nothing more.
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true
+          body: |
+            Installers for Windows, macOS and Linux are attached below.
+
+            The database and the stored session live in the per-user application data
+            directory, never inside the app, so installing over an existing copy keeps a
+            league's history.

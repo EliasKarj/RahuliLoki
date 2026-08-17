@@ -120,6 +120,26 @@ export function serializeError(error: unknown): { type: string; message: string;
 export function loggerOptions(level: string) {
   return {
     level,
+    /**
+     * Scrub every string that reaches a log method, whatever it was going to say.
+     *
+     * The other two layers cover the two ways a secret was expected to arrive: a named field,
+     * and an Error running through the serializer. Neither covers a message written by hand
+     * around an upstream response. Nothing in this codebase writes one — but "nothing does
+     * that" is a convention, and the log is now a file on disk that outlives the run rather
+     * than a terminal someone closed.
+     *
+     * A hook makes it structural instead. It costs one pass over the strings of a line that was
+     * being serialised anyway, and it cannot be forgotten at a call site.
+     */
+    hooks: {
+      logMethod(this: unknown, args: unknown[], method: (...args: unknown[]) => void): void {
+        method.apply(
+          this,
+          args.map((arg) => (typeof arg === 'string' ? scrub(arg) : arg)),
+        );
+      },
+    },
     redact: {
       paths: [
         'poesessid',
