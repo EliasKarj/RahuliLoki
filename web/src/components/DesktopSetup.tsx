@@ -11,6 +11,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, type League } from '../lib/api.ts';
 import { bridge, type DesktopSettings } from '../lib/desktop.ts';
+import {
+  INTERVAL_CHOICES,
+  cronForMinutes,
+  intervalWarning,
+  minutesFromCron,
+} from '../lib/schedule.ts';
 
 /** The value that turns the dropdown back into a text box, for private leagues. */
 const OTHER = '\u0000other';
@@ -33,6 +39,8 @@ export function DesktopSetup({ onChanged }: { onChanged: () => void }) {
   const [leagueSource, setLeagueSource] = useState<'ggg' | 'fallback' | null>(null);
   /** Set when the operator picked "Other", so the free-text box stays open while they type. */
   const [custom, setCustom] = useState(false);
+  /** How many tabs the last poll read. Null until one has, which is the honest "I don't know". */
+  const [tabCount, setTabCount] = useState<number | null>(null);
 
   const refresh = useCallback(async () => {
     if (desktop === null) return;
@@ -57,6 +65,17 @@ export function DesktopSetup({ onChanged }: { onChanged: () => void }) {
       // the permanent leagues, so this only fires if the server itself is unreachable — in
       // which case the dashboard behind this panel is saying so much more loudly.
       .catch(() => undefined);
+
+    // The cost of an interval is one request per tab, so the warning under the picker needs to
+    // know how many there are. The last snapshot counted them; before there is one, the picker
+    // simply says less rather than guessing.
+    api
+      .latest(undefined, controller.signal)
+      .then((response) => {
+        if (!controller.signal.aborted) setTabCount(Object.keys(response.tabs).length);
+      })
+      .catch(() => undefined);
+
     return () => controller.abort();
   }, [desktop]);
 
@@ -240,6 +259,41 @@ export function DesktopSetup({ onChanged }: { onChanged: () => void }) {
               ? ' League list unavailable — showing the permanent leagues; pick Other… for anything else.'
               : ''}
           </p>
+
+          <div>
+            <label className="flex flex-wrap items-center gap-2 text-xs text-ink-300">
+              Read the stash every
+              <select
+                value={minutesFromCron(settings.pollCron) ?? ''}
+                disabled={busy}
+                onChange={(event) =>
+                  void run(
+                    () => desktop.writeSettings({ pollCron: cronForMinutes(Number(event.target.value)) }),
+                    'Saved. The next poll follows the new interval.',
+                  )
+                }
+                className="rounded border border-ink-700 bg-ink-900 px-2 py-1 text-xs text-ink-100"
+              >
+                {/* A hand-written POLL_CRON is shown as itself rather than rounded to the
+                    nearest menu entry — and picking a menu entry then replaces it. */}
+                {minutesFromCron(settings.pollCron) === null ? (
+                  <option value="">{settings.pollCron}</option>
+                ) : null}
+                {INTERVAL_CHOICES.map((minutes) => (
+                  <option key={minutes} value={minutes}>
+                    {minutes < 60 ? `${minutes} minutes` : 'hour'}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {(() => {
+              const minutes = minutesFromCron(settings.pollCron);
+              const warning = minutes === null ? null : intervalWarning(minutes, tabCount);
+              return warning === null ? null : (
+                <p className="mt-1 text-xs text-accent-400">{warning}</p>
+              );
+            })()}
+          </div>
 
           <div className="flex flex-wrap gap-4 text-xs text-ink-300">
             <label className="flex items-center gap-2">

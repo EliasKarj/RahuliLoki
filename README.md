@@ -120,6 +120,24 @@ ei tarvitse kaivaa devtoolsista eikä liittää mihinkään.
 > joka tarvitsee pelkän istunnon eikä tilin nimeä, ja hyväksyy vain evästeen joka vastaa
 > tilinimellä. Samalla tilin nimi tulee GGG:ltä eikä tekstikentästä.
 
+Asetuspaneelissa valitaan myös **keräysväli** — 5, 10, 15, 30 tai 60 minuuttia. Valinta
+kirjoitetaan samaan `POLL_CRON`-asetukseen jota palvelin lukee muutenkin, ja palvelin
+käynnistyy sen jälkeen uudelleen taustalla.
+
+> **▸ Miksi 5 minuuttia ei mahdu isoon arkkuun:** yksi kierros maksaa **yhden pyynnön per
+> välilehti** — ensimmäinen pyyntö palauttaa välilehtiluettelon samassa vastauksessa, joten
+> ylimääräistä ei tule. GGG:n arkkurajoitus on `200:3600:3600`, eli **200 pyyntöä tunnissa**.
+>
+> Yhdeksäntoista välilehteä viiden minuutin välein on 12 × 19 = **228 pyyntöä tunnissa**, eli
+> yli budjetin. Kymmenen minuutin välein se on 114 ja mahtuu hyvin. Mitään ei hajoa yli
+> mentäessä — nopeusrajoitin tahdistaa itsensä ja kierrokset venyvät, kunnes ne alkavat mennä
+> päällekkäin seuraavan kanssa — mutta se on hidastumista eikä tihenemistä, joten valikko
+> sanoo sen ääneen: liian tiheä valinta näyttää alleen punaisen rivin, jossa lukee laskettu
+> tuntikulutus. Se on arkun omistajan päätös, ei ohjelman.
+>
+> Suurin väli jolla 19 välilehteä mahtuu on siis 10 min. Pienempi arkku mahtuu tiheämpään:
+> kuusitoista välilehteä tai vähemmän mahtuu viiteen minuuttiin.
+
 > **▸ Miksi ikkunan sulkeminen ei lopeta keruuta:** valvomaton keruu on tämän sovelluksen etu
 > Exilence Nextiin nähden — se keräsi vain kun ohjelma oli auki. Sulkeminen piilottaa ikkunan
 > ilmaisinalueelle ja kerääjä jatkaa. Lopettaminen on erillinen valinta ilmaisinalueen valikossa.
@@ -360,7 +378,7 @@ Kaikki `.env`-tiedostossa; `.env.example` on malli.
 | `POESESSID` | — | Istuntoeväste. Pakollinen keräämiseen. |
 | `POE_ACCOUNT_NAME` | — | Tilin nimi täsmälleen kuten GGG sen kirjoittaa, `Exile#1234`. |
 | `POE_LEAGUE` | `Standard` | Seurattava liiga. Tilannekuvat avaimitetaan tällä. |
-| `POLL_CRON` | `*/10 * * * *` | Keräysväli. Tarkistetaan käynnistyksessä, ei vasta ensimmäisellä herätyksellä. |
+| `POLL_CRON` | `*/10 * * * *` | Keräysväli. Tarkistetaan käynnistyksessä, ei vasta ensimmäisellä herätyksellä. Työpöytäversiossa tämä valitaan valikosta minuutteina. |
 | `MIN_ITEM_CHAOS` | `2` | Tätä halvemmat *yhteenlasketut* erät jätetään erittelystä pois. |
 | `TRACKED_TABS` | tyhjä | Pilkulla erotellut välilehtien nimet. Tyhjä = kaikki. |
 | `PRICE_TTL_MINUTES` | `60` | Kuinka vanhaa hintasettiä käytetään ennen uutta hakua. |
@@ -436,6 +454,18 @@ yksikössä vaatisi säännön ohittamista eikä sen unohtamista.
 > **Kaavioiden akselit.** Per-arvo-sääntö on oikein yksittäiselle luvulle ja väärin akselille:
 > akseli jonka jaotus vaihtaisi yksikköä puolivälissä tekisi käyrästä valheen sen omasta
 > muodosta. Kaavio valitsee siksi yhden yksikön huippunsa mukaan ja kertoo sen jaotuksessa.
+
+Ylärivillä, tilan ja **kerää nyt** -napin välissä, juoksee **laskuri seuraavaan automaattiseen
+kierrokseen**: `next poll in 4:07`. Kun kierros on käynnissä, siinä lukee sen sijaan
+`polling now`, ja kun automaattista keruuta ei ole (tunnukset puuttuvat tai kerääjä on
+pysäytetty), laskurin paikalla lukee syy.
+
+> **▸ Miksi aika kysytään ajastimelta eikä lasketa cron-lausekkeesta uudelleen:** toinen
+> jäsennin voi olla eri mieltä sen kanssa joka oikeasti pitää kelloa, ja laskuri joka on eri
+> mieltä ajastimen kanssa on huonompi kuin ei laskuria lainkaan. Palvelin kysyy node-cronilta
+> sen omat seuraavat herätykset ja valitsee ensimmäisen, joka ei osu perääntymisjaksoon —
+> epäonnistuneen kierroksen jälkeen herätys **ohitetaan** eikä siirretä, joten "seuraava
+> herätys" ja "seuraava keruu" ovat eri kysymyksiä.
 
 Tukiluvut ovat
 sen alla rivinä, hiusviivoin jaettuna. Heti perässä **esinetaulukko**, jossa jokaisen rivin
@@ -677,7 +707,7 @@ Kaikki `/api`-alkuiset, kaikki JSONia.
 | `GET /api/leagues` | Nykyiset liigat GGG:ltä työpöytäversion valikkoa varten. Välimuistissa 6 h; epäonnistuessa pysyvät liigat. |
 | `GET /api/account` | Kenelle tallennettu istunto GGG:n mukaan kuuluu, ja täsmääkö se `POE_ACCOUNT_NAME`iin. 502 kun GGG ei suostu vastaamaan — se itsessään on vastaus. |
 | `POST /api/poll` | Käynnistää kierroksen ja vastaa **202 heti**, ei kierroksen päätyttyä. 409 jos kierros on jo kesken, 503 jos tunnukset puuttuvat. Lopputulos luetaan `/api/health`istä. |
-| `GET /api/health` | Viimeisin onnistuminen, pysäytyksen syy, nopeusrajoituksen tila, hintojen ikä. |
+| `GET /api/health` | Viimeisin onnistuminen, pysäytyksen syy, nopeusrajoituksen tila, hintojen ikä ja `schedule.nextRunAt`: milloin seuraava automaattinen kierros ajetaan. |
 | `GET /api/config` | Liiga, ajastin, kynnysarvot, liigat joilla on historiaa. **Ei POESESSIDiä.** |
 
 Kun `AUTH_TOKEN` on asetettu, jokainen näistä vaatii `Authorization: Bearer …` -otsakkeen

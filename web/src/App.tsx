@@ -14,6 +14,7 @@ import { ItemHistory } from './components/ItemHistory.tsx';
 import { DesktopSetup } from './components/DesktopSetup.tsx';
 import { hasToken } from './lib/api.ts';
 import { rangeStart } from './lib/series.ts';
+import { describeSchedule } from './lib/schedule.ts';
 import {
   formatAgo,
   formatPrice,
@@ -108,7 +109,8 @@ export default function App() {
       ) : snapshots.length === 0 ? (
         <Empty>
           Nothing recorded for {activeLeague || 'this league'} in this range yet. The poller writes a
-          snapshot every {config?.pollCron ?? '10 minutes'}; you can also trigger one by hand above.
+          snapshot {describeSchedule(config?.pollCron ?? null)}; you can also trigger one by hand
+          above.
         </Empty>
       ) : (
         <div className="space-y-6">

@@ -178,6 +178,13 @@ export interface HealthResponse {
     totalPolls: number;
     totalFailures: number;
   };
+  /** The automatic schedule, so the page can count down to the next poll. */
+  schedule: {
+    /** The cron expression the scheduler is running on. */
+    cron: string;
+    /** When it next fires *and polls*, or null when nothing is scheduled. */
+    nextRunAt: string | null;
+  };
   rateLimit: {
     buckets: Array<{
       limit: { hits: number; periodSeconds: number; restrictedSeconds: number };

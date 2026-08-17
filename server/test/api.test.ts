@@ -326,6 +326,22 @@ describe('GET /api/health', () => {
     const response = await app.inject({ method: 'GET', url: '/api/health' });
     expect(response.body).not.toContain(SESSION);
   });
+
+  it('says when the next automatic poll is due, so the page can count down to it', async () => {
+    const { app } = await makeApp();
+    const body = (await app.inject({ method: 'GET', url: '/api/health' })).json();
+
+    expect(body.schedule).toEqual({ cron: '*/10 * * * *', nextRunAt: '2026-01-01T02:10:00.000Z' });
+  });
+
+  it('answers null for the next poll rather than inventing one when none is scheduled', async () => {
+    // Unconfigured, halted, or a backoff outlasting the horizon: the server says null, and the
+    // dashboard says so in words. A time it cannot stand behind would be worse than no time.
+    const { app } = await makeApp({ nextPollAt: () => null });
+    const body = (await app.inject({ method: 'GET', url: '/api/health' })).json();
+
+    expect(body.schedule.nextRunAt).toBeNull();
+  });
 });
 
 describe('POST /api/poll', () => {

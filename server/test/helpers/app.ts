@@ -129,6 +129,7 @@ export async function makeApp(
         isStale: () => false,
       },
       rateLimit: () => rateLimitView,
+      nextPollAt: () => '2026-01-01T02:10:00.000Z',
       leagues: async () => ({
         leagues: [
           { id: 'Settlers', hardcore: false, ssf: false, ruthless: false, endAt: null },

@@ -43,6 +43,9 @@ export async function healthRoutes(app: FastifyInstance, deps: ApiDeps): Promise
       league: deps.config.league,
       uptimeSeconds: Math.round((Date.now() - deps.startedAt.getTime()) / 1000),
       poller: deps.poller.health,
+      // What the scheduler will do next, so the dashboard can count down to it rather than
+      // leaving someone to work it out from a cron expression.
+      schedule: { cron: deps.config.pollCron, nextRunAt: deps.nextPollAt() },
       rateLimit: deps.rateLimit(),
       prices:
         priceSet === null

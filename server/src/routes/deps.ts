@@ -34,4 +34,14 @@ export interface ApiDeps {
    * the answer — see services/profileService.ts.
    */
   profile: () => Promise<Profile>;
+  /**
+   * When the scheduler will next fire, given the poller's current state.
+   *
+   * Asked of the scheduler rather than reconstructed from the cron expression. Re-deriving it
+   * would be a second parser that can disagree with the one actually holding the timer, and a
+   * countdown that disagrees with reality is worse than none.
+   *
+   * Null when nothing is scheduled — no credentials, or a halt that only a person can clear.
+   */
+  nextPollAt: () => string | null;
 }

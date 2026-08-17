@@ -21,6 +21,7 @@ import { buildApp } from './app.ts';
 import { loadConfig, type AppConfig } from './lib/config.ts';
 import { describeError, registerSecret } from './lib/logger.ts';
 import { RateLimiter } from './lib/rateLimiter.ts';
+import { nextScheduledPoll } from './lib/schedule.ts';
 import { PriceService } from './services/priceService.ts';
 import { StashService } from './services/stashService.ts';
 import { PrismaPriceSetStore, PrismaSnapshotStore } from './services/snapshotRepo.ts';
@@ -106,6 +107,7 @@ export async function startServer(options: StartOptions = {}): Promise<RunningSe
       return prices;
     },
     rateLimit: () => limiter.view(),
+    nextPollAt: () => nextPollAt(),
     leagues: () => leagues.list(),
     profile: () =>
       fetchProfile({
@@ -179,6 +181,22 @@ export async function startServer(options: StartOptions = {}): Promise<RunningSe
   if (webDist === null) {
     log.warn('no built SPA found; serving the API only. Run `pnpm build` to bundle the frontend.');
   }
+
+  /**
+   * When the stash is next read automatically, for the dashboard's countdown.
+   *
+   * Nothing is scheduled while the poller is unconfigured or halted, and a backoff makes the
+   * next fire and the next poll different times — see `nextScheduledPoll`. Twenty runs is far
+   * more than a backoff can outlast at any sane schedule.
+   */
+  const nextPollAt = (): string | null => {
+    if (missing.length > 0) return null;
+    const health = poller.health;
+    if (health.halted) return null;
+
+    const notBefore = health.nextAttemptAfter === null ? 0 : Date.parse(health.nextAttemptAfter);
+    return nextScheduledPoll(task.getNextRuns(20), notBefore);
+  };
 
   const task = cron.schedule(config.pollCron, () => {
     void poller.tick().then((result) => {
