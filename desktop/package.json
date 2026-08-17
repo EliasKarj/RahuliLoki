@@ -8,8 +8,8 @@
   "main": "dist/main.js",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "package": "pnpm build && electron-builder --config electron-builder.yml",
-    "package:dir": "pnpm build && electron-builder --config electron-builder.yml --dir",
+    "package": "pnpm build && electron-builder --config electron-builder.yml --publish never",
+    "package:dir": "pnpm build && electron-builder --config electron-builder.yml --dir --publish never",
     "start": "pnpm build && electron .",
     "test": "vitest run",
     "test:watch": "vitest",

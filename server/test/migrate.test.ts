@@ -12,10 +12,19 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { checksum, listMigrations, migrate } from '../src/lib/migrate.ts';
 
-const MIGRATIONS = new URL('../prisma/migrations', import.meta.url).pathname;
+/**
+ * `fileURLToPath` rather than `.pathname`, which is only a filesystem path on POSIX.
+ *
+ * On Windows a file URL's pathname is `/D:/a/repo/...` — with a leading slash — and joining
+ * that against a working directory produced `D:\D:\a\repo\...`, a path with two drive
+ * letters in it. Every test in this file failed with ENOENT on Windows and passed everywhere
+ * else, which is exactly the shape of bug that survives until someone builds a release.
+ */
+const MIGRATIONS = fileURLToPath(new URL('../prisma/migrations', import.meta.url));
 const temps: string[] = [];
 
 function tempDb(): string {

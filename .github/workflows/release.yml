@@ -50,11 +50,12 @@ jobs:
       - run: pnpm test
 
       # Builds the dashboard and the server, then packages the shell around them.
+      #
+      # `--publish never` lives in the package script itself. electron-builder publishes to
+      # GitHub Releases on its own the moment it detects CI, and then fails the build asking
+      # for a token it should never have been given — the release is assembled once, below,
+      # out of all three platforms' artifacts.
       - run: pnpm desktop:package
-        env:
-          # electron-builder publishes to GitHub Releases by itself when it finds a token. It
-          # should not: the release is assembled once, below, from all three platforms' output.
-          GH_TOKEN: ''
 
       - uses: actions/upload-artifact@v4
         with:
