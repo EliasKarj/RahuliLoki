@@ -2,121 +2,123 @@
 
 # What Remains
 
-**Path of Exile -varallisuusseuranta, joka kerää itse. Ei nappia jota painaa, ei tiliä
-kolmannelle osapuolelle — oma kone, oma tietokanta.**
+**A Path of Exile wealth tracker that collects on its own. No button to press, no account handed
+to a third party — your machine, your database.**
 
-*Mitä liigasta jäi jäljelle, kun se paloi loppuun.*
+*What was left of the league after it burned through.*
 
-`työpöytäohjelma` · `itse ylläpidetty` · `yksi käyttäjä` · `SQLite`
+`desktop app` · `self-hosted` · `single user` · `SQLite`
 
 </div>
 
 ---
 
-## Mitä tämä tekee
+## What it does
 
-Kymmenen minuutin välein taustaprosessi
+Every ten minutes, a background process
 
-1. hakee poe.ninjan hinnat (välimuistissa tunnin),
-2. lukee aarrearkun välilehdet GGG:n rajapinnasta yksi kerrallaan,
-3. arvostaa jokaisen esineen, kertoo pinon koolla ja pudottaa kohinan,
-4. kirjoittaa **yhden rivin**: kokonaisarvo chaosina ja divineina, divine-kurssi hetkellä,
-   esinemäärä ja välilehtikohtainen erittely.
+1. fetches poe.ninja's prices (cached for an hour),
+2. reads your stash tabs from GGG's API, one at a time,
+3. values every item, multiplies by the stack size and drops the noise,
+4. writes **one row**: total worth in chaos and in divine, the divine rate at that moment, the
+   item count, and a per-tab breakdown.
 
-Sivu lukee rivit ja piirtää niistä nettoarvon, tuoton, esinetaulukon ja sen mikä liikkui.
-Mitään ei tarvitse painaa: kaavio on ajan tasalla kun avaat sen viikon tauon jälkeen.
+The page reads those rows and draws your net worth, your gain, the item table and what moved.
+Nothing needs pressing: the chart is up to date when you open it after a week away.
 
-Keruu jatkuu myös ikkuna kiinni — se on tämän etu Exilence Nextiin nähden, joka keräsi vain
-ollessaan auki.
+Collection continues with the window closed — which is this app's advantage over Exilence Next,
+which only recorded while it was open.
 
 ---
 
-## Asennus
+## Install
 
-**[Lataa asennuspaketti julkaisuista](https://github.com/EliasKarj/WhatRemains/releases/latest)**
-— Windows (`.exe`), macOS (`.dmg`) tai Linux (`.AppImage`). Asenna, käynnistä, paina *Sign in
-to Path of Exile*. Ohjelma avaa GGG:n oman kirjautumissivun omaan ikkunaansa; POESESSIDiä ei
-tarvitse kaivaa devtoolsista eikä kirjoittaa mihinkään.
+**[Download an installer from the releases](https://github.com/EliasKarj/WhatRemains/releases/latest)**
+— Windows (`.exe`), macOS (`.dmg`) or Linux (`.AppImage`). Install it, launch it, press *Sign in
+to Path of Exile*. The app opens GGG's own login page in its own window; there is no POESESSID to
+dig out of devtools and nowhere to paste one.
 
-Muut tavat — lähdekoodista, Docker, Fly.io, `./start.sh` — ovat
-**[asennusohjeessa](docs/asennus.md)**, samoin varmuuskopiot ja päivitys vanhasta
-valuuttalokista.
+The other ways to run it — from source, Docker, Fly.io, `./start.sh` — are in the
+**[installation guide](docs/asennus.md)**, along with backups and upgrading from the old
+valuuttaloki.
 
 ```bash
-# Lähdekoodista, jos haluat kääntää itse:
+# From source, if you would rather build it yourself:
 pnpm install
-pnpm desktop            # kääntää ja käynnistää
-pnpm desktop:package    # rakentaa asennuspaketin tälle alustalle
+pnpm desktop            # builds and launches
+pnpm desktop:package    # builds an installer for this platform
 ```
 
 ---
 
-## Käyttö
+## Using it
 
-Tili ja asetukset ovat **oikeassa ylänurkassa**: pieni nappi, jossa lukee tilin nimi ja jonka
-piste kertoo onko istunto tallessa. Paneelissa on tasan yksi nappi jota painetaan —
-kirjautuminen; kentät tallentavat itsensä.
+Your account and settings live in the **top-right corner**: a small button showing the account
+name, with a dot that says whether a session is stored. There is exactly one button to press in
+the panel — signing in; the fields save themselves.
 
-| Asetus | Mitä |
-|--------|------|
-| Tilin nimi | Tulee GGG:ltä kirjautuessa. Käsin kirjoitettavissa vain hätävarana. |
-| Liiga | Tallentuu valittaessa. *Other…* yksityisille liigoille. |
-| Keräysväli | 5 / 10 / 15 / 30 / 60 min. Liian tiheä valinta kertoo itsestään — ks. alla. |
-| Taustakeruu | Ikkunan sulkeminen piilottaa sen ilmaisinalueelle, kerääjä jatkaa. |
+| Setting | What it does |
+|---------|--------------|
+| Account name | Comes from GGG when you sign in. Typeable only as a fallback. |
+| League | Saves as soon as you pick it. *Other…* for private leagues. |
+| Interval | 5 / 10 / 15 / 30 / 60 min. Too tight a choice says so itself — see below. |
+| Background collection | Closing the window hides it to the tray; the collector keeps going. |
 
-Ylärivi kertoo tilan: milloin viimeksi kerättiin, kuinka vanhat hinnat ovat, paljonko GGG:n
-nopeusrajoituksesta on jäljellä ja **laskurin seuraavaan automaattiseen kierrokseen**.
+The top row is the state: when it last collected, how old the prices are, how much of GGG's rate
+limit is left, and **a countdown to the next automatic poll**.
 
-> **▸ Miksi 5 minuuttia ei mahdu isoon arkkuun:** yksi kierros maksaa yhden pyynnön per
-> välilehti, ja GGG:n arkkuraja on 200 pyyntöä tunnissa. Yhdeksäntoista välilehteä viiden
-> minuutin välein on 228 — yli budjetin. Mitään ei hajoa: nopeusrajoitin tahdistaa itsensä ja
-> kierrokset venyvät. Mutta se on hidastumista eikä tihenemistä, joten valikko sanoo sen
-> ääneen. Kymmenen minuutin välein sama arkku on 114 ja mahtuu hyvin.
+> **▸ Why five minutes does not fit a large stash:** one poll costs one request per tab, and
+> GGG's stash limit is 200 requests an hour. Nineteen tabs every five minutes is 228 — over
+> budget. Nothing breaks: the limiter paces itself and polls stretch out. But that is slowing
+> down rather than speeding up, so the menu says it out loud. At ten minutes the same stash is
+> 114 and fits comfortably.
 
 ---
 
-## Dokumentaatio
+## Documentation
 
-Jokaisen valinnan kohdalla on **▸ Miksi näin** -perustelu: mihin raja-arvo perustuu ja mitä se
-ei kerro.
+Every choice comes with a **▸ Why this way** note: what a threshold is based on, and what it
+does not tell you.
+
+> The pages below are written in Finnish. The code, the interface and this page are in English.
 
 | | |
 |---|---|
-| **[Asennus](docs/asennus.md)** | Työpöytäohjelma, `./start.sh`, Docker, Fly.io, varmuuskopiot, päivitys valuuttalokista |
-| **[Tunnukset ja pääsynhallinta](docs/turvallisuus.md)** | Miksi POESESSID on salasanan veroinen, miksi GGG:n OAuth ei tähän käy, mitä `AUTH_TOKEN` suojaa |
-| **[Mitä sivu näyttää](docs/ulkoasu.md)** | Näkymät, Citadel at the End of Time -ulkoasu, ja miten luvut lasketaan |
-| **[Mistä luvut tulevat](docs/sisalto.md)** | GGG:n nopeusrajoitus, poe.ninjan hinnat, esineiden nimien selvitys |
-| **[Kehitys](docs/kehitys.md)** | Ympäristömuuttujat, rajapinta, testit, projektin rakenne |
+| **[Installation](docs/asennus.md)** | Desktop app, `./start.sh`, Docker, Fly.io, backups, upgrading from valuuttaloki |
+| **[Credentials and access](docs/turvallisuus.md)** | Why POESESSID is as good as a password, why GGG's OAuth will not do here, what `AUTH_TOKEN` protects |
+| **[What the page shows](docs/ulkoasu.md)** | The views, the Citadel at the End of Time look, and how the numbers are computed |
+| **[Where the numbers come from](docs/sisalto.md)** | GGG's rate limit, poe.ninja's prices, resolving item names |
+| **[Development](docs/kehitys.md)** | Environment variables, the API, tests, project layout |
 
 ---
 
-## Tunnukset lyhyesti
+## Credentials, briefly
 
-POESESSID **on istuntoeväste, ei rajattu API-avain**. Sillä voi tehdä sivustolla kaiken minkä
-sinäkin: lukea arkun, listata esineitä myyntiin, kirjoittaa foorumille. Siksi se
+POESESSID **is a session cookie, not a scoped API key**. It can do everything on the site that
+you can: read your stash, list items for sale, post on the forum. So it
 
-- ei koskaan päädy lokiin, selaimeen, osoitteeseen eikä prosessin argumentteihin,
-- tallennetaan `0600`-oikeuksin käyttäjän omaan datahakemistoon,
-- luetaan GGG:n omasta kirjautumisikkunasta, ei tekstikentästä.
+- never reaches a log, a browser, a URL or a process argument,
+- is stored `0600` in your own application data directory,
+- is read from GGG's own login window, never from a text field.
 
-Palvelin **kieltäytyy käynnistymästä** avoimeen verkkoon ilman `AUTH_TOKEN`ia. Perustelut ja
-uhkamalli: **[Tunnukset ja pääsynhallinta](docs/turvallisuus.md)**.
+The server **refuses to start** on a public interface without an `AUTH_TOKEN`. The reasoning and
+the threat model: **[Credentials and access](docs/turvallisuus.md)**.
 
 ---
 
-## Julkaisun tekeminen
+## Cutting a release
 
 ```bash
-# 1. versio neljään package.jsoniin ja server/src/lib/config.ts:ään
-# 2. tagi:
+# 1. bump the version in the four package.json files and in server/src/lib/config.ts
+# 2. tag it:
 git tag v1.0.1 && git push origin v1.0.1
 ```
 
-`.github/workflows/release.yml` kääntää asennuspaketit Windowsille, macOS:lle ja Linuxille
-kukin omalla ajurillaan, ajaa testit ennen pakkaamista ja liittää tulokset julkaisuun.
+`.github/workflows/release.yml` builds the installers for Windows, macOS and Linux each on its
+own runner, runs the tests before packaging, and attaches the results to the release.
 
 ---
 
-## Lisenssi
+## Licence
 
-MIT. Ei liity Grinding Gear Gamesiin.
+MIT. Not affiliated with Grinding Gear Games.

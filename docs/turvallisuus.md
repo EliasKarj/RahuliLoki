@@ -2,7 +2,7 @@
 
 Mitä POESESSID on, miksi siihen suhtaudutaan kuin salasanaan, ja mitä token suojaa.
 
-[← takaisin READMEen](../README.md)
+[← back to the README](../README.md)
 
 ---
 

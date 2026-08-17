@@ -2,7 +2,7 @@
 
 Asetukset, rajapinta, testit ja projektin rakenne.
 
-[← takaisin READMEen](../README.md)
+[← back to the README](../README.md)
 
 ---
 

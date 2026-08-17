@@ -2,7 +2,7 @@
 
 GGG:n nopeusrajoitus, poe.ninjan hinnat ja esineiden nimien selvitys.
 
-[← takaisin READMEen](../README.md)
+[← back to the README](../README.md)
 
 ---
 

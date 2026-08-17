@@ -2,7 +2,7 @@
 
 Ulkoasu, näkymät ja se miten luvut lasketaan.
 
-[← takaisin READMEen](../README.md)
+[← back to the README](../README.md)
 
 ---
 

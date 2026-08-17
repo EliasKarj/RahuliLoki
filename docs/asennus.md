@@ -3,7 +3,7 @@
 Neljä tapaa ajaa sama ohjelma. Valmis asennuspaketti on niistä ensimmäinen ja useimmille ainoa;
 loput ovat lähdekoodista ajamista varten.
 
-[← takaisin READMEen](../README.md)
+[← back to the README](../README.md)
 
 ---
 
