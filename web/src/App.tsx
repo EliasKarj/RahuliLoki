@@ -63,7 +63,7 @@ export default function App() {
 
   return (
     <DenominationProvider divineRate={divineRate}>
-    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+    <div className="page mx-auto max-w-6xl px-4 py-6 sm:px-6">
       <header className="mb-6">
         <div className="flex flex-wrap items-baseline justify-between gap-3">
           <div className="flex items-baseline gap-3">

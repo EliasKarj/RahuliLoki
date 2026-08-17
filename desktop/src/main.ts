@@ -142,6 +142,36 @@ function showWindow(): void {
   mainWindow.focus();
 }
 
+/**
+ * The window's own title bar, painted rather than left to the system.
+ *
+ * The default caption is drawn by the platform in the platform's colours: a grey strip above a
+ * page that is deliberately not grey, with the app's name in the system font. It is the one
+ * part of the window the app was not designing, and it showed.
+ *
+ * On Windows and Linux the caption is hidden and an overlay put in its place — the minimise,
+ * maximise and close buttons stay native (they have to; nothing else gets snap layouts or the
+ * right hit targets) but are drawn in this app's colours. The strip they sit in is the page's
+ * own, which is why the dashboard reserves height for it: see `[data-shell="desktop"]` in
+ * index.css.
+ *
+ * macOS keeps its traffic lights and only insets them, because a Mac window without them in the
+ * top-left corner is a window Mac users cannot close.
+ */
+function titleBar(): Electron.BrowserWindowConstructorOptions {
+  if (process.platform === 'darwin') return { titleBarStyle: 'hiddenInset' };
+  return {
+    titleBarStyle: 'hidden',
+    titleBarOverlay: {
+      color: '#070610',
+      symbolColor: '#9e93b5',
+      // Matches TITLEBAR_HEIGHT in the dashboard's CSS. Two numbers, one strip: if they drift,
+      // the window buttons sit off-centre against the app's own bar.
+      height: 38,
+    },
+  };
+}
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1180,
@@ -152,6 +182,7 @@ function createWindow(): void {
     // The void the dashboard paints on, so a slow first paint is not a flash of the wrong dark.
     backgroundColor: '#070610',
     autoHideMenuBar: true,
+    ...titleBar(),
     webPreferences: {
       preload: join(here, 'preload.cjs'),
       // The window loads our own dashboard over loopback, but it is still a renderer: it gets

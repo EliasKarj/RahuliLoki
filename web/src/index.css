@@ -123,6 +123,84 @@ body {
     0 0 0.75rem rgba(226, 169, 79, 0.12);
 }
 
+/**
+ * Scrollbars, in the app's own colours rather than the platform's.
+ *
+ * The default is a light grey trough with a mid-grey thumb — drawn for a white page, and on a
+ * page this dark it reads as a strip of the wrong application down the right-hand side. There
+ * are two of them on screen at once, the window's and the item table's, so it is not subtle.
+ *
+ * `scrollbar-color` is the standard property and does the whole job on Firefox; the WebKit
+ * pseudo-elements are what Electron actually renders, and they allow the rounded thumb and the
+ * transparent trough that make the bar disappear into the page until it is used.
+ */
+* {
+  scrollbar-color: var(--color-ink-700) transparent;
+  scrollbar-width: thin;
+}
+
+::-webkit-scrollbar {
+  width: 0.625rem;
+  height: 0.625rem;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--color-ink-700);
+  border-radius: 999px;
+  /* Inset by a transparent border, so the thumb is a bar in a gutter and not the gutter. */
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-ink-600);
+}
+
+/**
+ * Room for the window's own title bar, in the desktop shell only.
+ *
+ * Electron hides the system caption and puts the minimise/maximise/close buttons in an overlay
+ * over the top of the page — so without this the page's first row would be underneath them.
+ * The height matches `titleBar()` in desktop/src/main.ts; the two have to agree.
+ *
+ * The strip is a drag handle: with the caption gone, it is the only thing left to move the
+ * window by. A draggable region swallows clicks, so every control on the page opts back out of
+ * it — which is why the rule below names them rather than the strip.
+ */
+[data-shell='desktop'] body {
+  padding-top: 2.375rem;
+}
+
+[data-shell='desktop'] body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2.375rem;
+  background-color: var(--color-ink-950);
+  border-bottom: 1px solid var(--color-ink-800);
+  -webkit-app-region: drag;
+  z-index: 40;
+}
+
+/* The strip already provides the breathing room the page's own top padding was giving it. */
+[data-shell='desktop'] .page {
+  padding-top: 0.5rem;
+}
+
+[data-shell='desktop'] button,
+[data-shell='desktop'] a,
+[data-shell='desktop'] input,
+[data-shell='desktop'] select {
+  -webkit-app-region: no-drag;
+}
+
 /** Recharts draws its own focus outline on every hover; suppress it. */
 .recharts-wrapper:focus,
 .recharts-surface:focus {

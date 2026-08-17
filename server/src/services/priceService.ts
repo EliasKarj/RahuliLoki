@@ -136,6 +136,22 @@ export function iconUrl(value: unknown, base = 'https://poe.ninja'): string | nu
   return allowed ? parsed.toString() : null;
 }
 
+/**
+ * Whether an icon is GGG's own artwork, off the CDN the game itself serves from.
+ *
+ * The stash gives one of these per item; poe.ninja gives its own for chaos and divine. Both are
+ * loadable, but only one of them is the picture of the item being counted, so this is the tie
+ * break in `rememberIcons`.
+ */
+function fromGameCdn(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return host === 'poecdn.com' || host.endsWith('.poecdn.com');
+  } catch {
+    return false;
+  }
+}
+
 export interface PriceServiceOptions {
   league: string;
   /**
@@ -304,20 +320,26 @@ export class PriceService {
    *
    * The poller calls this with what it saw in the stash. Existing entries are kept: an icon does
    * not change, and rewriting the row on every poll for no difference is a write nobody asked
-   * for. Returns how many were new, which is also how it decides whether to save at all.
+   * for. Returns how many were written, which is also how it decides whether to save at all.
+   *
+   * The one exception is an entry poe.ninja supplied. Those cover chaos and divine only, and
+   * they point at poe.ninja's own origin rather than at GGG's CDN — so the two most-shown items
+   * in the app were the only two whose artwork came from somewhere else. The stash's copy is
+   * the item's own artwork and sits where every other icon does, so it replaces them.
    */
   async rememberIcons(icons: Record<string, string>): Promise<number> {
     const set = this.#cached;
     if (set === null) return 0;
 
-    let added = 0;
+    let written = 0;
     for (const [name, url] of Object.entries(icons)) {
-      if (set.icons[name] !== undefined) continue;
+      const held = set.icons[name];
+      if (held !== undefined && (fromGameCdn(held) || !fromGameCdn(url))) continue;
       set.icons[name] = url;
-      added += 1;
+      written += 1;
     }
-    if (added > 0) await this.#options.store.save(set);
-    return added;
+    if (written > 0) await this.#options.store.save(set);
+    return written;
   }
 
   isStale(set: PriceSet | null = this.#cached): boolean {

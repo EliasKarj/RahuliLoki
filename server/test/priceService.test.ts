@@ -480,6 +480,40 @@ describe('rememberIcons', () => {
     expect(subject.cached?.icons['The Doctor']).toBe('https://web.poecdn.com/a.png');
   });
 
+  it("lets the stash's artwork replace poe.ninja's", async () => {
+    // poe.ninja publishes icons for chaos and divine only, off its own origin. Those two are
+    // the most-shown items in the app — the headline figure carries one of them — so having
+    // them come from somewhere other than every other icon is exactly the wrong exception.
+    const { store, saved } = memoryStore();
+    const subject = service({ store });
+    await subject.getPrices();
+    (subject.cached as PriceSet).icons['Divine Orb'] = 'https://poe.ninja/gen/image/divine.png';
+    const before = saved.length;
+
+    const written = await subject.rememberIcons({
+      'Divine Orb': 'https://web.poecdn.com/divine.png',
+    });
+
+    expect(written).toBe(1);
+    expect(subject.cached?.icons['Divine Orb']).toBe('https://web.poecdn.com/divine.png');
+    expect(saved.length).toBe(before + 1);
+  });
+
+  it('does not let poe.ninja take a name back from the stash', async () => {
+    // The replacement runs one way only. Otherwise the two would trade places on every poll and
+    // rewrite the row for it.
+    const subject = service();
+    await subject.getPrices();
+    await subject.rememberIcons({ 'Divine Orb': 'https://web.poecdn.com/divine.png' });
+
+    const written = await subject.rememberIcons({
+      'Divine Orb': 'https://poe.ninja/gen/image/divine.png',
+    });
+
+    expect(written).toBe(0);
+    expect(subject.cached?.icons['Divine Orb']).toBe('https://web.poecdn.com/divine.png');
+  });
+
   it('does nothing at all when there is no price set yet', async () => {
     const subject = service();
     expect(await subject.rememberIcons({ 'The Doctor': 'https://web.poecdn.com/doc.png' })).toBe(0);

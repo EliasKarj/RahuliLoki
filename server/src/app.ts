@@ -39,10 +39,16 @@ const CSP = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
-  // Item icons are served off GGG's own CDN, which is where poe.ninja points at them. Widened
-  // for images only — an <img> cannot execute, and the server-side icon parser already refuses
-  // any URL that is not https on a poecdn.com host, so this is the second of two checks.
-  "img-src 'self' data: https://web.poecdn.com",
+  // Item icons come from GGG's CDN (the stash gives one per item) and from poe.ninja, which
+  // serves the chaos and divine artwork off its own origin. Widened for images only — an <img>
+  // cannot execute, and `iconUrl` in priceService already refuses any URL that is not https on
+  // one of these hosts, so this is the second of two checks.
+  //
+  // These two lists have to agree. When they did not, the server happily handed the page the
+  // two icons it was forbidden to load: every item in the table had artwork except Chaos Orb
+  // and Divine Orb, and the headline figure lost the orb beside it. A blocked image says
+  // nothing on screen, so the mismatch was invisible until someone looked at a real stash.
+  "img-src 'self' data: https://web.poecdn.com https://poe.ninja",
   "font-src 'self'",
   "connect-src 'self'",
   "object-src 'none'",
