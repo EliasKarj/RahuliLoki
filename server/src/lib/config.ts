@@ -224,7 +224,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ConfigResult {
     uniqueCategories: readList(env, 'PRICE_UNIQUE_CATEGORIES', DEFAULT_UNIQUE_CATEGORIES),
     priceTtlMs: priceTtlMinutes * 60_000,
     // GGG asks for a User-Agent they can identify and contact. Give them one.
-    userAgent: `what-remains/${VERSION} (+https://github.com/EliasKarj/RahuliLoki) ${contact}`,
+    userAgent: `what-remains/${VERSION} (+https://github.com/EliasKarj/WhatRemains) ${contact}`,
     port,
     host,
     authToken,

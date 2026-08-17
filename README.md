@@ -169,13 +169,13 @@ käynnistyy sen jälkeen uudelleen taustalla.
 ### Yksi komento (nopein)
 
 ```bash
-git clone https://github.com/EliasKarj/RahuliLoki.git what-remains
+git clone https://github.com/EliasKarj/WhatRemains.git what-remains
 cd what-remains
 ./start.sh              # macOS, Linux
 ```
 
 ```powershell
-git clone https://github.com/EliasKarj/RahuliLoki.git what-remains
+git clone https://github.com/EliasKarj/WhatRemains.git what-remains
 cd what-remains
 .\start.ps1            # Windows
 ```
@@ -210,7 +210,7 @@ osoitteessa <http://localhost:3000>.
 ### Docker (suositeltu palvelimelle)
 
 ```bash
-git clone https://github.com/EliasKarj/RahuliLoki.git what-remains
+git clone https://github.com/EliasKarj/WhatRemains.git what-remains
 cd what-remains
 cp .env.example .env      # täytä POESESSID ja POE_ACCOUNT_NAME
 docker compose up -d
