@@ -39,7 +39,7 @@ to Path of Exile*. The app opens GGG's own login page in its own window; there i
 dig out of devtools and nowhere to paste one.
 
 The other ways to run it — from source, Docker, Fly.io, `./start.sh` — are in the
-**[installation guide](docs/asennus.md)**, along with backups and upgrading from the old
+**[installation guide](docs/installation.md)**, along with backups and upgrading from the old
 valuuttaloki.
 
 ```bash
@@ -80,15 +80,13 @@ limit is left, and **a countdown to the next automatic poll**.
 Every choice comes with a **▸ Why this way** note: what a threshold is based on, and what it
 does not tell you.
 
-> The pages below are written in Finnish. The code, the interface and this page are in English.
-
 | | |
 |---|---|
-| **[Installation](docs/asennus.md)** | Desktop app, `./start.sh`, Docker, Fly.io, backups, upgrading from valuuttaloki |
-| **[Credentials and access](docs/turvallisuus.md)** | Why POESESSID is as good as a password, why GGG's OAuth will not do here, what `AUTH_TOKEN` protects |
-| **[What the page shows](docs/ulkoasu.md)** | The views, the Citadel at the End of Time look, and how the numbers are computed |
-| **[Where the numbers come from](docs/sisalto.md)** | GGG's rate limit, poe.ninja's prices, resolving item names |
-| **[Development](docs/kehitys.md)** | Environment variables, the API, tests, project layout |
+| **[Installation](docs/installation.md)** | Desktop app, `./start.sh`, Docker, Fly.io, backups, upgrading from valuuttaloki |
+| **[Credentials and access](docs/credentials.md)** | Why POESESSID is as good as a password, why GGG's OAuth will not do here, what `AUTH_TOKEN` protects |
+| **[What the page shows](docs/interface.md)** | The views, the Citadel at the End of Time look, and how the numbers are computed |
+| **[Where the numbers come from](docs/data.md)** | GGG's rate limit, poe.ninja's prices, resolving item names |
+| **[Development](docs/development.md)** | Environment variables, the API, tests, project layout |
 
 ---
 
@@ -102,7 +100,7 @@ you can: read your stash, list items for sale, post on the forum. So it
 - is read from GGG's own login window, never from a text field.
 
 The server **refuses to start** on a public interface without an `AUTH_TOKEN`. The reasoning and
-the threat model: **[Credentials and access](docs/turvallisuus.md)**.
+the threat model: **[Credentials and access](docs/credentials.md)**.
 
 ---
 
