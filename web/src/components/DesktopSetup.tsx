@@ -13,6 +13,9 @@
  * It still opens itself when something is missing. Hiding the setup screen from someone who has
  * not set anything up would be a worse trade than the space it costs.
  *
+ * There is one button to press in it: signing in. The fields save themselves as they are
+ * edited, and the sign-in carries what used to take two more presses — see `signIn`.
+ *
  * Renders nothing in a browser — `bridge()` is null there — so the same bundle serves both.
  */
 
@@ -52,6 +55,15 @@ export function DesktopSetup({ onChanged }: { onChanged: () => void }) {
   const [leagueSource, setLeagueSource] = useState<'ggg' | 'fallback' | null>(null);
   /** Set when the operator picked "Other", so the free-text box stays open while they type. */
   const [custom, setCustom] = useState(false);
+  /**
+   * What is in the two text fields, while it differs from what is stored.
+   *
+   * Null means "whatever the settings say" — which is what they say for all but the seconds
+   * between a keystroke and the blur that saves it. Holding the draft separately is what lets
+   * the stored value win again after a sign-in replaces the account name from under the cursor.
+   */
+  const [accountDraft, setAccountDraft] = useState<string | null>(null);
+  const [leagueDraft, setLeagueDraft] = useState<string | null>(null);
   /** How many tabs the last poll read. Null until one has, which is the honest "I don't know". */
   const [tabCount, setTabCount] = useState<number | null>(null);
   const root = useRef<HTMLDivElement>(null);
@@ -149,6 +161,61 @@ export function DesktopSetup({ onChanged }: { onChanged: () => void }) {
   const field =
     'w-full rounded border border-ink-700 bg-ink-900 px-2 py-1.5 text-sm text-ink-100 outline-none focus:border-accent-600';
 
+  const accountName = accountDraft ?? settings.accountName;
+  const league = leagueDraft ?? settings.league;
+
+  /** Text fields save themselves when they lose focus. Nothing to press, nothing to forget. */
+  const saveAccountName = (): void => {
+    const value = accountName.trim();
+    setAccountDraft(null);
+    if (value === settings.accountName) return;
+    void run(() => desktop.writeSettings({ accountName: value }), 'Saved.');
+  };
+
+  const saveLeague = (): void => {
+    const value = league.trim();
+    setLeagueDraft(null);
+    if (value === '' || value === settings.league) return;
+    void run(() => desktop.writeSettings({ league: value }), 'Saved.').then(() => setCustom(false));
+  };
+
+  /**
+   * Sign in — and, in the same press, everything the two buttons next to it used to do.
+   *
+   * They were three presses for one intention. "Save" wrote a league and an account name;
+   * "Ask GGG" replaced that account name with the one GGG reports; signing in proved which
+   * account the session belongs to and reported the same name a third time. Someone setting the
+   * app up had to press all three, in an order nothing on screen explained.
+   *
+   * So the fields save themselves as they are edited, and this one button carries the rest: the
+   * league sitting in the form goes with the sign-in, and GGG's answer settles the name. The
+   * "Ask GGG" case that still matters — a stored session whose account name never got filled in
+   * — is the fallback below, and it needs no button because the only time to run it is now.
+   */
+  const signIn = async (): Promise<string> => {
+    const chosen = league.trim();
+    // Before the window opens: a league picked but not yet blurred would otherwise be lost to
+    // the settings reload that follows a successful login.
+    if (chosen !== '' && chosen !== settings.league) {
+      await desktop.writeSettings({ league: chosen });
+      setLeagueDraft(null);
+      setCustom(false);
+    }
+
+    const result = await desktop.logIn();
+    if (result.cancelled) return 'Sign-in cancelled — nothing was stored.';
+
+    // The shell stores the name GGG gave it during the login. This covers the case where it
+    // could not: an older stored session, or a login that verified without returning a name.
+    const after = await desktop.readSettings();
+    if (after.accountName.trim() === '') {
+      const account = await api.account();
+      await desktop.writeSettings({ accountName: account.name });
+      return `Signed in. GGG says this session is ${account.name}.`;
+    }
+    return `Signed in as ${after.accountName}.`;
+  };
+
   return (
     <div className="relative" ref={root}>
       <button
@@ -194,34 +261,19 @@ export function DesktopSetup({ onChanged }: { onChanged: () => void }) {
           {/* Who and which league first, the session below the hairline. The panel is titled
               "Account", and the account is what these two fields say; signing in is the action
               that backs them up rather than the thing being looked at. */}
-          <form
-            className="space-y-3"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const form = new FormData(event.currentTarget);
-              const chosen = String(form.get('league') ?? '').trim();
-              if (chosen === OTHER) {
-                // They opened the dropdown, chose Other and submitted without typing.
-                setCustom(true);
-                setMessage('Type the league name, then save.');
-                return;
-              }
-              void run(
-                () =>
-                  desktop.writeSettings({
-                    accountName: String(form.get('accountName') ?? '').trim(),
-                    league: chosen || 'Standard',
-                  }),
-                'Saved.',
-              ).then(() => setCustom(false));
-            }}
-          >
+          <div className="space-y-3">
             <label className="flex flex-col gap-1 text-xs text-ink-400">
               Account name
               <input
-                name="accountName"
-                defaultValue={settings.accountName}
+                value={accountName}
+                disabled={busy}
+                onChange={(event) => setAccountDraft(event.target.value)}
+                onBlur={saveAccountName}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') event.currentTarget.blur();
+                }}
                 placeholder="Exile#1234"
+                title="Signing in fills this in from GGG. Type it only if you must."
                 className={field}
               />
             </label>
@@ -230,25 +282,44 @@ export function DesktopSetup({ onChanged }: { onChanged: () => void }) {
               {leagues === null || custom ? (
                 // Before the list arrives, and for private leagues GGG does not publish.
                 <input
-                  name="league"
-                  defaultValue={settings.league}
+                  value={league}
+                  disabled={busy}
                   autoFocus={custom}
+                  onChange={(event) => setLeagueDraft(event.target.value)}
+                  onBlur={saveLeague}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') event.currentTarget.blur();
+                  }}
                   placeholder="League name"
                   className={field}
                 />
               ) : (
                 <select
-                  name="league"
-                  defaultValue={settings.league}
+                  value={league}
+                  disabled={busy}
                   onChange={(event) => {
-                    if (event.target.value === OTHER) setCustom(true);
+                    const chosen = event.target.value;
+                    if (chosen === OTHER) {
+                      setCustom(true);
+                      return;
+                    }
+                    // Saved on the spot, like the interval and the checkboxes below. There is
+                    // no button to press afterwards, so there must be nothing left to press.
+                    //
+                    // The draft holds the new value across the write so the control does not
+                    // snap back to the old league for the frame before the settings reload,
+                    // and is dropped again once the stored value agrees with it.
+                    setLeagueDraft(chosen);
+                    void run(() => desktop.writeSettings({ league: chosen }), 'Saved.').then(() =>
+                      setLeagueDraft(null),
+                    );
                   }}
                   className={field}
                 >
                   {/* The configured league is always an option, even if GGG no longer lists
                       it — a finished league still has history worth reading. */}
-                  {leagues.some((entry) => entry.id === settings.league) ? null : (
-                    <option value={settings.league}>{settings.league}</option>
+                  {leagues.some((entry) => entry.id === league) ? null : (
+                    <option value={league}>{league}</option>
                   )}
                   {ordered(leagues).map((entry) => (
                     <option key={entry.id} value={entry.id}>
@@ -260,44 +331,9 @@ export function DesktopSetup({ onChanged }: { onChanged: () => void }) {
                 </select>
               )}
             </label>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="submit"
-                disabled={busy}
-                className="rounded border border-ink-700 px-3 py-1.5 text-sm text-ink-200 transition-colors hover:border-ink-600 disabled:opacity-50"
-              >
-                Save
-              </button>
-              {/* Typing the account name is a pure liability when the session already knows it.
-                  This asks GGG and fills it in — and because the question needs no account name,
-                  a failure here proves the session is the problem rather than the spelling. */}
-              <button
-                type="button"
-                disabled={busy || !settings.hasSession}
-                // What the paragraph under this used to say, in the place a tooltip costs
-                // nothing: hover if you want it, and it is out of the way if you do not.
-                title={
-                  settings.hasSession
-                    ? 'Fill in the account name from the signed-in session'
-                    : 'Sign in first'
-                }
-                onClick={() =>
-                  void run(async () => {
-                    const account = await api.account();
-                    if (account.matches) return `GGG confirms this session is ${account.name}.`;
-                    await desktop.writeSettings({ accountName: account.name });
-                    return `GGG says this session is ${account.name}. Saved.`;
-                  }, 'Checked.')
-                }
-                className="rounded border border-ink-700 px-3 py-1.5 text-sm text-ink-200 transition-colors hover:border-ink-600 disabled:opacity-50"
-              >
-                Ask GGG
-              </button>
-            </div>
-          </form>
-          {/* The standing explanation is gone: the placeholder already shows the #number, and
-              "Ask GGG" is a button you can simply press. This one stays because it is not
-              advice — it says the dropdown is currently short a few leagues and why. */}
+          </div>
+          {/* Kept because it is not advice — it says the dropdown is currently short a few
+              leagues, and why. */}
           {leagueSource === 'fallback' ? (
             <p className="text-xs text-ink-500">
               League list unavailable — showing the permanent leagues. Pick Other… for anything
@@ -310,8 +346,8 @@ export function DesktopSetup({ onChanged }: { onChanged: () => void }) {
               <button
                 type="button"
                 disabled={busy}
-                onClick={() => void run(() => desktop.logIn(), 'Signed in.')}
-                title="Opens GGG's own login page in a separate window. The session never passes through this dashboard."
+                onClick={() => void run(signIn, 'Signed in.')}
+                title="Opens GGG's own login page in a separate window, then stores the account name GGG reports. The session never passes through this dashboard."
                 className="rounded bg-accent-600 px-3 py-1.5 text-sm font-medium text-ink-950 transition-colors hover:bg-accent-500 disabled:opacity-50"
               >
                 {settings.hasSession ? 'Sign in again' : 'Sign in to Path of Exile'}

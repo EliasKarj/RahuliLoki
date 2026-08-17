@@ -106,9 +106,27 @@ ei tarvitse kaivaa devtoolsista eikä liittää mihinkään.
 
 Tili ja asetukset ovat **oikeassa ylänurkassa**: pieni nappi, jossa lukee tilin nimi ja jonka
 piste kertoo onko istunto tallessa. Klikkaus avaa loput kolmena ryhmänä hiusviivoin erotettuna:
-**kuka ja mikä liiga** (tilin nimi, liiga, *Ask GGG*), **istunto** (kirjautuminen ja uloskirjaus)
-ja **mitä kerääjä tekee** (keräysväli, taustakeruu, käynnistys koneen mukana). Ulkopuolinen
+**kuka ja mikä liiga** (tilin nimi, liiga), **istunto** (kirjautuminen ja uloskirjaus) ja
+**mitä kerääjä tekee** (keräysväli, taustakeruu, käynnistys koneen mukana). Ulkopuolinen
 klikkaus tai Esc sulkee.
+
+**Paneelissa on tasan yksi nappi jota painetaan: kirjautuminen.** Kentät tallentavat itsensä
+— liiga valittaessa, tekstikentät kun ne menettävät kohdistuksen tai kun painaa Enteriä —
+ja kirjautuminen tekee lopun.
+
+> **▸ Miksi *Save* ja *Ask GGG* katosivat:** ne olivat kolme painallusta yhtä aikomusta kohti.
+> *Save* kirjoitti liigan ja tilin nimen, *Ask GGG* korvasi juuri kirjoitetun nimen sillä jonka
+> GGG kertoo, ja kirjautuminen todisti kenelle istunto kuuluu — eli kertoi saman nimen
+> kolmannen kerran. Käyttöönottaja joutui painamaan kaikkia kolmea järjestyksessä jota mikään
+> ruudulla ei selittänyt.
+>
+> Nyt kirjautuminen vie mukanaan lomakkeessa olevan liigan ja ottaa nimen GGG:ltä. Se *Ask
+> GGG* -tapaus joka yhä merkitsee — tallessa oleva istunto jonka tilinimi jäi tyhjäksi —
+> hoituu kirjautumisen sisällä, eikä tarvitse omaa nappia: ainoa hetki jolloin sen kysyminen
+> kannattaa on juuri se hetki.
+>
+> Tilin nimen kenttä jäi silti kirjoitettavaksi. GGG:n vastaus on aina parempi kuin käsin
+> kirjoitettu nimi, mutta kenttä on ainoa ulospääsy siltä varalta ettei `/api/profile` vastaa.
 
 > **▸ Miksi nurkkaan:** kirjautuminen on ensimmäisellä käynnistyksellä ainoa asia jolla on
 > väliä ja jokaisella seuraavalla viimeinen. Koko levyinen laatikko, jossa luki "kirjautuneena
