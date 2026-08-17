@@ -191,34 +191,9 @@ export function DesktopSetup({ onChanged }: { onChanged: () => void }) {
             </button>
           </div>
 
-          <div>
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void run(() => desktop.logIn(), 'Signed in.')}
-                className="rounded bg-accent-600 px-3 py-1.5 text-sm font-medium text-ink-950 transition-colors hover:bg-accent-500 disabled:opacity-50"
-              >
-                {settings.hasSession ? 'Sign in again' : 'Sign in to Path of Exile'}
-              </button>
-              {settings.hasSession ? (
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void run(() => desktop.logOut(), 'Session forgotten.')}
-                  className="text-xs text-ink-400 transition-colors hover:text-ink-200"
-                >
-                  Sign out
-                </button>
-              ) : null}
-            </div>
-            <p className="mt-2 text-xs text-ink-500">
-              {settings.hasSession ? 'A session is stored. ' : 'No session yet. '}
-              Opens GGG&rsquo;s real login page in its own window; your session never passes
-              through this dashboard and is never shown on screen.
-            </p>
-          </div>
-
+          {/* Who and which league first, the session below the hairline. The panel is titled
+              "Account", and the account is what these two fields say; signing in is the action
+              that backs them up rather than the thing being looked at. */}
           <form
             className="space-y-3"
             onSubmit={(event) => {
@@ -322,7 +297,36 @@ export function DesktopSetup({ onChanged }: { onChanged: () => void }) {
               : ''}
           </p>
 
-          <div>
+          <div className="border-t border-ink-800 pt-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void run(() => desktop.logIn(), 'Signed in.')}
+                className="rounded bg-accent-600 px-3 py-1.5 text-sm font-medium text-ink-950 transition-colors hover:bg-accent-500 disabled:opacity-50"
+              >
+                {settings.hasSession ? 'Sign in again' : 'Sign in to Path of Exile'}
+              </button>
+              {settings.hasSession ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void run(() => desktop.logOut(), 'Session forgotten.')}
+                  className="text-xs text-ink-400 transition-colors hover:text-ink-200"
+                >
+                  Sign out
+                </button>
+              ) : null}
+            </div>
+            <p className="mt-2 text-xs text-ink-500">
+              {settings.hasSession ? 'A session is stored. ' : 'No session yet. '}
+              Opens GGG&rsquo;s real login page in its own window; your session never passes
+              through this dashboard and is never shown on screen.
+            </p>
+          </div>
+
+          {/* Third group: what the collector does, once there is an account for it to do it to. */}
+          <div className="border-t border-ink-800 pt-4">
             <label className="flex flex-wrap items-center gap-2 text-xs text-ink-300">
               Read the stash every
               <select

@@ -102,8 +102,10 @@ Ohjelma avaa GGG:n kirjautumissivun omaan ikkunaansa, ja istunto luetaan siitä.
 ei tarvitse kaivaa devtoolsista eikä liittää mihinkään.
 
 Tili ja asetukset ovat **oikeassa ylänurkassa**: pieni nappi, jossa lukee tilin nimi ja jonka
-piste kertoo onko istunto tallessa. Klikkaus avaa loput — kirjautuminen, liiga, keräysväli,
-taustakeruu. Ulkopuolinen klikkaus tai Esc sulkee.
+piste kertoo onko istunto tallessa. Klikkaus avaa loput kolmena ryhmänä hiusviivoin erotettuna:
+**kuka ja mikä liiga** (tilin nimi, liiga, *Ask GGG*), **istunto** (kirjautuminen ja uloskirjaus)
+ja **mitä kerääjä tekee** (keräysväli, taustakeruu, käynnistys koneen mukana). Ulkopuolinen
+klikkaus tai Esc sulkee.
 
 > **▸ Miksi nurkkaan:** kirjautuminen on ensimmäisellä käynnistyksellä ainoa asia jolla on
 > väliä ja jokaisella seuraavalla viimeinen. Koko levyinen laatikko, jossa luki "kirjautuneena
