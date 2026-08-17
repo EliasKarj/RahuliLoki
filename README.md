@@ -106,11 +106,16 @@ the threat model: **[Credentials and access](docs/credentials.md)**.
 
 ## Cutting a release
 
-```bash
-# 1. bump the version in the four package.json files and in server/src/lib/config.ts
-# 2. tag it:
-git tag v1.0.1 && git push origin v1.0.1
+1. Bump the version in the four `package.json` files and in `server/src/lib/config.ts`.
+2. Tag it:
+
 ```
+git tag v1.0.1
+git push origin v1.0.1
+```
+
+Two lines rather than one joined by `&&`: Windows PowerShell 5.1 — still the default on
+Windows 10 and 11 — parses `&&` as an error rather than as a separator.
 
 `.github/workflows/release.yml` builds the installers for Windows, macOS and Linux each on its
 own runner, runs the tests before packaging, and attaches the results to the release.
