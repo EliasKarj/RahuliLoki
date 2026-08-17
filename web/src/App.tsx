@@ -116,12 +116,13 @@ export default function App() {
         <div className="space-y-6">
           <Hero snapshots={snapshots} stats={stats} orbs={health?.prices ?? null} />
 
-          {/* No subtitle. It said when the snapshot was taken, which the status row above
-              already says as "last poll 4 min ago", and that names are clickable, which the
-              cursor says on the way to clicking one. */}
-          <Panel title="Items">
+          {/* No heading at all, unlike every section below it. Those fold away and need a
+              label to be unfolded by; this one is always open, sits directly under the hero's
+              rule, and opens with a search box over a column called Item. A word saying
+              "Items" over that is a label on a labelled thing. */}
+          <section>
             <TopItemsTable items={latest?.topItems ?? []} onSelect={setSelected} />
-          </Panel>
+          </section>
 
           <Panel
             collapsible
