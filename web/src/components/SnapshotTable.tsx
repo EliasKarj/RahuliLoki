@@ -7,7 +7,8 @@
  */
 
 import type { SeriesInterval, SnapshotWithTabs } from '../lib/api.ts';
-import { formatAgo, formatChaos, formatDateTime, formatDivine, formatCount, formatSignedChaos } from '../lib/format.ts';
+import { formatAgo, formatChaos, formatDateTime, formatDivine, formatCount } from '../lib/format.ts';
+import { usePrices } from '../lib/denomination.tsx';
 import { Empty } from './ui.tsx';
 
 interface Props {
@@ -21,6 +22,7 @@ export function SnapshotTable({ snapshots, intervals, limit = 25 }: Props) {
     return <Empty>No snapshots in this range.</Empty>;
   }
 
+  const prices = usePrices();
   const byToId = new Map(intervals.map((interval) => [interval.toId, interval]));
   const rows = [...snapshots].reverse().slice(0, limit);
 
@@ -60,12 +62,14 @@ export function SnapshotTable({ snapshots, intervals, limit = 25 }: Props) {
                     </span>
                   ) : null}
                 </td>
-                <td className="num py-1.5 pr-3 text-ink-100">{formatChaos(snapshot.totalChaos)}</td>
+                <td className="num py-1.5 pr-3 text-ink-100">{prices.price(snapshot.totalChaos)}</td>
                 <td className={`num py-1.5 pr-3 ${changeColour}`}>
-                  {interval === undefined ? '—' : formatSignedChaos(interval.deltaChaos)}
+                  {interval === undefined ? '—' : prices.signed(interval.deltaChaos)}
                 </td>
                 <td className="num py-1.5 pr-3 text-cool-500">{formatDivine(snapshot.totalDivine)}</td>
-                <td className="num py-1.5 pr-3 text-ink-400">{formatChaos(snapshot.divineRate)}</td>
+                {/* Chaos always. This column is the conversion itself; in divine it would
+                    read 1.00 for every row and say nothing. */}
+                <td className="num py-1.5 pr-3 text-ink-400">{formatChaos(snapshot.divineRate)}c</td>
                 <td className="num py-1.5 pr-3 text-ink-400">{formatCount(snapshot.itemCount)}</td>
                 <td
                   className="num py-1.5 text-ink-400"

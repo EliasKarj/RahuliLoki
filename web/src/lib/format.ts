@@ -141,3 +141,61 @@ export function denominate(chaos: number, divineRate: number): Denominated {
 export function formatDenominated(amount: Denominated): string {
   return amount.unit === 'divine' ? formatDivine(amount.value) : formatChaos(amount.value);
 }
+
+/**
+ * A price, in the orb it belongs in, with its unit attached.
+ *
+ * The one formatter every price on the page goes through, so the rule is stated once. Below a
+ * divine an amount reads in chaos; at or above one it reads in divine.
+ */
+export function formatPrice(chaos: number, divineRate: number): string {
+  const amount = denominate(chaos, divineRate);
+  return amount.unit === 'divine' ? `${formatDivine(amount.value)} div` : `${formatChaos(amount.value)}c`;
+}
+
+/** The same, signed, for a change rather than a holding. */
+export function formatSignedPrice(chaos: number, divineRate: number): string {
+  const amount = denominate(chaos, divineRate);
+  const sign = amount.value > 0 ? '+' : amount.value < 0 ? '−' : '';
+  const magnitude = Math.abs(amount.value);
+  return amount.unit === 'divine'
+    ? `${sign}${formatDivine(magnitude)} div`
+    : `${sign}${formatChaos(magnitude)}c`;
+}
+
+/** A rate: the same rule, per hour. */
+export function formatPriceRate(chaosPerHour: number, divineRate: number): string {
+  if (!Number.isFinite(chaosPerHour)) return '—';
+  return `${formatSignedPrice(chaosPerHour, divineRate)}/h`;
+}
+
+export interface ChartUnit {
+  unit: 'chaos' | 'divine';
+  /** Divide a chaos value by this to get the axis' unit. */
+  divisor: number;
+  suffix: string;
+}
+
+/**
+ * One unit for a whole axis, chosen from the largest value on it.
+ *
+ * The per-value rule is right for a figure read on its own and wrong for an axis. An axis whose
+ * ticks switched units halfway up would be unreadable, and a series plotted against it would be
+ * a lie about its own shape. So a chart picks one unit — the one its peak belongs in — and says
+ * so in the tick labels.
+ */
+export function chartUnit(values: number[], divineRate: number): ChartUnit {
+  const rate = Number.isFinite(divineRate) && divineRate > 0 ? divineRate : 0;
+  const peak = values.reduce(
+    (max, value) => (Number.isFinite(value) ? Math.max(max, Math.abs(value)) : max),
+    0,
+  );
+  if (rate === 0 || peak < rate) return { unit: 'chaos', divisor: 1, suffix: 'c' };
+  return { unit: 'divine', divisor: rate, suffix: ' div' };
+}
+
+/** Format a chaos value against an axis' chosen unit. */
+export function formatInUnit(chaos: number, unit: ChartUnit): string {
+  const scaled = chaos / unit.divisor;
+  return unit.unit === 'divine' ? formatDivine(scaled) : formatChaos(scaled);
+}

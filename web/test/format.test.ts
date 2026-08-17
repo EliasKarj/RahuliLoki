@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   formatAgo,
   formatChaos,
+  chartUnit,
   denominate,
+  formatInUnit,
+  formatPrice,
+  formatSignedPrice,
   formatCount,
   formatDivine,
   formatHours,
@@ -150,5 +154,58 @@ describe('denominate', () => {
 
   it('does not invent a number from a broken total', () => {
     expect(denominate(Number.NaN, 196.9).unit).toBe('chaos');
+  });
+});
+
+describe('formatPrice', () => {
+  it('states the unit it chose, so a figure is never ambiguous', () => {
+    expect(formatPrice(20512, 196.9)).toBe('104.17 div');
+    expect(formatPrice(150, 196.9)).toBe('150c');
+  });
+
+  it('falls back to chaos when there is no usable rate', () => {
+    expect(formatPrice(20512, 0)).toBe('20.5kc');
+  });
+});
+
+describe('formatSignedPrice', () => {
+  it('signs a change without letting the sign pick the unit', () => {
+    expect(formatSignedPrice(20512, 196.9)).toBe('+104.17 div');
+    expect(formatSignedPrice(-20512, 196.9)).toBe('−104.17 div');
+    expect(formatSignedPrice(-150, 196.9)).toBe('−150c');
+  });
+
+  it('leaves no sign on nothing', () => {
+    expect(formatSignedPrice(0, 196.9)).toBe('0c');
+  });
+});
+
+describe('chartUnit', () => {
+  it('picks one unit for the whole axis from its peak', () => {
+    // Per-value switching is right for a figure read alone and wrong for an axis: ticks that
+    // changed unit halfway up would make the series a lie about its own shape.
+    expect(chartUnit([100, 5000, 30000], 196.9)).toMatchObject({ unit: 'divine' });
+    expect(chartUnit([10, 50, 120], 196.9)).toMatchObject({ unit: 'chaos', divisor: 1 });
+  });
+
+  it('decides on magnitude, so an axis of losses scales like one of gains', () => {
+    expect(chartUnit([-30000, -100], 196.9).unit).toBe('divine');
+  });
+
+  it('stays in chaos without a usable rate', () => {
+    expect(chartUnit([30000], 0)).toMatchObject({ unit: 'chaos', divisor: 1 });
+  });
+
+  it('survives an empty or broken series', () => {
+    expect(chartUnit([], 196.9).unit).toBe('chaos');
+    expect(chartUnit([Number.NaN], 196.9).unit).toBe('chaos');
+  });
+});
+
+describe('formatInUnit', () => {
+  it('scales a value into the axis unit', () => {
+    const unit = chartUnit([30000], 196.9);
+    expect(formatInUnit(19690, unit)).toBe('100.00');
+    expect(formatInUnit(19690, { unit: 'chaos', divisor: 1, suffix: 'c' })).toBe('19.7k');
   });
 });

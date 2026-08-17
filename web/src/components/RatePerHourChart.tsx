@@ -10,13 +10,18 @@
 import { Bar, BarChart, CartesianGrid, Cell, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { SeriesInterval } from '../lib/api.ts';
 import { rateRows } from '../lib/series.ts';
-import { formatChaos, formatDateTime, formatDay, formatHours, formatRate, formatSignedChaos, formatTime } from '../lib/format.ts';
+import { formatDateTime, formatDay, formatHours, formatInUnit, formatTime } from '../lib/format.ts';
+import { usePrices } from '../lib/denomination.tsx';
 import { Empty, TooltipCard } from './ui.tsx';
 
 const AXIS = { stroke: '#6b7787', fontSize: 11 };
 
 export function RatePerHourChart({ intervals, wide }: { intervals: SeriesInterval[]; wide: boolean }) {
+  const prices = usePrices();
   const rows = rateRows(intervals);
+  // One unit for the axis, from its largest bar. A per-value rule would switch units between
+  // neighbouring bars and make the chart unreadable.
+  const unit = prices.axis(rows.map((row) => row.deltaChaos));
 
   if (rows.length === 0) {
     return <Empty>No completed intervals in this range yet.</Empty>;
@@ -39,7 +44,13 @@ export function RatePerHourChart({ intervals, wide }: { intervals: SeriesInterva
             tickLine={false}
             minTickGap={48}
           />
-          <YAxis tickFormatter={formatChaos} {...AXIS} tickLine={false} axisLine={false} width={56} />
+          <YAxis
+            tickFormatter={(value: number) => formatInUnit(value, unit)}
+            {...AXIS}
+            tickLine={false}
+            axisLine={false}
+            width={56}
+          />
           <ReferenceLine y={0} stroke="#333c49" />
 
           <Tooltip
@@ -51,8 +62,8 @@ export function RatePerHourChart({ intervals, wide }: { intervals: SeriesInterva
                 <TooltipCard
                   title={formatDateTime(row.to)}
                   rows={[
-                    ['Rate', formatRate(row.chaosPerHour), row.idle ? 'text-ink-400' : 'text-accent-500'],
-                    ['Change', formatSignedChaos(row.deltaChaos)],
+                    ['Rate', prices.rate(row.chaosPerHour), row.idle ? 'text-ink-400' : 'text-accent-500'],
+                    ['Change', prices.signed(row.deltaChaos)],
                     ['Interval', formatHours(row.hours)],
                     ['Counted', row.idle ? 'no — idle' : 'yes'],
                   ]}

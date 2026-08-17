@@ -21,7 +21,8 @@ import {
   YAxis,
 } from 'recharts';
 import { api, type ItemHistoryResponse, type RangeQuery } from '../lib/api.ts';
-import { formatChaos, formatCount, formatDateTime, formatDay, formatTime } from '../lib/format.ts';
+import { formatCount, formatDateTime, formatDay, formatInUnit, formatTime } from '../lib/format.ts';
+import { usePrices } from '../lib/denomination.tsx';
 import { Empty, TooltipCard } from './ui.tsx';
 import { ItemIcon } from './ItemIcon.tsx';
 
@@ -60,6 +61,7 @@ export function ItemHistory({
     // `range` is rebuilt each render by the parent; its two string fields are the real inputs.
   }, [name, range.league, range.from]);
 
+  const prices = usePrices();
   const rows = (data?.points ?? []).map((point) => ({
     t: Date.parse(point.takenAt),
     takenAt: point.takenAt,
@@ -67,6 +69,11 @@ export function ItemHistory({
     chaosEach: point.chaosEach,
     chaosTotal: point.chaosTotal,
   }));
+
+  // Two axes, two units, each from its own peak: a stack worth thousands and a unit price of a
+  // few chaos do not belong in the same denomination.
+  const totalUnit = prices.axis(rows.map((row) => row.chaosTotal));
+  const eachUnit = prices.axis(rows.map((row) => row.chaosEach));
 
   return (
     <div className="rounded border border-ink-800 bg-ink-900/40 p-4">
@@ -113,7 +120,7 @@ export function ItemHistory({
               />
               <YAxis
                 yAxisId="total"
-                tickFormatter={formatChaos}
+                tickFormatter={(value: number) => formatInUnit(value, totalUnit)}
                 {...AXIS}
                 tickLine={false}
                 axisLine={false}
@@ -122,7 +129,7 @@ export function ItemHistory({
               <YAxis
                 yAxisId="each"
                 orientation="right"
-                tickFormatter={formatChaos}
+                tickFormatter={(value: number) => formatInUnit(value, eachUnit)}
                 {...AXIS}
                 tickLine={false}
                 axisLine={false}
@@ -139,8 +146,8 @@ export function ItemHistory({
                       title={formatDateTime(row.takenAt)}
                       rows={[
                         ['Held', formatCount(row.qty), 'text-ink-200'],
-                        ['Each', `${formatChaos(row.chaosEach)}c`, 'text-cool-500'],
-                        ['Total', `${formatChaos(row.chaosTotal)}c`, 'text-accent-500'],
+                        ['Each', prices.price(row.chaosEach), 'text-cool-500'],
+                        ['Total', prices.price(row.chaosTotal), 'text-accent-500'],
                       ]}
                     />
                   );

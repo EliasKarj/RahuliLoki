@@ -22,7 +22,8 @@ import {
 } from 'recharts';
 import type { SeriesInterval, SnapshotWithTabs } from '../lib/api.ts';
 import { annotationPoints, netWorthRows } from '../lib/series.ts';
-import { formatChaos, formatDateTime, formatDay, formatDivine, formatSignedChaos, formatTime } from '../lib/format.ts';
+import { formatChaos, formatDateTime, formatDay, formatDivine, formatInUnit, formatTime } from '../lib/format.ts';
+import { usePrices } from '../lib/denomination.tsx';
 import { Empty, TooltipCard } from './ui.tsx';
 
 const AXIS = { stroke: '#6b7787', fontSize: 11 };
@@ -35,7 +36,11 @@ interface Props {
 }
 
 export function NetWorthChart({ snapshots, intervals, wide }: Props) {
+  const prices = usePrices();
   const rows = netWorthRows(snapshots);
+  // The left axis carries net worth and takes one unit from its peak. The right axis is the
+  // divine rate, which is chaos by definition and is left alone.
+  const unit = prices.axis(rows.map((row) => row.chaos));
   const marks = annotationPoints(intervals, rows);
 
   if (rows.length < 2) {
@@ -68,7 +73,7 @@ export function NetWorthChart({ snapshots, intervals, wide }: Props) {
           />
           <YAxis
             yAxisId="chaos"
-            tickFormatter={formatChaos}
+            tickFormatter={(value: number) => formatInUnit(value, unit)}
             {...AXIS}
             tickLine={false}
             axisLine={false}
@@ -77,11 +82,11 @@ export function NetWorthChart({ snapshots, intervals, wide }: Props) {
           <YAxis
             yAxisId="divine"
             orientation="right"
-            tickFormatter={(value: number) => formatChaos(value)}
+            tickFormatter={(value: number) => `${formatChaos(value)}c`}
             {...AXIS}
             tickLine={false}
             axisLine={false}
-            width={48}
+            width={52}
             domain={['auto', 'auto']}
           />
 
@@ -94,7 +99,7 @@ export function NetWorthChart({ snapshots, intervals, wide }: Props) {
                 <TooltipCard
                   title={formatDateTime(row.takenAt)}
                   rows={[
-                    ['Chaos', formatChaos(row.chaos), 'text-accent-500'],
+                    ['Net worth', prices.price(row.chaos), 'text-accent-500'],
                     ['Divine', formatDivine(row.divine), 'text-cool-500'],
                     ['Divine rate', `${formatChaos(row.divineRate)}c`, 'text-cool-500'],
                     ['Items', String(row.itemCount)],
@@ -146,7 +151,7 @@ export function NetWorthChart({ snapshots, intervals, wide }: Props) {
           {marks.length} marked {marks.length === 1 ? 'interval' : 'intervals'} moved more than 3× the
           trailing median
           {marks.length <= 4
-            ? `: ${marks.map((mark) => `${formatSignedChaos(mark.deltaChaos)} at ${formatDateTime(mark.at)}`).join(', ')}`
+            ? `: ${marks.map((mark) => `${prices.signed(mark.deltaChaos)} at ${formatDateTime(mark.at)}`).join(', ')}`
             : '.'}
         </p>
       ) : null}

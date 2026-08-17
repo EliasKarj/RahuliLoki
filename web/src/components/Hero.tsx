@@ -21,9 +21,8 @@ import {
   formatDenominated,
   formatDivine,
   formatHours,
-  formatRate,
-  formatSignedChaos,
 } from '../lib/format.ts';
+import { usePrices } from '../lib/denomination.tsx';
 
 const WIDTH = 1200;
 const HEIGHT = 96;
@@ -31,24 +30,25 @@ const HEIGHT = 96;
 export function Hero({
   snapshots,
   stats,
-  prices,
+  orbs,
 }: {
   snapshots: SnapshotWithTabs[];
   stats: StatsResponse | null;
   /** Carries the two orb icons. Null before the first price set, which is a fine state to be in. */
-  prices: HealthResponse['prices'] | null;
+  orbs: HealthResponse['prices'] | null;
 }) {
   const spark = useMemo(
     () => sparklinePath(snapshots.map((snapshot) => snapshot.totalChaos), WIDTH, HEIGHT),
     [snapshots],
   );
 
+  const prices = usePrices();
   const gain = stats?.totalGainChaos ?? 0;
 
   // Quoted in the orb a player would say it in: divine past one divine, chaos below. The unit
   // decides which orb's art sits next to the figure, so the two can never disagree.
   const worth = denominate(stats?.currentChaos ?? 0, stats?.divineRate ?? 0);
-  const icon = worth.unit === 'divine' ? prices?.divineIcon : prices?.chaosIcon;
+  const icon = worth.unit === 'divine' ? orbs?.divineIcon : orbs?.chaosIcon;
 
   return (
     <section className="border-b border-ink-800 pb-5">
@@ -110,18 +110,18 @@ export function Hero({
       <dl className="mt-4 flex flex-wrap gap-x-8 gap-y-3 text-xs">
         <Figure
           label="Gain in range"
-          value={`${formatSignedChaos(gain)}c`}
+          value={prices.signed(gain)}
           tone={gain === 0 ? 'flat' : gain > 0 ? 'up' : 'down'}
         />
-        <Figure label="c/h active" value={formatRate(stats?.chaosPerHourActive ?? 0)} />
-        <Figure label="c/h wall-clock" value={formatRate(stats?.chaosPerHourWallClock ?? 0)} />
+        <Figure label="Active rate" value={prices.rate(stats?.chaosPerHourActive ?? 0)} />
+        <Figure label="Wall-clock rate" value={prices.rate(stats?.chaosPerHourWallClock ?? 0)} />
         <Figure
           label="Moving"
           value={`${formatHours(stats?.activeHours ?? 0)} of ${formatHours(stats?.wallClockHours ?? 0)}`}
         />
         <Figure
           label="Best hour"
-          value={stats?.bestHour ? `${formatSignedChaos(stats.bestHour.gainChaos)}c` : '—'}
+          value={stats?.bestHour ? prices.signed(stats.bestHour.gainChaos) : '—'}
         />
       </dl>
     </section>

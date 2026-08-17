@@ -421,7 +421,23 @@ ja ainoat asiat joilla on reunat ovat luvut itse.
 Ylinnä yksi hallitseva lukema — nettoarvo — ja sarja piirrettynä sen taakse. Lukema on siinä
 yksikössä jossa sen sanoisi ääneen: **alle divinen arvoinen arkku chaoksina, sen yli divineinä**,
 ja vieressä sen orbin oma kuva. Toinen yksikkö on aina rivin alla, joten mitään ei häviä
-vaihdossa. Tukiluvut ovat
+vaihdossa.
+
+Sama sääntö koskee **jokaista hintaa sivulla** — taulukon yksikköhintoja ja summia,
+kategoriasiruja, muutoksia, tuottoja ja tuntinopeuksia. Sääntö on kirjoitettu yhteen paikkaan
+(`formatPrice`) ja divine-kurssi on Reactin kontekstissa, jotta hinnan tulostaminen väärässä
+yksikössä vaatisi säännön ohittamista eikä sen unohtamista.
+
+> **▸ Kaksi kohtaa joissa sääntöä ei sovelleta, kummassakin syystä:**
+>
+> **Divine-kurssi itse** ("205c per divine"). Se *on* muunnos; divineinä se lukisi joka rivillä
+> 1.00 eikä kertoisi mitään.
+>
+> **Kaavioiden akselit.** Per-arvo-sääntö on oikein yksittäiselle luvulle ja väärin akselille:
+> akseli jonka jaotus vaihtaisi yksikköä puolivälissä tekisi käyrästä valheen sen omasta
+> muodosta. Kaavio valitsee siksi yhden yksikön huippunsa mukaan ja kertoo sen jaotuksessa.
+
+Tukiluvut ovat
 sen alla rivinä, hiusviivoin jaettuna. Heti perässä **esinetaulukko**, jossa jokaisen rivin
 takana on palkki: rivin osuus suurimmasta omistuksesta. Kaaviot ovat alempana yhden rivin
 palkkeina, oletuksena kiinni.
@@ -733,7 +749,7 @@ validoimaton symlinkkien polkuhyppäys purettaessa. Korjattua versiota **ei ole 
 pnpm test
 ```
 
-**439 testiä**, ei yhtään verkkopyyntöä:
+**457 testiä**, ei yhtään verkkopyyntöä:
 
 - **Nopeusrajoitin** — otsakkeiden jäsennys, tahdistus, sarjallistuminen, `Retry-After`,
   kaksinkertaistuminen kattoon asti. Kello ja uni ovat väärennettyjä, joten 30 minuutin

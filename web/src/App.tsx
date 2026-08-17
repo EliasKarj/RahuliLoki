@@ -4,6 +4,7 @@ import { NetWorthChart } from './components/NetWorthChart.tsx';
 import { RatePerHourChart } from './components/RatePerHourChart.tsx';
 import { TabAreaChart, TopItemsTable } from './components/TabBreakdown.tsx';
 import { Hero } from './components/Hero.tsx';
+import { DenominationProvider } from './lib/denomination.tsx';
 import { SnapshotTable } from './components/SnapshotTable.tsx';
 import { PollerStatus } from './components/PollerStatus.tsx';
 import { Empty, Panel, RangeToggle } from './components/ui.tsx';
@@ -15,7 +16,7 @@ import { hasToken } from './lib/api.ts';
 import { rangeStart } from './lib/series.ts';
 import {
   formatAgo,
-  formatChaos,
+  formatPrice,
   formatDateTime,
 } from './lib/format.ts';
 import type { RangeKey } from './lib/series.ts';
@@ -52,11 +53,15 @@ export default function App() {
   if (unauthorized) return <TokenGate onUnlock={refresh} rejected={hasToken()} />;
 
   const intervals = stats?.intervals ?? [];
+  // One rate for the whole page. `stats` carries the live one; the newest snapshot is the
+  // fallback before there are two snapshots to compute stats from.
+  const divineRate = stats?.divineRate || latest?.snapshot.divineRate || 0;
   const wide = range !== '24h';
   const leagues = config?.leagues ?? [];
   const activeLeague = league ?? config?.league ?? '';
 
   return (
+    <DenominationProvider divineRate={divineRate}>
     <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
       <header className="mb-6">
         <div className="flex flex-wrap items-baseline justify-between gap-3">
@@ -107,7 +112,7 @@ export default function App() {
         </Empty>
       ) : (
         <div className="space-y-6">
-          <Hero snapshots={snapshots} stats={stats} prices={health?.prices ?? null} />
+          <Hero snapshots={snapshots} stats={stats} orbs={health?.prices ?? null} />
 
           <Panel
             title="Items"
@@ -154,7 +159,8 @@ export default function App() {
             subtitle={
               changes?.from && changes.to
                 ? `Between ${formatDateTime(changes.from)} and ${formatDateTime(changes.to)}. ` +
-                  `Gained ${formatChaos(changes.gainedChaos)}c, lost ${formatChaos(Math.abs(changes.lostChaos))}c.`
+                  `Gained ${formatPrice(changes.gainedChaos, divineRate)}, lost ` +
+                  `${formatPrice(Math.abs(changes.lostChaos), divineRate)}.`
                 : 'Between the ends of this range.'
             }
           >
@@ -196,5 +202,6 @@ export default function App() {
         {refreshedAt ? <span>refreshed {formatAgo(new Date(refreshedAt).toISOString())}</span> : null}
       </footer>
     </div>
+    </DenominationProvider>
   );
 }

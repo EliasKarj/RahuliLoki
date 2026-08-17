@@ -12,7 +12,8 @@
 
 import { useState } from 'react';
 import type { ItemChange } from '../lib/api.ts';
-import { formatChaos, formatCount, formatSignedChaos } from '../lib/format.ts';
+import { formatCount } from '../lib/format.ts';
+import { usePrices } from '../lib/denomination.tsx';
 import { Empty } from './ui.tsx';
 import { ItemIcon } from './ItemIcon.tsx';
 
@@ -39,6 +40,7 @@ export function ChangesTable({
   emptyReason?: string | undefined;
   onSelect?: (name: string) => void;
 }) {
+  const prices = usePrices();
   const [filter, setFilter] = useState<Filter>('all');
 
   if (changes.length === 0) {
@@ -110,8 +112,8 @@ export function ChangesTable({
                 </td>
                 <td className="num py-1.5 pr-3 text-ink-400">
                   {row.chaosEachBefore === row.chaosEachAfter
-                    ? formatChaos(row.chaosEachAfter)
-                    : `${formatChaos(row.chaosEachBefore)} → ${formatChaos(row.chaosEachAfter)}`}
+                    ? prices.price(row.chaosEachAfter)
+                    : `${prices.price(row.chaosEachBefore)} → ${prices.price(row.chaosEachAfter)}`}
                 </td>
                 <td className="py-1.5 pr-3 text-right">
                   <span
@@ -128,7 +130,7 @@ export function ChangesTable({
                     row.chaosDelta > 0 ? 'text-accent-500' : 'text-cool-400'
                   }`}
                 >
-                  {formatSignedChaos(row.chaosDelta)}
+                  {prices.signed(row.chaosDelta)}
                 </td>
               </tr>
             ))}

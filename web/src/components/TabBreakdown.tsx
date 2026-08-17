@@ -10,7 +10,8 @@ import { useMemo, useState } from 'react';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { SnapshotWithTabs, TopItem } from '../lib/api.ts';
 import { sortRows, tabNames, tabRows, type SortDirection } from '../lib/series.ts';
-import { formatChaos, formatCount, formatDateTime, formatDay, formatTime } from '../lib/format.ts';
+import { formatCount, formatDateTime, formatDay, formatInUnit, formatTime } from '../lib/format.ts';
+import { usePrices } from '../lib/denomination.tsx';
 import { Empty, TooltipCard } from './ui.tsx';
 import { ItemIcon } from './ItemIcon.tsx';
 
@@ -28,8 +29,12 @@ function bandColour(index: number): string {
 }
 
 export function TabAreaChart({ snapshots, wide }: { snapshots: SnapshotWithTabs[]; wide: boolean }) {
+  const prices = usePrices();
   const names = useMemo(() => tabNames(snapshots), [snapshots]);
   const rows = useMemo(() => tabRows(snapshots, names), [snapshots, names]);
+  // One unit for the axis, from the largest total on it. Ticks that changed unit halfway up
+  // would make the series a lie about its own shape.
+  const unit = prices.axis(snapshots.map((snapshot) => snapshot.totalChaos));
 
   if (rows.length < 2 || names.length === 0) {
     return <Empty>Per-tab history appears once there are two snapshots to compare.</Empty>;
@@ -52,7 +57,12 @@ export function TabAreaChart({ snapshots, wide }: { snapshots: SnapshotWithTabs[
             tickLine={false}
             minTickGap={48}
           />
-          <YAxis tickFormatter={formatChaos} {...AXIS} tickLine={false} axisLine={false} width={56} />
+          <YAxis tickFormatter={(value: number) => formatInUnit(value, unit)}
+          {...AXIS}
+          tickLine={false}
+          axisLine={false}
+          width={56}
+        />
 
           <Tooltip
             cursor={{ stroke: '#333c49' }}
@@ -68,7 +78,7 @@ export function TabAreaChart({ snapshots, wide }: { snapshots: SnapshotWithTabs[
                   title={formatDateTime(String(row.takenAt))}
                   rows={entries.map(([name, value], index) => [
                     name,
-                    formatChaos(value),
+                    `${formatInUnit(value, unit)}${unit.suffix}`,
                     index % 2 === 0 ? 'text-accent-500' : 'text-cool-500',
                   ])}
                 />
@@ -221,6 +231,7 @@ export function TopItemsTable({
     key: 'chaosTotal',
     direction: 'desc',
   });
+  const prices = usePrices();
   const [query, setQuery] = useState('');
   /** Null means every category. A category that vanishes from the data falls back to that. */
   const [category, setCategory] = useState<string | null>(null);
@@ -277,7 +288,7 @@ export function TopItemsTable({
             ? `${grouped.length} items`
             : `${rows.length} of ${grouped.length} items`}
           {' · '}
-          {formatChaos(total)}c
+          {prices.price(total)}
         </span>
       </div>
 
@@ -285,7 +296,7 @@ export function TopItemsTable({
           filter, "Scarab 3.2kc" answers the question that made someone reach for it. */}
       <div className="mb-3 flex flex-wrap gap-1.5">
         <Chip active={category === null} onClick={() => setCategory(null)}>
-          All <span className="num !text-left text-ink-400">{formatChaos(total)}c</span>
+          All <span className="num !text-left text-ink-400">{prices.price(total)}</span>
         </Chip>
         {totals.map((entry) => (
           <Chip
@@ -294,7 +305,7 @@ export function TopItemsTable({
             onClick={() => setCategory(category === entry.category ? null : entry.category)}
           >
             {categoryLabel(entry.category)}{' '}
-            <span className="num !text-left text-ink-400">{formatChaos(entry.chaos)}c</span>
+            <span className="num !text-left text-ink-400">{prices.price(entry.chaos)}</span>
           </Chip>
         ))}
       </div>
@@ -369,10 +380,10 @@ export function TopItemsTable({
                     {row.tabs.length === 1 ? row.tabs[0] : `${row.tabs[0]} +${row.tabs.length - 1}`}
                   </td>
                   <td className="num py-1.5 pr-3 text-ink-200">{formatCount(row.qty)}</td>
-                  <td className="num py-1.5 pr-3 text-ink-400">{formatChaos(row.chaosEach)}</td>
-                  <td className="num py-1.5 text-accent-500">{formatChaos(row.chaosTotal)}</td>
+                  <td className="num py-1.5 pr-3 text-ink-400">{prices.price(row.chaosEach)}</td>
+                  <td className="num py-1.5 text-accent-500">{prices.price(row.chaosTotal)}</td>
                   {cumulative ? (
-                    <td className="num py-1.5 pl-3 text-ink-400">{formatChaos(running)}</td>
+                    <td className="num py-1.5 pl-3 text-ink-400">{prices.price(running)}</td>
                   ) : null}
                 </tr>
               );
