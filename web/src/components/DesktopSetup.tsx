@@ -1,14 +1,22 @@
 /**
- * Setup, for the desktop build only.
+ * Account and settings, for the desktop build only.
  *
  * The web build asks people to open devtools and copy a session cookie. This asks them to log
- * in. That is the entire reason the desktop shell exists, so the button that does it is the
- * first thing on the screen and the rest of the panel stays out of the way until it is done.
+ * in — that is the entire reason the desktop shell exists.
+ *
+ * Which is also why it used to be a full-width panel above the dashboard: it is the first thing
+ * that matters on the first launch. It is the *last* thing that matters on every launch after
+ * that, and a permanent box saying "signed in as Exile#1234" was pushing the numbers people
+ * opened the app for below the fold. So it lives in the corner now: a small button that says
+ * who is signed in, and everything else behind it.
+ *
+ * It still opens itself when something is missing. Hiding the setup screen from someone who has
+ * not set anything up would be a worse trade than the space it costs.
  *
  * Renders nothing in a browser — `bridge()` is null there — so the same bundle serves both.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, type League } from '../lib/api.ts';
 import { bridge, type DesktopSettings } from '../lib/desktop.ts';
 import {
@@ -34,13 +42,22 @@ export function DesktopSetup({ onChanged }: { onChanged: () => void }) {
   const [settings, setSettings] = useState<DesktopSettings | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState(false);
+  /**
+   * Whether the operator has opened or closed it themselves. Null means they have not touched
+   * it, and the answer comes from whether anything still needs setting up — so the panel is
+   * open on a first launch and closed on every one after, without an effect racing the load.
+   */
+  const [manualOpen, setManualOpen] = useState<boolean | null>(null);
   const [leagues, setLeagues] = useState<League[] | null>(null);
   const [leagueSource, setLeagueSource] = useState<'ggg' | 'fallback' | null>(null);
   /** Set when the operator picked "Other", so the free-text box stays open while they type. */
   const [custom, setCustom] = useState(false);
   /** How many tabs the last poll read. Null until one has, which is the honest "I don't know". */
   const [tabCount, setTabCount] = useState<number | null>(null);
+  const root = useRef<HTMLDivElement>(null);
+
+  const configured = settings !== null && settings.missing.length === 0;
+  const open = desktop !== null && settings !== null && (manualOpen ?? !configured);
 
   const refresh = useCallback(async () => {
     if (desktop === null) return;
@@ -79,12 +96,30 @@ export function DesktopSetup({ onChanged }: { onChanged: () => void }) {
     return () => controller.abort();
   }, [desktop]);
 
-  if (desktop === null || settings === null) return null;
+  // A menu floating over the dashboard has to close the way every other menu does: a click
+  // somewhere else, or Escape. Without it, the panel covers the numbers until you find the
+  // button again — which is the problem moving it into the corner was meant to solve.
+  useEffect(() => {
+    if (!open) return;
 
-  const configured = settings.missing.length === 0;
-  // Once everything is set, collapse to a single line. A setup panel that never goes away is
-  // just clutter on every launch afterwards.
-  const showBody = expanded || !configured;
+    const onPointerDown = (event: MouseEvent): void => {
+      if (root.current !== null && !root.current.contains(event.target as Node)) {
+        setManualOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setManualOpen(false);
+    };
+
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
+
+  if (desktop === null || settings === null) return null;
 
   /**
    * Run one action, then report what happened.
@@ -95,6 +130,10 @@ export function DesktopSetup({ onChanged }: { onChanged: () => void }) {
   const run = async (action: () => Promise<unknown>, note: string): Promise<void> => {
     setBusy(true);
     setMessage(null);
+    // Acting inside the panel counts as opening it. Otherwise the first launch would slam it
+    // shut at the worst moment: signing in is what fills the last missing setting, so the panel
+    // would vanish along with whatever it was about to say about the attempt.
+    setManualOpen(true);
     try {
       const result = await action();
       await refresh();
@@ -107,28 +146,51 @@ export function DesktopSetup({ onChanged }: { onChanged: () => void }) {
     }
   };
 
-  return (
-    <section className="rounded border border-ink-800 bg-ink-900/40 p-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-sm font-medium text-ink-100">
-          {configured ? 'Account' : 'Set up valuuttaloki'}
-        </h2>
-        <button
-          type="button"
-          onClick={() => setExpanded((value) => !value)}
-          className="text-xs text-ink-400 transition-colors hover:text-ink-200"
-        >
-          {showBody ? 'Hide' : 'Settings'}
-        </button>
-      </div>
+  const field =
+    'w-full rounded border border-ink-700 bg-ink-900 px-2 py-1.5 text-sm text-ink-100 outline-none focus:border-accent-600';
 
-      {!showBody ? (
-        <p className="mt-1 text-xs text-ink-400">
-          {settings.accountName || 'unnamed account'} · {settings.league}
-          {settings.hasSession ? ' · signed in' : ''}
-        </p>
-      ) : (
-        <div className="mt-3 space-y-4">
+  return (
+    <div className="relative" ref={root}>
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        onClick={() => setManualOpen(!open)}
+        title={configured ? `${settings.accountName} · ${settings.league}` : 'Finish setting up'}
+        className={
+          configured
+            ? 'flex items-center gap-2 rounded border border-ink-800 px-2 py-1 text-xs text-ink-300 transition-colors hover:border-ink-600 hover:text-ink-100'
+            : 'flex items-center gap-2 rounded border border-accent-600/60 bg-accent-600/10 px-2 py-1 text-xs text-accent-400 transition-colors hover:bg-accent-600/20'
+        }
+      >
+        {/* Signed in or not, in the smallest thing that can say it. The label alone cannot: an
+            account name is stored long after the session behind it has expired. */}
+        <span
+          aria-hidden
+          className={`h-1.5 w-1.5 rounded-full ${settings.hasSession ? 'bg-accent-500' : 'bg-ink-600'}`}
+        />
+        {configured ? settings.accountName || 'Account' : 'Set up'}
+      </button>
+
+      {open ? (
+        <div
+          role="dialog"
+          aria-label="Account and settings"
+          className="absolute right-0 top-full z-30 mt-2 w-[22rem] space-y-4 rounded border border-ink-700 bg-ink-950 p-4 text-left shadow-2xl shadow-black/60"
+        >
+          <div className="flex items-baseline justify-between gap-2">
+            <h2 className="text-sm font-medium text-ink-100">
+              {configured ? 'Account' : 'Set up valuuttaloki'}
+            </h2>
+            <button
+              type="button"
+              onClick={() => setManualOpen(false)}
+              className="text-xs text-ink-400 transition-colors hover:text-ink-200"
+            >
+              Close
+            </button>
+          </div>
+
           <div>
             <div className="flex flex-wrap items-center gap-3">
               <button
@@ -149,18 +211,16 @@ export function DesktopSetup({ onChanged }: { onChanged: () => void }) {
                   Sign out
                 </button>
               ) : null}
-              <span className="text-xs text-ink-500">
-                {settings.hasSession ? 'A session is stored.' : 'No session yet.'}
-              </span>
             </div>
             <p className="mt-2 text-xs text-ink-500">
-              Opens GGG&rsquo;s real login page in its own window. Your session never passes
+              {settings.hasSession ? 'A session is stored. ' : 'No session yet. '}
+              Opens GGG&rsquo;s real login page in its own window; your session never passes
               through this dashboard and is never shown on screen.
             </p>
           </div>
 
           <form
-            className="flex flex-wrap items-end gap-3"
+            className="space-y-3"
             onSubmit={(event) => {
               event.preventDefault();
               const form = new FormData(event.currentTarget);
@@ -187,7 +247,7 @@ export function DesktopSetup({ onChanged }: { onChanged: () => void }) {
                 name="accountName"
                 defaultValue={settings.accountName}
                 placeholder="Exile#1234"
-                className="w-48 rounded border border-ink-700 bg-ink-900 px-2 py-1.5 text-sm text-ink-100 outline-none focus:border-accent-600"
+                className={field}
               />
             </label>
             <label className="flex flex-col gap-1 text-xs text-ink-400">
@@ -199,7 +259,7 @@ export function DesktopSetup({ onChanged }: { onChanged: () => void }) {
                   defaultValue={settings.league}
                   autoFocus={custom}
                   placeholder="League name"
-                  className="w-48 rounded border border-ink-700 bg-ink-900 px-2 py-1.5 text-sm text-ink-100 outline-none focus:border-accent-600"
+                  className={field}
                 />
               ) : (
                 <select
@@ -208,7 +268,7 @@ export function DesktopSetup({ onChanged }: { onChanged: () => void }) {
                   onChange={(event) => {
                     if (event.target.value === OTHER) setCustom(true);
                   }}
-                  className="w-48 rounded border border-ink-700 bg-ink-900 px-2 py-1.5 text-sm text-ink-100 outline-none focus:border-accent-600"
+                  className={field}
                 >
                   {/* The configured league is always an option, even if GGG no longer lists
                       it — a finished league still has history worth reading. */}
@@ -225,34 +285,36 @@ export function DesktopSetup({ onChanged }: { onChanged: () => void }) {
                 </select>
               )}
             </label>
-            <button
-              type="submit"
-              disabled={busy}
-              className="rounded border border-ink-700 px-3 py-1.5 text-sm text-ink-200 transition-colors hover:border-ink-600 disabled:opacity-50"
-            >
-              Save
-            </button>
-            {/* Typing the account name is a pure liability when the session already knows it.
-                This asks GGG and fills it in — and because the question needs no account name,
-                a failure here proves the session is the problem rather than the spelling. */}
-            <button
-              type="button"
-              disabled={busy || !settings.hasSession}
-              title={settings.hasSession ? undefined : 'Sign in first'}
-              onClick={() =>
-                void run(async () => {
-                  const account = await api.account();
-                  if (account.matches) return `GGG confirms this session is ${account.name}.`;
-                  await desktop.writeSettings({ accountName: account.name });
-                  return `GGG says this session is ${account.name}. Saved.`;
-                }, 'Checked.')
-              }
-              className="rounded border border-ink-700 px-3 py-1.5 text-sm text-ink-200 transition-colors hover:border-ink-600 disabled:opacity-50"
-            >
-              Ask GGG
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="submit"
+                disabled={busy}
+                className="rounded border border-ink-700 px-3 py-1.5 text-sm text-ink-200 transition-colors hover:border-ink-600 disabled:opacity-50"
+              >
+                Save
+              </button>
+              {/* Typing the account name is a pure liability when the session already knows it.
+                  This asks GGG and fills it in — and because the question needs no account name,
+                  a failure here proves the session is the problem rather than the spelling. */}
+              <button
+                type="button"
+                disabled={busy || !settings.hasSession}
+                title={settings.hasSession ? undefined : 'Sign in first'}
+                onClick={() =>
+                  void run(async () => {
+                    const account = await api.account();
+                    if (account.matches) return `GGG confirms this session is ${account.name}.`;
+                    await desktop.writeSettings({ accountName: account.name });
+                    return `GGG says this session is ${account.name}. Saved.`;
+                  }, 'Checked.')
+                }
+                className="rounded border border-ink-700 px-3 py-1.5 text-sm text-ink-200 transition-colors hover:border-ink-600 disabled:opacity-50"
+              >
+                Ask GGG
+              </button>
+            </div>
           </form>
-          <p className="-mt-2 text-xs text-ink-500">
+          <p className="text-xs text-ink-500">
             The account name must match GGG exactly, including the #number. <b>Ask GGG</b> fills
             it in from the signed-in session, and tells you if the session itself is the problem.
             {leagueSource === 'fallback'
@@ -295,7 +357,7 @@ export function DesktopSetup({ onChanged }: { onChanged: () => void }) {
             })()}
           </div>
 
-          <div className="flex flex-wrap gap-4 text-xs text-ink-300">
+          <div className="space-y-2 text-xs text-ink-300">
             <label className="flex items-center gap-2">
               <input
                 type="checkbox"
@@ -331,7 +393,7 @@ export function DesktopSetup({ onChanged }: { onChanged: () => void }) {
           ) : null}
           {message !== null ? <p className="text-xs text-ink-400">{message}</p> : null}
         </div>
-      )}
-    </section>
+      ) : null}
+    </div>
   );
 }

@@ -85,16 +85,16 @@ export default function App() {
               <span className="text-xs text-ink-400">{activeLeague}</span>
             )}
           </div>
-          <RangeToggle value={range} onChange={setRange} />
+          <div className="flex items-center gap-3">
+            <RangeToggle value={range} onChange={setRange} />
+            {/* Desktop build only: renders nothing in a browser. Corner-sized on purpose —
+                it is the first thing that matters once and the last thing that matters after. */}
+            <DesktopSetup onChanged={refresh} />
+          </div>
         </div>
 
         <div className="mt-3">
           <PollerStatus health={health} onPolled={refresh} />
-        </div>
-
-        {/* Desktop build only: renders nothing in a browser. */}
-        <div className="mt-3">
-          <DesktopSetup onChanged={refresh} />
         </div>
 
         {error ? (

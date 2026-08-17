@@ -101,6 +101,19 @@ Sama palvelin, sama paneeli — mutta oma ikkuna, ilmaisinalue ja **oikea kirjau
 Ohjelma avaa GGG:n kirjautumissivun omaan ikkunaansa, ja istunto luetaan siitä. POESESSIDiä
 ei tarvitse kaivaa devtoolsista eikä liittää mihinkään.
 
+Tili ja asetukset ovat **oikeassa ylänurkassa**: pieni nappi, jossa lukee tilin nimi ja jonka
+piste kertoo onko istunto tallessa. Klikkaus avaa loput — kirjautuminen, liiga, keräysväli,
+taustakeruu. Ulkopuolinen klikkaus tai Esc sulkee.
+
+> **▸ Miksi nurkkaan:** kirjautuminen on ensimmäisellä käynnistyksellä ainoa asia jolla on
+> väliä ja jokaisella seuraavalla viimeinen. Koko levyinen laatikko, jossa luki "kirjautuneena
+> Exile#1234", työnsi ne luvut joiden takia ohjelma avattiin alemmas joka ainoa kerta. Nappi
+> pitää tiedon näkyvissä ja ottaa yhden rivin.
+>
+> Kun jotain puuttuu, paneeli aukeaa itsestään eikä odota että se löydetään. Asetusruudun
+> piilottaminen siltä joka ei ole vielä asettanut mitään olisi huonompi vaihtokauppa kuin se
+> tila jonka se vie.
+
 > **▸ Miksi kirjautumisikkuna on koko työpöytäversion syy:** ohje "avaa F12, etsi evästekaappi,
 > kopioi arvo jonka juuri kerroimme olevan salasanan veroinen" on kolme askelta kitkaa ja yksi
 > askel huonon tavan opettamista. Kuka tahansa joka oppii kaivamaan POESESSIDin pyynnöstä on
