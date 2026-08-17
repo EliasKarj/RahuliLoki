@@ -274,7 +274,13 @@ export function DesktopSetup({ onChanged }: { onChanged: () => void }) {
               <button
                 type="button"
                 disabled={busy || !settings.hasSession}
-                title={settings.hasSession ? undefined : 'Sign in first'}
+                // What the paragraph under this used to say, in the place a tooltip costs
+                // nothing: hover if you want it, and it is out of the way if you do not.
+                title={
+                  settings.hasSession
+                    ? 'Fill in the account name from the signed-in session'
+                    : 'Sign in first'
+                }
                 onClick={() =>
                   void run(async () => {
                     const account = await api.account();
@@ -289,13 +295,15 @@ export function DesktopSetup({ onChanged }: { onChanged: () => void }) {
               </button>
             </div>
           </form>
-          <p className="text-xs text-ink-500">
-            The account name must match GGG exactly, including the #number. <b>Ask GGG</b> fills
-            it in from the signed-in session, and tells you if the session itself is the problem.
-            {leagueSource === 'fallback'
-              ? ' League list unavailable — showing the permanent leagues; pick Other… for anything else.'
-              : ''}
-          </p>
+          {/* The standing explanation is gone: the placeholder already shows the #number, and
+              "Ask GGG" is a button you can simply press. This one stays because it is not
+              advice — it says the dropdown is currently short a few leagues and why. */}
+          {leagueSource === 'fallback' ? (
+            <p className="text-xs text-ink-500">
+              League list unavailable — showing the permanent leagues. Pick Other… for anything
+              else.
+            </p>
+          ) : null}
 
           <div className="border-t border-ink-800 pt-4">
             <div className="flex flex-wrap items-center gap-3">
@@ -303,6 +311,7 @@ export function DesktopSetup({ onChanged }: { onChanged: () => void }) {
                 type="button"
                 disabled={busy}
                 onClick={() => void run(() => desktop.logIn(), 'Signed in.')}
+                title="Opens GGG's own login page in a separate window. The session never passes through this dashboard."
                 className="rounded bg-accent-600 px-3 py-1.5 text-sm font-medium text-ink-950 transition-colors hover:bg-accent-500 disabled:opacity-50"
               >
                 {settings.hasSession ? 'Sign in again' : 'Sign in to Path of Exile'}
@@ -318,11 +327,6 @@ export function DesktopSetup({ onChanged }: { onChanged: () => void }) {
                 </button>
               ) : null}
             </div>
-            <p className="mt-2 text-xs text-ink-500">
-              {settings.hasSession ? 'A session is stored. ' : 'No session yet. '}
-              Opens GGG&rsquo;s real login page in its own window; your session never passes
-              through this dashboard and is never shown on screen.
-            </p>
           </div>
 
           {/* Third group: what the collector does, once there is an account for it to do it to. */}

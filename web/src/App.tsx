@@ -116,14 +116,10 @@ export default function App() {
         <div className="space-y-6">
           <Hero snapshots={snapshots} stats={stats} orbs={health?.prices ?? null} />
 
-          <Panel
-            title="Items"
-            subtitle={
-              latest
-                ? `Latest snapshot, ${formatDateTime(latest.snapshot.takenAt)}. Click a name for its history.`
-                : 'Latest snapshot.'
-            }
-          >
+          {/* No subtitle. It said when the snapshot was taken, which the status row above
+              already says as "last poll 4 min ago", and that names are clickable, which the
+              cursor says on the way to clicking one. */}
+          <Panel title="Items">
             <TopItemsTable items={latest?.topItems ?? []} onSelect={setSelected} />
           </Panel>
 
