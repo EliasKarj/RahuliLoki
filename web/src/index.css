@@ -1,6 +1,20 @@
 @import 'tailwindcss';
 
 /**
+ * The three faces, carried in the package rather than hoped for on the machine.
+ *
+ * This used to name JetBrains Mono and fall back to whatever monospace the platform had, which
+ * on Windows is Consolas — so the app people actually ran was not the app that was designed.
+ * Self-hosting is the only way to fix that here: a strict CSP forbids fetching from a font host,
+ * and it should, because a wealth tracker has no business telling Google when it is opened.
+ *
+ * Variable faces, latin subset, three files and about 300 kB in an installer of 160 MB.
+ */
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/jetbrains-mono';
+@import '@fontsource-variable/cinzel';
+
+/**
  * The Citadel at the End of Time.
  *
  * A stash tracker is a ledger of what is left after a league has burned through: what you kept,
@@ -21,10 +35,8 @@
  * The chart colours live in lib/palette.ts, because SVG takes colours as props rather than as
  * classes. Those two files are the whole palette; change both or neither.
  *
- * JetBrains Mono is not bundled — this app ships as a single self-hosted container and should
- * not fetch fonts from anyone. Install it locally for the intended look; the stack falls back
- * to the platform's monospace otherwise. The display face is deliberately whatever serif the
- * platform already has: a wordmark in wide caps reads as carved in any of them.
+ * The faces are bundled and served from this origin — nothing is fetched from a font host, and
+ * nothing depends on what the machine happens to have installed. See the imports above.
  */
 
 @theme {
@@ -48,11 +60,14 @@
   --color-cool-600: #6d4bc9;
 
   --font-mono:
-    'JetBrains Mono', ui-monospace, 'SFMono-Regular', 'Menlo', 'Consolas', monospace;
+    'JetBrains Mono Variable', ui-monospace, 'SFMono-Regular', 'Menlo', 'Consolas', monospace;
   --font-sans:
-    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+    'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* Cinzel is a Roman inscriptional face — the wordmark is meant to read as carved, and this
+     is the shape that was carved. The stack behind it is what the platform can offer if the
+     bundled file ever fails to load. */
   --font-display:
-    'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+    'Cinzel Variable', 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
 }
 
 html {

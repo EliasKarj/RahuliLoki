@@ -137,7 +137,7 @@ export function TopItemsTable({
       <div className="max-h-[min(70vh,56rem)] overflow-auto">
         <table className="w-full text-sm">
           <thead className="sticky top-0 z-10 bg-ink-900">
-            <tr className="border-b border-ink-800 text-xs uppercase tracking-wider text-ink-400">
+            <tr className="border-b border-ink-800 text-xs font-normal text-ink-400">
               {COLUMNS.map((column) => (
                 <th
                   key={column.key}

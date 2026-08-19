@@ -75,7 +75,7 @@ export default function App() {
      * There is still a cap, because a row three thousand pixels wide puts an item's name and
      * its value at opposite ends of the desk. 108rem is about where that starts. */}
     <div className="page mx-auto w-full max-w-[108rem] px-4 py-6 sm:px-8 lg:px-10">
-      <header className="mb-6">
+      <header className="mb-8">
         <div className="flex flex-wrap items-baseline justify-between gap-3">
           <div className="flex items-baseline gap-3">
             {/* Carved, not typeset — see .wordmark. The trailing letter's tracking is padding
@@ -130,7 +130,7 @@ export default function App() {
           above.
         </Empty>
       ) : (
-        <div className="space-y-8">
+        <div className="space-y-10">
           <Hero snapshots={snapshots} stats={stats} orbs={health?.prices ?? null} />
 
           {/* No heading at all, unlike every section below it. Those fold away and need a

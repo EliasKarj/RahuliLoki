@@ -51,7 +51,7 @@ export function Hero({
   const icon = worth.unit === 'divine' ? orbs?.divineIcon : orbs?.chaosIcon;
 
   return (
-    <section className="border-b border-ink-800 pb-5">
+    <section className="border-b border-ink-800 pb-8">
       {/* The sparkline is confined to the block holding the figure, never the one holding the
           supporting numbers. Bleeding it across both put a stroke straight through a row of
           small labels — context for a number is worth nothing if it costs the number's
@@ -122,7 +122,7 @@ export function Hero({
        * useful in the first place: they are the denominator, not a figure. The wall-clock rate
        * is gain over wall-clock hours, and both of those numbers are still on screen.
        */}
-      <dl className="mt-4 flex flex-wrap gap-x-8 gap-y-3 text-xs">
+      <dl className="mt-6 flex flex-wrap gap-x-10 gap-y-3 text-xs">
         <Figure
           label="Gain in range"
           value={prices.signed(gain)}
@@ -159,7 +159,7 @@ function Figure({
 }) {
   return (
     <div className="border-l border-ink-800 pl-3 first:border-l-0 first:pl-0">
-      <dt className="text-[0.65rem] uppercase tracking-[0.15em] text-ink-400">{label}</dt>
+      <dt className="text-xs text-ink-400">{label}</dt>
       <dd
         className={`num mt-0.5 !text-left text-base ${
           tone === 'up' ? 'text-accent-500' : tone === 'down' ? 'text-ink-200' : 'text-ink-100'

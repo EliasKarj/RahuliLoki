@@ -74,7 +74,7 @@ export function ChangesTable({
       <div className="max-w-6xl overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-ink-800 text-xs uppercase tracking-wider text-ink-400">
+            <tr className="border-b border-ink-800 text-xs font-normal text-ink-400">
               <th scope="col" className="py-2 text-left font-medium">Item</th>
               <th scope="col" className="py-2 text-right font-medium">Held</th>
               <th scope="col" className="py-2 text-right font-medium">Each</th>

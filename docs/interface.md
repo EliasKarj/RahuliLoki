@@ -26,6 +26,25 @@ rather than the same rows in the same box with empty page underneath.
 
 ---
 
+## Type
+
+Three faces, all carried in the package: **Inter** for text, **JetBrains Mono** for every number,
+and **Cinzel** — a Roman inscriptional face — for the wordmark alone.
+
+> **▸ Why they are bundled rather than named and hoped for:** the stylesheet used to ask for
+> JetBrains Mono and fall back to whatever monospace the machine had, which on Windows is
+> Consolas. The app most people ran was therefore not the app that was designed, and nobody
+> could tell. Self-hosting is the only fix available here: the Content-Security-Policy says
+> `font-src 'self'`, and it should — a wealth tracker has no business telling a font host when
+> it is opened. Three variable files, about 300 kB, in an installer of 160 MB.
+
+Small caps are now one thing and not everything. The wordmark is carved; section headings,
+figure labels and table headers are set in sentence case at a normal size, because five stacked
+headings in wide-tracked capitals is a lot of texture for a page whose job is to be read at a
+glance.
+
+---
+
 ## The look: Citadel at the End of Time
 
 A void that is not quite black, gold that is the only light in it, and violet that is time

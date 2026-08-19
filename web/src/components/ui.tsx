@@ -37,13 +37,17 @@ export function Panel({
   const heading = (
     <div className="flex items-baseline gap-2 text-left">
       {collapsible ? (
-        <span className="text-[0.6rem] text-ink-500 transition-colors group-hover:text-accent-500" aria-hidden="true">
+        <span className="text-[0.65rem] text-ink-500 transition-colors group-hover:text-accent-500" aria-hidden="true">
           {open ? '\u25be' : '\u25b8'}
         </span>
       ) : null}
-      <h2 className="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-ink-300">
-        {title}
-      </h2>
+      {/* Sentence case, not small caps.
+       *
+       * Five stacked headings in wide-tracked capitals is a lot of texture for a page whose
+       * job is to be read at a glance, and it made every section shout at the same volume as
+       * the wordmark. The wordmark is the one carved thing here now; a section is just a
+       * label, so it is set like one. */}
+      <h2 className="text-sm font-medium tracking-wide text-ink-200">{title}</h2>
       {subtitle && shown ? (
         <p className="hidden text-xs font-normal normal-case tracking-normal text-ink-500 lg:block">
           {subtitle}
@@ -54,7 +58,7 @@ export function Panel({
 
   return (
     <section>
-      <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-ink-800 pb-2">
+      <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-ink-800 pb-3">
         {collapsible ? (
           <button
             type="button"
@@ -69,7 +73,7 @@ export function Panel({
         )}
         {actions}
       </header>
-      {shown ? <div className="pt-4">{children}</div> : null}
+      {shown ? <div className="pt-5">{children}</div> : null}
     </section>
   );
 }
