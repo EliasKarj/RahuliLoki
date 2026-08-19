@@ -12,6 +12,7 @@ import { TokenGate } from './components/TokenGate.tsx';
 import { ChangesTable } from './components/ChangesTable.tsx';
 import { ItemHistory } from './components/ItemHistory.tsx';
 import { DesktopSetup } from './components/DesktopSetup.tsx';
+import { UpdateNotice } from './components/UpdateNotice.tsx';
 import { hasToken } from './lib/api.ts';
 import { rangeStart } from './lib/series.ts';
 import { describeSchedule } from './lib/schedule.ts';
@@ -98,6 +99,10 @@ export default function App() {
         <div className="mt-3">
           <PollerStatus health={health} onPolled={refresh} />
         </div>
+
+        {/* Renders nothing unless there is a release newer than this build, and nothing at all
+            once dismissed. See lib/update.ts. */}
+        <UpdateNotice update={health?.update} />
 
         {error ? (
           <p className="mt-3 rounded border border-accent-600/50 bg-accent-600/10 px-3 py-2 text-xs text-accent-400">

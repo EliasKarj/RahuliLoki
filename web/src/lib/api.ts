@@ -6,6 +6,8 @@
  * in development Vite proxies /api — either way there is no host to configure and no CORS.
  */
 
+import type { UpdateInfo } from './update.ts';
+
 export interface SnapshotMeta {
   id: number;
   takenAt: string;
@@ -207,6 +209,13 @@ export interface HealthResponse {
     divineIcon: string | null;
   };
   missing: string[];
+  /**
+   * Whether a newer release exists, as of the server's last check — see lib/update.ts.
+   *
+   * Optional because an older server does not send it, and the dashboard is served from the
+   * same build as the API only in the packaged app; a browser can be pointed at anything.
+   */
+  update?: UpdateInfo;
 }
 
 export class ApiError extends Error {

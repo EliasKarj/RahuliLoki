@@ -7,6 +7,7 @@ import type { SnapshotStore } from '../services/snapshotRepo.ts';
 import type { PollerHealth, PollOutcome } from '../jobs/pollJob.ts';
 import type { LeagueList } from '../services/leagueService.ts';
 import type { Profile } from '../services/profileService.ts';
+import type { UpdateStatus } from '../services/updateService.ts';
 
 export interface PollerLike {
   readonly health: PollerHealth;
@@ -44,4 +45,13 @@ export interface ApiDeps {
    * Null when nothing is scheduled — no credentials, or a halt that only a person can clear.
    */
   nextPollAt: () => string | null;
+  /**
+   * Whether a newer release exists, as of the last time anybody asked GitHub.
+   *
+   * Synchronous on purpose: this hangs off /api/health, which the dashboard polls every minute,
+   * and a health endpoint that waits on a third party is a health endpoint that reports the
+   * third party's outage as its own. The asking happens elsewhere, on its own daily clock; this
+   * only reads the answer.
+   */
+  update: () => UpdateStatus;
 }

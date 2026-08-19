@@ -430,6 +430,20 @@ export function DesktopSetup({ onChanged }: { onChanged: () => void }) {
               />
               Start with my computer
             </label>
+            <label className="flex items-center gap-2" title="One request a day to api.github.com, carrying no account details">
+              <input
+                type="checkbox"
+                checked={settings.updateCheck}
+                disabled={busy}
+                onChange={(event) =>
+                  void run(
+                    () => desktop.writeSettings({ updateCheck: event.target.checked }),
+                    'Saved.',
+                  )
+                }
+              />
+              Check for new versions
+            </label>
           </div>
 
           {settings.missing.length > 0 ? (

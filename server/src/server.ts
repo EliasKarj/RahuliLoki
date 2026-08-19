@@ -18,7 +18,7 @@ import cron from 'node-cron';
 import { PrismaClient } from '../generated/prisma/index.js';
 
 import { buildApp } from './app.ts';
-import { loadConfig, type AppConfig } from './lib/config.ts';
+import { loadConfig, VERSION, type AppConfig } from './lib/config.ts';
 import { describeError, registerSecret } from './lib/logger.ts';
 import { RateLimiter } from './lib/rateLimiter.ts';
 import { nextScheduledPoll } from './lib/schedule.ts';
@@ -26,6 +26,7 @@ import { PriceService } from './services/priceService.ts';
 import { StashService } from './services/stashService.ts';
 import { PrismaPriceSetStore, PrismaSnapshotStore } from './services/snapshotRepo.ts';
 import { LeagueService } from './services/leagueService.ts';
+import { UpdateService } from './services/updateService.ts';
 import { fetchProfile } from './services/profileService.ts';
 import { PollRunner } from './jobs/pollJob.ts';
 import type { ApiDeps } from './routes/deps.ts';
@@ -123,6 +124,7 @@ export async function startServer(options: StartOptions = {}): Promise<RunningSe
   let prices: PriceService;
   let poller: PollRunner;
   let leagues: LeagueService;
+  let updates: UpdateService;
 
   const deps: ApiDeps = {
     config,
@@ -137,6 +139,12 @@ export async function startServer(options: StartOptions = {}): Promise<RunningSe
     },
     rateLimit: () => limiter.view(),
     nextPollAt: () => nextPollAt(),
+    // Reading the cached answer, and asking GitHub for a new one only once the old one is a day
+    // old. The dashboard polls this endpoint every minute; the request behind it happens once.
+    update: () => {
+      void updates.check();
+      return updates.status;
+    },
     leagues: () => leagues.list(),
     profile: () =>
       fetchProfile({
@@ -163,6 +171,13 @@ export async function startServer(options: StartOptions = {}): Promise<RunningSe
   leagues = new LeagueService({
     userAgent: config.userAgent,
     knownLeagues: () => store.leagues(),
+    timeoutMs: config.requestTimeoutMs,
+    log,
+  });
+  updates = new UpdateService({
+    current: VERSION,
+    userAgent: config.userAgent,
+    enabled: config.updateCheck,
     timeoutMs: config.requestTimeoutMs,
     log,
   });
@@ -201,6 +216,11 @@ export async function startServer(options: StartOptions = {}): Promise<RunningSe
   await prices.hydrate().catch((error: unknown) => {
     log.warn({ err: error }, 'could not restore a price set from the database');
   });
+
+  // Not awaited, and not allowed to matter: the app is fully usable whether or not GitHub
+  // answers, so a boot must never wait on it. This only means the first dashboard load already
+  // knows the answer rather than showing nothing until the minute's health poll comes round.
+  void updates.check();
 
   if (missing.length > 0) {
     log.warn({ missing }, 'poller is disabled until these are set; existing history is still served');

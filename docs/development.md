@@ -30,6 +30,7 @@ All of it in `.env`; `.env.example` is the template.
 | `ALLOW_UNAUTHENTICATED` | empty | An acknowledgement that something else handles authentication. |
 | `ALLOWED_HOSTS` | empty | Permitted `Host` headers in tokenless mode. |
 | `TRUST_PROXY` | empty | Whether to believe `X-Forwarded-*`. Only behind a real proxy. |
+| `UPDATE_CHECK` | on | Ask GitHub once a day whether there is a newer release. `off` stops it entirely. |
 | `PRICE_SET_RETENTION` | `48` | Price sets kept per league. `0` = all of them. Includes the icon map. |
 | `REQUEST_TIMEOUT_MS` | `30000` | Ceiling for a single outbound request. |
 | `LOG_LEVEL` | `info` | pino's level. |
@@ -67,7 +68,7 @@ Everything under `/api`, everything JSON.
 | `GET /api/leagues` | The current leagues from GGG, for the desktop build's menu. Cached 6 h; the permanent leagues on failure. |
 | `GET /api/account` | Who GGG says the stored session belongs to, and whether that matches `POE_ACCOUNT_NAME`. 502 when GGG will not answer — which is itself an answer. |
 | `POST /api/poll` | Starts a poll and answers **202 immediately**, not when it finishes. 409 if one is already running, 503 if credentials are missing. The outcome is read from `/api/health`. |
-| `GET /api/health` | Last success, halt reason, rate-limit state, price age, and `schedule.nextRunAt`: when the next automatic poll runs. |
+| `GET /api/health` | Last success, halt reason, rate-limit state, price age, `schedule.nextRunAt` (when the next automatic poll runs), and `update`: whether a newer release exists. |
 | `GET /api/config` | League, schedule, thresholds, and which leagues have history. **No POESESSID.** |
 
 When `AUTH_TOKEN` is set, every one of these requires an `Authorization: Bearer …` header
@@ -85,6 +86,12 @@ change without one.
 > had, and reported a net worth from weeks earlier as the current one, because "current" is read
 > off the last row of the series. Past about two weeks of a league at the old cap, both were
 > quietly wrong.
+
+> **▸ Why the update check hangs off the health endpoint:** the dashboard already reads it every
+> minute, and the answer changes about once a month. Its own endpoint would be a second poll for
+> a field that is almost always the same. `deps.update()` is synchronous and returns the cached
+> answer — a health endpoint that waits on api.github.com reports GitHub's outage as its own —
+> and the request behind it happens at boot and once a day thereafter.
 
 > **▸ Why not 503 when halted:** a container health check would restart the process, and a restart
 > does not fix an expired POESESSID. It would only restart the container in a loop for days. The
@@ -148,7 +155,7 @@ unvalidated symlink path traversal during extraction. There **is no fixed versio
 pnpm test
 ```
 
-**517 tests**, not one network request:
+**551 tests**, not one network request:
 
 - **The rate limiter** — header parsing, pacing, serialisation, `Retry-After`, doubling up to the
   ceiling. The clock and sleep are faked, so testing a 30-minute backoff takes microseconds.
@@ -168,6 +175,12 @@ pnpm test
   ends in a timeout rather than spinning.
 - **Logging** — that a log written to a file redacts the credential exactly as one written to a
   terminal does.
+- **The update check** — that a draft, a prerelease and an unparseable tag are not updates, that
+  `1.0.9` is older than `1.0.10` and not newer, that the link is dropped unless it points at
+  GitHub, that a failure changes nothing, and that switching it off makes no request at all.
+- **Desktop settings** — that the update check defaults to on for a settings file written before
+  it existed, that switching it off reaches the server as `UPDATE_CHECK=off`, and that the file
+  holding the credential is written `0600`.
 - **The store's SQL** — against a real SQLite file, migrated by the app's own migrator: the
   per-tab column, its fallback for rows written before it existed, and the item series summed
   inside the database (including a fractional sum, which is what broke it the first time).
@@ -179,10 +192,11 @@ pnpm test
 ```
 /server
   /src
-    /services   priceService, stashService, valuationService, uniques, snapshotRepo
+    /services   priceService, stashService, valuationService, uniques, snapshotRepo,
+                leagueService, profileService, updateService
     /routes     snapshots, health, config
     /jobs       pollJob
-    /lib        rateLimiter, logger, series, changes, config, auth, http, schedule
+    /lib        rateLimiter, logger, series, changes, config, auth, http, schedule, version
     app.ts      assembling Fastify (testable without a listening port)
     server.ts   assembling the server as a function (the desktop build embeds the same one)
     index.ts    the command-line wrapper: startup and a clean shutdown
@@ -196,9 +210,11 @@ pnpm test
 /web
   /src
     /components Hero, NetWorthChart, RatePerHourChart, TabBreakdown, SnapshotTable,
-                PollerStatus, TokenGate, ChangesTable, ItemHistory, ItemIcon, DesktopSetup
+                PollerStatus, TokenGate, ChangesTable, ItemHistory, ItemIcon, DesktopSetup,
+                UpdateNotice
     /hooks      useSnapshots
-    /lib        api, format, series, palette (chart colours), schedule (the countdown), spark
+    /lib        api, format, series, palette (chart colours), schedule (the countdown), spark,
+                update (the release notice and its dismissal)
 ```
 
 The statistics are computed on the server and arrive at the browser finished. The idle rule and

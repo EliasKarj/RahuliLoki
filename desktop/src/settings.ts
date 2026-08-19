@@ -26,6 +26,14 @@ export interface Settings {
   pollInBackground: boolean;
   /** Start with the operating system. */
   launchAtLogin: boolean;
+  /**
+   * Ask GitHub once a day whether there is a newer release.
+   *
+   * On by default and switchable off: it is the only request this app makes that is not about
+   * the stash, and somebody who does not want their machine talking to GitHub should not have
+   * to read the source to find that out. See server/src/services/updateService.ts.
+   */
+  updateCheck: boolean;
 }
 
 export const DEFAULTS: Settings = {
@@ -37,6 +45,7 @@ export const DEFAULTS: Settings = {
   trackedTabs: [],
   pollInBackground: true,
   launchAtLogin: false,
+  updateCheck: true,
 };
 
 function settingsFile(userDataDir: string): string {
@@ -61,6 +70,7 @@ export function loadSettings(userDataDir: string): Settings {
         : [],
       pollInBackground: raw.pollInBackground !== false,
       launchAtLogin: raw.launchAtLogin === true,
+      updateCheck: raw.updateCheck !== false,
     };
   } catch {
     // Missing or unparseable. Defaults get the user to the setup screen, which is the right
@@ -98,6 +108,7 @@ export function toEnv(settings: Settings, databaseFile: string): NodeJS.ProcessE
     AUTH_TOKEN: '',
     ALLOW_UNAUTHENTICATED: '',
     LOG_LEVEL: process.env.WHAT_REMAINS_LOG_LEVEL ?? 'info',
+    UPDATE_CHECK: settings.updateCheck ? 'on' : 'off',
     // Passed through so an operator can redirect it without rebuilding the app.
     ...(process.env.POE_NINJA_URL ? { POE_NINJA_URL: process.env.POE_NINJA_URL } : {}),
   };

@@ -19,6 +19,8 @@ export interface DesktopSettings {
   trackedTabs: string[];
   pollInBackground: boolean;
   launchAtLogin: boolean;
+  /** Whether the app asks GitHub about new releases. See lib/update.ts. */
+  updateCheck: boolean;
   /** Whether a session is stored. The value itself is never exposed. */
   hasSession: boolean;
   /** What still has to be filled in before polling can run. */

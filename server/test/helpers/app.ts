@@ -141,6 +141,13 @@ export async function makeApp(
         fetchedAt: new Date(START).toISOString(),
       }),
       profile: async () => ({ name: 'Exile#1234', uuid: 'uuid-1' }),
+      update: () => ({
+        current: '1.0.0',
+        latest: null,
+        available: false,
+        url: null,
+        checkedAt: null,
+      }),
       startedAt: new Date(START),
       ...overrides,
     },

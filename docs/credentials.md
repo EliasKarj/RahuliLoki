@@ -131,3 +131,29 @@ token travels in an `Authorization` header, never as a cookie and never in a URL
 > **▸ Why not a cookie:** a cookie is attached automatically to a request sent by an attacker's
 > page too, which is the whole of the CSRF problem. A header forces a preflight, which the
 > browser will not perform for a foreign origin.
+
+---
+
+## What leaves the machine
+
+Three hosts, and nothing else:
+
+| Host | What is sent | Carries the credential? |
+|------|--------------|-------------------------|
+| `pathofexile.com` | The stash and profile requests. | Yes — the `Cookie` header. This is the point of the app. |
+| `poe.ninja` | League name and category, in the URL. | No. |
+| `api.github.com` | Nothing but a `User-Agent`: "is there a newer release?" | No. |
+
+The last one is the only request that is not about the stash, and the only one the app makes
+about itself. It runs at startup and once a day thereafter, has no account name, session or
+token attached, and what GitHub learns from it is that an IP address asked about a public
+repository — the same thing it learns from anyone opening the releases page.
+
+It can be switched off: untick **Check for new versions** in the desktop panel, or set
+`UPDATE_CHECK=off`. The app then never contacts GitHub, and never says anything about versions.
+
+> **▸ Why it only checks, and never installs:** downloading and swapping out a running program's
+> own binary is a different feature with a different threat model. It wants code signing before
+> it wants a button; without one, an auto-updater is a thing that replaces your executable with
+> something it fetched from the internet. So this notices, links to the release page, and leaves
+> the decision where it belongs.

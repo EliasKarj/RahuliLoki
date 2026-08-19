@@ -65,6 +65,12 @@ stands where the countdown would.
 > a tick is **skipped** rather than delayed, so "the next tick" and "the next poll" are different
 > questions.
 
+When a newer version has been released, a single line appears under that row: *What Remains
+1.1.0 is out — you are running 1.0.2*, with a link to the release page and a **dismiss**. The
+dismissal is remembered for that version only, so the next release says so again. Nothing is
+downloaded or installed by the app itself — see
+[What leaves the machine](credentials.md#what-leaves-the-machine).
+
 The supporting figures sit underneath in a row divided by hairlines. Immediately after them comes
 the **item table**, where each row has a bar behind it: that row's share of the largest holding.
 The charts are further down as single-line bars, closed by default.

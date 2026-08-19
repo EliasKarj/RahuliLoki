@@ -126,6 +126,7 @@ const SERVER_SETTINGS: ReadonlyArray<keyof Settings> = [
   'pollCron',
   'minItemChaos',
   'trackedTabs',
+  'updateCheck',
 ];
 
 function affectsServer(patch: Partial<Settings>): boolean {

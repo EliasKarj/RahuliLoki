@@ -75,6 +75,13 @@ export interface AppConfig {
   allowedHosts: string[];
   /** Whether X-Forwarded-* may be believed. Off unless a proxy really is in front. */
   trustProxy: boolean;
+  /**
+   * Whether to ask GitHub, once a day, whether a newer release exists.
+   *
+   * On by default, and the one outbound request this app makes that is not about your stash —
+   * see updateService.ts for exactly what leaves the machine. `UPDATE_CHECK=off` stops it.
+   */
+  updateCheck: boolean;
   /** PriceSet rows kept per league; older ones are pruned after each fetch. 0 disables. */
   priceSetRetention: number;
   /** Ceiling on a single outbound request to GGG or poe.ninja. */
@@ -107,7 +114,7 @@ export interface ConfigResult {
   leagueDefaulted: boolean;
 }
 
-const VERSION = '1.0.2';
+export const VERSION = '1.0.3';
 
 export class ConfigError extends Error {}
 
@@ -142,6 +149,13 @@ export function isValidCron(expression: string): boolean {
 function readBool(env: NodeJS.ProcessEnv, key: string): boolean {
   const raw = env[key]?.trim().toLowerCase();
   return raw === '1' || raw === 'true' || raw === 'yes';
+}
+
+/** Like `readBool`, but for a setting that is on until somebody says otherwise. */
+function readOffSwitch(env: NodeJS.ProcessEnv, key: string): boolean {
+  const raw = env[key]?.trim().toLowerCase();
+  if (raw === undefined || raw === '') return true;
+  return !(raw === '0' || raw === 'false' || raw === 'no' || raw === 'off');
 }
 
 /**
@@ -231,6 +245,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ConfigResult {
     allowUnauthenticated,
     allowedHosts,
     trustProxy: readBool(env, 'TRUST_PROXY'),
+    // On unless switched off: a check nobody knows about is a check nobody wanted, but one
+    // that has to be turned on is one nobody has when the update matters.
+    updateCheck: readOffSwitch(env, 'UPDATE_CHECK'),
     priceSetRetention,
     requestTimeoutMs,
     poeNinjaUrl: env.POE_NINJA_URL?.trim() || DEFAULT_NINJA_URL,

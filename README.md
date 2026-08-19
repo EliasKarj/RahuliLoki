@@ -63,9 +63,11 @@ the panel — signing in; the fields save themselves.
 | League | Saves as soon as you pick it. *Other…* for private leagues. |
 | Interval | 5 / 10 / 15 / 30 / 60 min. Too tight a choice says so itself — see below. |
 | Background collection | Closing the window hides it to the tray; the collector keeps going. |
+| Check for new versions | One request a day to GitHub, carrying no account details. Off means the app never contacts it. |
 
 The top row is the state: when it last collected, how old the prices are, how much of GGG's rate
-limit is left, and **a countdown to the next automatic poll**.
+limit is left, and **a countdown to the next automatic poll**. When a newer version exists, a
+line under it says so and links to the release page — the app never installs anything itself.
 
 > **▸ Why five minutes does not fit a large stash:** one poll costs one request per tab, and
 > GGG's stash limit is 200 requests an hour. Nineteen tabs every five minutes is 228 — over
@@ -106,8 +108,10 @@ the threat model: **[Credentials and access](docs/credentials.md)**.
 
 ## Cutting a release
 
-1. Bump the version in the four `package.json` files and in `server/src/lib/config.ts`.
-2. Tag it:
+1. Bump the version in the four `package.json` files and in `server/src/lib/config.ts`. The two
+   have to agree: the version in `config.ts` is the one an installed copy compares against the
+   published tag when it checks for updates.
+2. Tag it — `vMAJOR.MINOR.PATCH`, since anything else is not read as a release:
 
 ```
 git tag v1.0.1

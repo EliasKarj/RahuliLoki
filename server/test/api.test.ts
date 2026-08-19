@@ -379,6 +379,30 @@ describe('GET /api/health', () => {
 
     expect(body.schedule.nextRunAt).toBeNull();
   });
+
+  it('carries the update check, and only for an authenticated caller', async () => {
+    const update = {
+      current: '1.0.2',
+      latest: 'v1.1.0',
+      available: true,
+      url: 'https://github.com/EliasKarj/WhatRemains/releases/tag/v1.1.0',
+      checkedAt: '2026-01-01T02:00:00.000Z',
+    };
+    const token = 'a'.repeat(32);
+    const { app } = await makeApp({ update: () => update }, { AUTH_TOKEN: token } as NodeJS.ProcessEnv);
+
+    const authed = await app.inject({
+      method: 'GET',
+      url: '/api/health',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(authed.json().update).toEqual(update);
+
+    // The anonymous answer stays exactly what a liveness probe needs. Which build somebody is
+    // running is a fact about them, not about whether the process is serving.
+    const anonymous = await app.inject({ method: 'GET', url: '/api/health' });
+    expect(anonymous.json()).toEqual({ status: 'up' });
+  });
 });
 
 describe('POST /api/poll', () => {

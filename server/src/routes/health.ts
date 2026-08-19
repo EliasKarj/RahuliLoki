@@ -62,6 +62,9 @@ export async function healthRoutes(app: FastifyInstance, deps: ApiDeps): Promise
               divineIcon: priceSet.icons['Divine Orb'] ?? null,
             },
       missing: deps.missing,
+      // Null rather than absent when the check is switched off or has not answered yet, so the
+      // dashboard has one thing to test instead of three.
+      update: deps.update(),
     });
   });
 
