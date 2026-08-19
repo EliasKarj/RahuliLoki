@@ -13,7 +13,7 @@
 
 import { validate as cronValidate } from 'node-cron';
 import { isLoopbackBind, MIN_TOKEN_LENGTH } from './auth.ts';
-import { DEFAULT_NINJA_URL } from '../services/priceService.ts';
+import { DEFAULT_NINJA_URL } from '../services/ninjaPayload.ts';
 
 /** poe.ninja categories that key cleanly by item name. Gems and maps stay out — see README. */
 export const DEFAULT_CURRENCY_CATEGORIES = ['Currency', 'Fragment'] as const;

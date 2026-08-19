@@ -1,16 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
+import { PriceService, type PriceSet, type PriceSetStore } from '../src/services/priceService.ts';
 import {
   CHAOS_ID,
   PriceFetchError,
-  PriceService,
   coreItems,
   divineRateFrom,
   iconUrl,
   mergeOverview,
   unmatchedIds,
-  type PriceSet,
-  type PriceSetStore,
-} from '../src/services/priceService.ts';
+} from '../src/services/ninjaPayload.ts';
 import {
   bareOverview,
   core,

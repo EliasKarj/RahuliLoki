@@ -112,6 +112,12 @@ pnpm test
 pnpm typecheck
 ```
 
+> **▸ Why the pure half of a module tends to sit in its own file:** `ninjaPayload.ts` next to
+> `priceService.ts`, `lib/items.ts` next to `ItemsTable.tsx`. The split is not tidiness for its
+> own sake — it is what lets four modules import a constant or a parser without dragging in a
+> fetch, a cache and a database, and what lets the tests for "do two stacks of chaos add up"
+> import something that does not pull in Recharts.
+
 The server runs TypeScript directly through Node's type stripping — there is no build step in
 development, and `tsc` only produces `dist` for a release.
 
@@ -201,8 +207,9 @@ pnpm test
 ```
 /server
   /src
-    /services   priceService, stashService, valuationService, uniques, snapshotRepo,
-                leagueService, profileService, updateService
+    /services   priceService (fetching and caching), ninjaPayload (reading what comes back),
+                stashService, valuationService, uniques, snapshotRepo, leagueService,
+                profileService, updateService
     /routes     snapshots, health, config
     /jobs       pollJob
     /lib        rateLimiter, logger, series, changes, config, auth, http, schedule, version
@@ -220,10 +227,10 @@ pnpm test
   /src
     /components Hero, NetWorthChart, RatePerHourChart, TabBreakdown, SnapshotTable,
                 PollerStatus, TokenGate, ChangesTable, ItemHistory, ItemIcon, DesktopSetup,
-                UpdateNotice
+                UpdateNotice, TabAreaChart, ItemsTable
     /hooks      useSnapshots
     /lib        api, format, series, palette (chart colours), schedule (the countdown), spark,
-                update (the release notice and its dismissal)
+                update (the release notice and its dismissal), items (the item table's data)
 ```
 
 The statistics are computed on the server and arrive at the browser finished. The idle rule and

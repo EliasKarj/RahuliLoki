@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="What Remains">
+  <!--
+    The same citadel as the desktop icon (desktop/build/make-icon.py), drawn as vectors so it
+    stays legible at sixteen pixels: three towers cut out of a setting sun, on the ground line
+    they stand on. Kept to four shapes for that reason — a favicon is read at the size of a word.
+  -->
+  <defs>
+    <linearGradient id="sun" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f2c97e"/>
+      <stop offset="100%" stop-color="#c08c34"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#070610"/>
+  <circle cx="32" cy="36" r="17" fill="url(#sun)"/>
+  <path fill="#070610" d="M32 14l7 10h-3v22h-8V24h-3zM18 26l5 7h-2v13h-6V33h-2zM46 26l5 7h-2v13h-6V33h-2z"/>
+  <rect x="7" y="49" width="50" height="1.6" rx="0.8" fill="#e2a94f"/>
+</svg>

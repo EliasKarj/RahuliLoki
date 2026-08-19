@@ -20,7 +20,7 @@
  * behaviour in milliseconds without touching the network.
  */
 
-import { describeError, silentLogger, type Logger } from './logger.ts';
+import { silentLogger, type Logger } from './logger.ts';
 import { timeoutSignal } from './http.ts';
 
 export interface RateLimitPolicy {

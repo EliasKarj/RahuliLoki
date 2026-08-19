@@ -6,6 +6,11 @@
     "lib": ["ES2023"],
     "types": ["node"],
     "strict": true,
+    // An import or a local nobody reads is the first thing a codebase accumulates, and it never
+    // announces itself: it compiles, it ships, and the next person has to work out whether it
+    // mattered. Cheaper to make it fail here.
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
     "skipLibCheck": true,

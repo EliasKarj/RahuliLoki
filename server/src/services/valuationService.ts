@@ -23,7 +23,7 @@
  */
 
 import { ninjaId } from './ninjaId.ts';
-import { iconUrl } from './priceService.ts';
+import { iconUrl } from './ninjaPayload.ts';
 import { linkCount, pickCandidate, uniqueKey, type UniqueIndex } from './uniques.ts';
 
 export interface ValuedEntry {

@@ -1,11 +1,15 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark" />
     <title>What Remains</title>
     <meta name="description" content="Self-hosted Path of Exile wealth tracker." />
+    <!-- Without this every page load logs a 404 for /favicon.ico and the tab shows a blank
+         globe. An SVG rather than an .ico: it is 700 bytes, it scales, and it is the same
+         citadel the desktop build puts in the dock. -->
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   </head>
   <body>
     <div id="root"></div>

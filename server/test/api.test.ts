@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { clearSecrets, registerSecret } from '../src/lib/logger.ts';
 import { QueryError, parseQuery } from '../src/routes/snapshots.ts';
-import { PollerBusyError, PollerHaltedError, type PollOutcome } from '../src/jobs/pollJob.ts';
 import { SESSION, START, idleHealth, makeApp } from './helpers/app.ts';
 
 afterEach(() => clearSecrets());

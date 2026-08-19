@@ -19,7 +19,7 @@ import { PrismaClient } from '../generated/prisma/index.js';
 
 import { buildApp } from './app.ts';
 import { loadConfig, VERSION, type AppConfig } from './lib/config.ts';
-import { describeError, registerSecret } from './lib/logger.ts';
+import { registerSecret } from './lib/logger.ts';
 import { RateLimiter } from './lib/rateLimiter.ts';
 import { nextScheduledPoll } from './lib/schedule.ts';
 import { PriceService } from './services/priceService.ts';

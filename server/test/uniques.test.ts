@@ -12,7 +12,7 @@ import {
   type UniqueIndex,
   type UniquePrice,
 } from '../src/services/uniques.ts';
-import { iconUrl } from '../src/services/priceService.ts';
+import { iconUrl } from '../src/services/ninjaPayload.ts';
 import { resolveUnique, valueTabs } from '../src/services/valuationService.ts';
 import { uniqueArmourOverview } from './fixtures/poeninja.ts';
 

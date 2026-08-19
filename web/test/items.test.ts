@@ -6,7 +6,7 @@ import {
   groupByItem,
   matchesQuery,
   sortItemRows,
-} from '../src/components/TabBreakdown.tsx';
+} from '../src/lib/items.ts';
 import type { TopItem } from '../src/lib/api.ts';
 
 const item = (over: Partial<TopItem>): TopItem => ({

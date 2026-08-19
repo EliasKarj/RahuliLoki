@@ -12,7 +12,8 @@
  */
 
 import { describeError, silentLogger, type Logger } from '../lib/logger.ts';
-import { unmatchedIds, type PriceService } from '../services/priceService.ts';
+import { unmatchedIds } from '../services/ninjaPayload.ts';
+import type { PriceService } from '../services/priceService.ts';
 import type { StashService } from '../services/stashService.ts';
 import type { SnapshotMeta, SnapshotStore } from '../services/snapshotRepo.ts';
 import { valueTabs } from '../services/valuationService.ts';

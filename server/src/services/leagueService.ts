@@ -18,7 +18,7 @@
  *   would be a request GGG has no reason to serve.
  */
 
-import { describeError, silentLogger, type Logger } from '../lib/logger.ts';
+import { silentLogger, type Logger } from '../lib/logger.ts';
 import { readJsonCapped, timeoutSignal } from '../lib/http.ts';
 
 export interface League {

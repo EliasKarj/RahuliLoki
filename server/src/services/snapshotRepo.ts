@@ -14,7 +14,7 @@
 import type { PrismaClient } from '../../generated/prisma/index.js';
 import type { Breakdown } from './valuationService.ts';
 import { tabTotals } from './valuationService.ts';
-import { DIVINE_ID } from './priceService.ts';
+import { DIVINE_ID } from './ninjaPayload.ts';
 import type { PriceSet, PriceSetStore } from './priceService.ts';
 import type { UniqueIndex } from './uniques.ts';
 
