@@ -61,3 +61,28 @@ jobs:
       # reviewable: it is one line in a diff, not a whole gate quietly switched off.
       - name: Audit dependencies
         run: pnpm audit --audit-level moderate
+
+  # The same tests on Windows, and nothing else.
+  #
+  # This exists because a test asserting a POSIX file mode passed everywhere it was ever run and
+  # failed on the Windows runner — during a release build, which is the one place a red test
+  # costs a published version rather than a re-run. The release workflow runs the suite on all
+  # three platforms already; that is far too late to find out.
+  #
+  # Deliberately not the full check job: the audit, the migration diff and the migrator
+  # verification are platform-independent and already run above. What is worth repeating here is
+  # only what can differ — file modes, path separators, line endings.
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @whatremains/server exec prisma generate
+      - run: pnpm typecheck
+      - run: pnpm test

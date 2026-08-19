@@ -61,13 +61,29 @@ describe('toEnv', () => {
 });
 
 describe('the settings file', () => {
-  it('is written for its owner only', () => {
+  it('holds the credential, which is why the rest of this matters', () => {
     const dir = tempDir();
     saveSettings(dir, { ...DEFAULTS, poesessid: 'a'.repeat(32) });
 
-    // The credential is in this file; the permissions are the whole of its protection.
-    const { mode } = statSync(join(dir, 'settings.json'));
-    expect(mode & 0o777).toBe(0o600);
     expect(readFileSync(join(dir, 'settings.json'), 'utf8')).toContain('aaaa');
+  });
+
+  /**
+   * Windows has no POSIX mode to assert on. `chmod` there sets the read-only attribute and
+   * nothing else, so `stat` reports 0o666 whatever was asked for, and a file's protection is
+   * the ACL on the per-user AppData directory rather than a mode. Asserting 0o600 on Windows
+   * tests the C runtime's emulation, not this code — and it failed the whole release build,
+   * which is a worse outcome than the platform gap it was pretending to cover.
+   */
+  it.skipIf(process.platform === 'win32')('is written for its owner only, where modes exist', () => {
+    const dir = tempDir();
+    saveSettings(dir, { ...DEFAULTS, poesessid: 'a'.repeat(32) });
+
+    expect(statSync(join(dir, 'settings.json')).mode & 0o777).toBe(0o600);
+
+    // Again over an existing file: writeFileSync's mode applies only on creation, so the
+    // explicit chmod afterwards is the thing being tested here.
+    saveSettings(dir, { ...DEFAULTS, poesessid: 'b'.repeat(32) });
+    expect(statSync(join(dir, 'settings.json')).mode & 0o777).toBe(0o600);
   });
 });

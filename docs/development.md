@@ -155,7 +155,7 @@ unvalidated symlink path traversal during extraction. There **is no fixed versio
 pnpm test
 ```
 
-**551 tests**, not one network request:
+**552 tests**, not one network request:
 
 - **The rate limiter** — header parsing, pacing, serialisation, `Retry-After`, doubling up to the
   ceiling. The clock and sleep are faked, so testing a 30-minute backoff takes microseconds.
@@ -180,7 +180,8 @@ pnpm test
   GitHub, that a failure changes nothing, and that switching it off makes no request at all.
 - **Desktop settings** — that the update check defaults to on for a settings file written before
   it existed, that switching it off reaches the server as `UPDATE_CHECK=off`, and that the file
-  holding the credential is written `0600`.
+  holding the credential is written `0600` — that last one only where file modes exist, since
+  Windows reports `0o666` for everything and the file is protected by an ACL there instead.
 - **The store's SQL** — against a real SQLite file, migrated by the app's own migrator: the
   per-tab column, its fallback for rows written before it existed, and the item series summed
   inside the database (including a fractional sum, which is what broke it the first time).
