@@ -88,45 +88,32 @@ describe('diffBreakdowns', () => {
 });
 
 describe('itemHistory', () => {
-  const snapshots: Array<{ takenAt: Date; breakdown: Breakdown }> = [
-    { takenAt: new Date('2026-01-01T00:00:00Z'), breakdown: { A: { Widget: entry(2, 10) } } },
-    { takenAt: new Date('2026-01-01T01:00:00Z'), breakdown: { A: { Widget: entry(5, 10) } } },
-    { takenAt: new Date('2026-01-01T02:00:00Z'), breakdown: { A: {} } },
-  ];
-
-  it('tracks quantity and value across the range', () => {
-    const points = itemHistory(snapshots, 'Widget');
-    expect(points.map((p) => p.qty)).toEqual([2, 5, 0]);
-    expect(points.map((p) => p.chaosTotal)).toEqual([20, 50, 0]);
+  // The summing moved into the store, which does it in SQL — see snapshotRepoSql.test.ts. What
+  // is left here is the shaping, and the rounding is the part worth pinning: these figures are
+  // prices, and every price in the API is stated to two decimals.
+  const point = (qty: number, chaosEach: number, chaosTotal: number) => ({
+    takenAt: new Date('2026-01-01T00:00:00Z'),
+    qty,
+    chaosEach,
+    chaosTotal,
   });
 
-  it('reports absence as zero rather than a gap in the line', () => {
-    // A sold-out holding should drop to the floor, not make the series stop.
-    const points = itemHistory(snapshots, 'Widget');
-    expect(points).toHaveLength(3);
-    expect(points[2]).toMatchObject({ qty: 0, chaosTotal: 0 });
+  it('states the time as ISO and the money to two decimals', () => {
+    const points = itemHistory([point(3, 1.234, 3.014_9)]);
+    expect(points).toEqual([
+      { takenAt: '2026-01-01T00:00:00.000Z', qty: 3, chaosEach: 1.23, chaosTotal: 3.01 },
+    ]);
   });
 
-  it('sums across tabs', () => {
-    const points = itemHistory(
-      [
-        {
-          takenAt: new Date('2026-01-01T00:00:00Z'),
-          breakdown: { A: { Widget: entry(2, 10) }, B: { Widget: entry(3, 10) } },
-        },
-      ],
-      'Widget',
-    );
-    expect(points[0]).toMatchObject({ qty: 5, chaosTotal: 50 });
+  it('passes a zero through as a zero', () => {
+    // A sold-out holding drops to the floor rather than making the series stop; the store emits
+    // the zero and this must not turn it into anything else.
+    expect(itemHistory([point(0, 0, 0)])[0]).toMatchObject({ qty: 0, chaosTotal: 0 });
   });
 
-  it('is all zeroes for an item never held', () => {
-    expect(itemHistory(snapshots, 'Nothing').every((p) => p.qty === 0)).toBe(true);
-  });
-
-  it('does not mistake an inherited property for a holding', () => {
-    // Breakdown keys come from stash tab and item names, so a lookup for `constructor` has to
-    // miss rather than return a function off the prototype.
-    expect(itemHistory(snapshots, 'constructor').every((p) => p.qty === 0)).toBe(true);
+  it('keeps quantities whole', () => {
+    // Quantities are counts of items. Rounding them like money would be wrong in a way nobody
+    // would notice, so they are not rounded at all.
+    expect(itemHistory([point(1234, 0.1, 123.4)])[0]?.qty).toBe(1234);
   });
 });

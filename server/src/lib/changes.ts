@@ -15,6 +15,7 @@
  */
 
 import type { Breakdown } from '../services/valuationService.ts';
+import type { ItemSeriesPoint } from '../services/snapshotRepo.ts';
 
 export interface ItemChange {
   name: string;
@@ -141,36 +142,21 @@ export interface ItemHistoryPoint {
 }
 
 /**
- * One item's quantity and value across a series of snapshots.
+ * One item's quantity and value across a series of snapshots, as the API states them.
  *
- * A snapshot where the item is absent contributes a zero rather than a gap. That is the honest
- * reading — you held none of it — and it keeps the line continuous, so selling a stack shows as
- * a drop to the floor instead of the series quietly ending.
+ * The summing happens in the store — see `itemSeries`, which does it in the database rather
+ * than by reading every breakdown in the range. What is left here is the shaping: an ISO
+ * timestamp and figures rounded the way every other price in the API is.
  *
- * Tabs are summed for the same reason the diff aggregates them: moving a stack between tabs is
- * not a change in what you hold.
+ * A snapshot where the item is absent arrives as a zero rather than as a missing point. That is
+ * the honest reading — you held none of it — and it keeps the line continuous, so selling a
+ * stack shows as a drop to the floor instead of the series quietly ending.
  */
-export function itemHistory(
-  snapshots: Array<{ takenAt: Date; breakdown: Breakdown }>,
-  name: string,
-): ItemHistoryPoint[] {
-  return snapshots.map((snapshot) => {
-    let qty = 0;
-    let chaosTotal = 0;
-    let chaosEach = 0;
-    for (const entries of Object.values(snapshot.breakdown)) {
-      if (!Object.hasOwn(entries, name)) continue;
-      const entry = entries[name];
-      if (entry === undefined) continue;
-      qty += entry.qty;
-      chaosTotal += entry.chaosTotal;
-      chaosEach = entry.chaosEach;
-    }
-    return {
-      takenAt: snapshot.takenAt.toISOString(),
-      qty,
-      chaosEach: round2(chaosEach),
-      chaosTotal: round2(chaosTotal),
-    };
-  });
+export function itemHistory(points: ItemSeriesPoint[]): ItemHistoryPoint[] {
+  return points.map((point) => ({
+    takenAt: point.takenAt.toISOString(),
+    qty: point.qty,
+    chaosEach: round2(point.chaosEach),
+    chaosTotal: round2(point.chaosTotal),
+  }));
 }

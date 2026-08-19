@@ -35,6 +35,17 @@ model Snapshot {
   divineRate  Float // chaos per divine at time of snapshot
   itemCount   Int
   breakdown   Json // { [tabName]: { [itemName]: { qty, chaosEach, chaosTotal } } }
+  // { [tabName]: chaosTotal }: the per-tab sums of `breakdown`, written at the same moment.
+  //
+  // Derived data, stored on purpose. The dashboard asks for these on every refresh — they draw
+  // the per-tab area chart — and computing them meant reading and parsing every breakdown blob
+  // in the range. On a month of a nineteen-tab stash that is a hundred megabytes of JSON to
+  // produce about a kilobyte of numbers, and it measured 2.3 seconds. Read from this column it
+  // is a few milliseconds.
+  //
+  // Nullable so the migration lands on existing rows before its backfill has run; the read path
+  // falls back to the breakdown for any row where it is still null.
+  tabs        Json?
   priceSetAt  DateTime // when the poe.ninja price set was fetched
 
   @@index([league, takenAt])

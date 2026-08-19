@@ -3,6 +3,7 @@
 import { tabTotals, type Breakdown } from '../../src/services/valuationService.ts';
 import type {
   CreateSnapshotInput,
+  ItemSeriesPoint,
   SnapshotMeta,
   SnapshotQuery,
   SnapshotStore,
@@ -22,7 +23,9 @@ export class MemorySnapshotStore implements SnapshotStore {
       .filter((row) => (query.from ? row.takenAt >= query.from : true))
       .filter((row) => (query.to ? row.takenAt <= query.to : true))
       .sort((a, b) => a.takenAt.getTime() - b.takenAt.getTime())
-      .slice(0, query.limit ?? Number.MAX_SAFE_INTEGER);
+      // A limit keeps the newest rows, as the real store does: the near end of a wealth history
+      // is the half worth having, and `computeStats` reads "current" off the last row.
+      .slice(-(query.limit ?? Number.MAX_SAFE_INTEGER));
   }
 
   async list(query: SnapshotQuery): Promise<SnapshotMeta[]> {
@@ -35,6 +38,23 @@ export class MemorySnapshotStore implements SnapshotStore {
 
   async listTabTotals(query: SnapshotQuery): Promise<SnapshotWithTabs[]> {
     return this.#filter(query).map(({ breakdown, ...meta }) => ({ ...meta, tabs: tabTotals(breakdown) }));
+  }
+
+  /** The same answer as the Prisma store's SQL, computed the obvious way over a handful of rows. */
+  async itemSeries(query: SnapshotQuery, name: string): Promise<ItemSeriesPoint[]> {
+    return this.#filter(query).map((row) => {
+      let qty = 0;
+      let chaosTotal = 0;
+      let chaosEach = 0;
+      for (const entries of Object.values(row.breakdown)) {
+        const entry = Object.hasOwn(entries, name) ? entries[name] : undefined;
+        if (entry === undefined) continue;
+        qty += entry.qty;
+        chaosTotal += entry.chaosTotal;
+        chaosEach = Math.max(chaosEach, entry.chaosEach);
+      }
+      return { takenAt: row.takenAt, qty, chaosEach, chaosTotal };
+    });
   }
 
   async latest(league: string): Promise<SnapshotWithBreakdown | null> {

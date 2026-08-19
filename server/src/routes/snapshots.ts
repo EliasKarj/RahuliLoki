@@ -21,7 +21,14 @@ import type { SnapshotQuery } from '../services/snapshotRepo.ts';
 
 /** Hard ceiling on a single response, whatever ?limit says. */
 const MAX_LIMIT = 10_000;
-/** Lower ceiling when the breakdown has to be read off disk to answer. */
+/**
+ * Lower ceiling when the breakdown has to be read off disk to answer.
+ *
+ * Only `?full=1` does now. `?tabs=1` used to: it read every breakdown in the range to add up
+ * per-tab sums, which is why it shared this cap. The sums are a column now, so that query is as
+ * light as the plain listing and is capped with it — which also means the per-tab chart covers
+ * five times the history it used to.
+ */
 const MAX_HEAVY_LIMIT = 2_000;
 
 export class QueryError extends Error {}
@@ -48,7 +55,7 @@ export interface ParsedQuery extends SnapshotQuery {
 export function parseQuery(raw: Record<string, unknown>, defaultLeague: string): ParsedQuery {
   const full = bool(raw.full);
   const tabs = bool(raw.tabs);
-  const heavy = full || tabs;
+  const heavy = full;
 
   let limit = heavy ? MAX_HEAVY_LIMIT : MAX_LIMIT;
   if (raw.limit !== undefined && raw.limit !== '') {
@@ -197,7 +204,7 @@ export async function snapshotRoutes(app: FastifyInstance, deps: ApiDeps): Promi
     }
 
     const { full: _full, tabs: _tabs, ...storeQuery } = query;
-    const snapshots = await deps.store.listFull(storeQuery);
+    const points = await deps.store.itemSeries(storeQuery, name);
     const icons = deps.prices.cached?.icons ?? {};
     const icon = Object.hasOwn(icons, name) ? icons[name] : undefined;
 
@@ -205,7 +212,7 @@ export async function snapshotRoutes(app: FastifyInstance, deps: ApiDeps): Promi
       league: query.league,
       name,
       ...(icon === undefined ? {} : { icon }),
-      points: itemHistory(snapshots, name),
+      points: itemHistory(points),
     });
   });
 

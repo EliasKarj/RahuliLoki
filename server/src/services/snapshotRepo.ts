@@ -37,6 +37,14 @@ export interface SnapshotWithTabs extends SnapshotMeta {
   tabs: Record<string, number>;
 }
 
+/** One item's holding at one moment, summed across the tabs it sits in. */
+export interface ItemSeriesPoint {
+  takenAt: Date;
+  qty: number;
+  chaosEach: number;
+  chaosTotal: number;
+}
+
 export interface SnapshotQuery {
   league: string;
   from?: Date;
@@ -60,6 +68,8 @@ export interface SnapshotStore {
   listTabTotals(query: SnapshotQuery): Promise<SnapshotWithTabs[]>;
   listFull(query: SnapshotQuery): Promise<SnapshotWithBreakdown[]>;
   latest(league: string): Promise<SnapshotWithBreakdown | null>;
+  /** One item across a range, one point per snapshot — absent means zero, not a gap. */
+  itemSeries(query: SnapshotQuery, name: string): Promise<ItemSeriesPoint[]>;
   /** The oldest and newest snapshot in a range, with breakdowns. Two rows, not the range. */
   bounds(query: SnapshotQuery): Promise<{ first: SnapshotWithBreakdown; last: SnapshotWithBreakdown } | null>;
   create(input: CreateSnapshotInput): Promise<SnapshotMeta>;
@@ -77,7 +87,18 @@ const META_SELECT = {
   priceSetAt: true,
 } as const;
 
+const TABS_SELECT = { ...META_SELECT, tabs: true } as const;
+
 /** Prisma's Json columns come back as `unknown`; narrow once, here. */
+function asTabs(value: unknown): Record<string, number> | null {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
+  const out: Record<string, number> = Object.create(null) as Record<string, number>;
+  for (const [tab, total] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof total === 'number' && Number.isFinite(total)) out[tab] = total;
+  }
+  return out;
+}
+
 function asBreakdown(value: unknown): Breakdown {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return {};
   return value as Breakdown;
@@ -126,27 +147,119 @@ export class PrismaSnapshotStore implements SnapshotStore {
     this.#prisma = prisma;
   }
 
+  /**
+   * A range of snapshots, oldest first — but truncated from the far end, not the near one.
+   *
+   * A limit and an ascending sort together kept the *oldest* rows, which is the wrong half of a
+   * wealth history. Past about two weeks of a league the chart stopped mid-league with no sign
+   * that it had, and the headline figure — which `computeStats` takes from the last row it is
+   * given — reported a net worth from a fortnight ago as the current one. Both were wrong in
+   * the direction nobody checks, because a chart that ends is indistinguishable from a chart of
+   * someone who stopped playing.
+   *
+   * So the newest rows win. The series still ends at now, and what falls off is the beginning,
+   * where a gap is visible for what it is.
+   */
   async list(query: SnapshotQuery): Promise<SnapshotMeta[]> {
-    return this.#prisma.snapshot.findMany({
+    const rows = await this.#prisma.snapshot.findMany({
       where: where(query),
-      orderBy: { takenAt: 'asc' },
+      orderBy: { takenAt: query.limit ? 'desc' : 'asc' },
       ...(query.limit ? { take: query.limit } : {}),
       select: META_SELECT,
     });
+    return query.limit ? rows.reverse() : rows;
   }
 
   async listFull(query: SnapshotQuery): Promise<SnapshotWithBreakdown[]> {
     const rows = await this.#prisma.snapshot.findMany({
       where: where(query),
-      orderBy: { takenAt: 'asc' },
+      orderBy: { takenAt: query.limit ? 'desc' : 'asc' },
       ...(query.limit ? { take: query.limit } : {}),
     });
-    return rows.map((row) => ({ ...row, breakdown: asBreakdown(row.breakdown) }));
+    const ordered = query.limit ? rows.reverse() : rows;
+    return ordered.map((row) => ({ ...row, breakdown: asBreakdown(row.breakdown) }));
   }
 
+  /**
+   * Per-tab sums for a range, from the column that holds them rather than from the breakdowns.
+   *
+   * This is the query the dashboard repeats on every refresh, and it used to read every
+   * breakdown in the range to add up numbers that were already known when the row was written.
+   * A month of a nineteen-tab stash is a hundred megabytes of JSON for about a kilobyte of
+   * answer, which measured 2.3 seconds; the column answers in single-digit milliseconds.
+   *
+   * Rows written before the column existed are backfilled by its migration. The fallback below
+   * is for the gap between the two — and it reads only the rows that need it, not the range.
+   */
   async listTabTotals(query: SnapshotQuery): Promise<SnapshotWithTabs[]> {
-    const rows = await this.listFull(query);
-    return rows.map(({ breakdown, ...meta }) => ({ ...meta, tabs: tabTotals(breakdown) }));
+    const rows = await this.#prisma.snapshot
+      .findMany({
+        where: where(query),
+        // Newest-first with a limit, then reversed — see `list` for why the far end is the one
+        // that gets cut.
+        orderBy: { takenAt: query.limit ? 'desc' : 'asc' },
+        ...(query.limit ? { take: query.limit } : {}),
+        select: TABS_SELECT,
+      })
+      .then((found) => (query.limit ? found.reverse() : found));
+
+    const missing = rows.filter((row) => asTabs(row.tabs) === null).map((row) => row.id);
+    const computed = new Map<number, Record<string, number>>();
+    if (missing.length > 0) {
+      const blobs = await this.#prisma.snapshot.findMany({
+        where: { id: { in: missing } },
+        select: { id: true, breakdown: true },
+      });
+      for (const blob of blobs) computed.set(blob.id, tabTotals(asBreakdown(blob.breakdown)));
+    }
+
+    return rows.map(({ tabs, ...meta }) => ({
+      ...meta,
+      tabs: asTabs(tabs) ?? computed.get(meta.id) ?? {},
+    }));
+  }
+
+  /**
+   * One item's quantity and value across a range, summed in the database.
+   *
+   * The straightforward version — read every breakdown in the range and pick the name out of
+   * each — is a hundred megabytes of JSON through the client for one item's line on a chart,
+   * and measured 1.7 seconds over a month. SQLite reaches into the blobs itself in about 0.7,
+   * which is the difference between a click that feels slow and one that feels broken.
+   *
+   * The CASTs are not decoration. Prisma types a raw column from the first value it sees, and a
+   * SUM that starts out whole gets read back as a BigInt — which then throws the moment a later
+   * row is fractional. `CAST(… AS REAL)` says once what every one of these columns is.
+   *
+   * Snapshots with none of the item are missing from this query and filled in as zero below: a
+   * pile that was sold should fall to zero rather than leave a gap, which is a different claim.
+   */
+  async itemSeries(query: SnapshotQuery, name: string): Promise<ItemSeriesPoint[]> {
+    const [meta, sums] = await Promise.all([
+      this.list(query),
+      this.#prisma.$queryRaw<Array<{ id: number; qty: number; chaosEach: number; chaosTotal: number }>>`
+        SELECT s.id AS id,
+               CAST(SUM(json_extract(item.value, '$.qty')) AS REAL) AS qty,
+               CAST(MAX(json_extract(item.value, '$.chaosEach')) AS REAL) AS chaosEach,
+               CAST(SUM(json_extract(item.value, '$.chaosTotal')) AS REAL) AS chaosTotal
+        FROM Snapshot s, json_each(s.breakdown) tab, json_each(tab.value) item
+        WHERE s.league = ${query.league}
+          AND (${query.from ?? null} IS NULL OR s.takenAt >= ${query.from ?? null})
+          AND (${query.to ?? null} IS NULL OR s.takenAt <= ${query.to ?? null})
+          AND item.key = ${name}
+        GROUP BY s.id`,
+    ]);
+
+    const found = new Map(sums.map((row) => [row.id, row]));
+    return meta.map((row) => {
+      const hit = found.get(row.id);
+      return {
+        takenAt: row.takenAt,
+        qty: hit?.qty ?? 0,
+        chaosEach: hit?.chaosEach ?? 0,
+        chaosTotal: hit?.chaosTotal ?? 0,
+      };
+    });
   }
 
   async latest(league: string): Promise<SnapshotWithBreakdown | null> {
@@ -185,6 +298,8 @@ export class PrismaSnapshotStore implements SnapshotStore {
         divineRate: input.divineRate,
         itemCount: input.itemCount,
         breakdown: input.breakdown as object,
+        // Derived here rather than on every read. See the column's comment in schema.prisma.
+        tabs: tabTotals(input.breakdown),
         priceSetAt: input.priceSetAt,
       },
       select: META_SELECT,

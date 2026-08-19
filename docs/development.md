@@ -75,7 +75,16 @@ When `AUTH_TOKEN` is set, every one of these requires an `Authorization: Bearer 
 without a token and full diagnostics only when authenticated — see
 [Access control](credentials.md#access-control).
 
-`/api/health` answers **200 whenever the process is up**, halted included.
+`/api/health` answers **200 whenever the process is up**, halted included. It is also what the
+dashboard polls between refreshes: it names the last poll, and nothing else in the dashboard can
+change without one.
+
+> **▸ Why a range wider than the cap keeps the newest rows:** `?limit` bounds a response, and the
+> half of a wealth history worth keeping is the near one. Truncating the other way — which is
+> what an ascending sort with a limit does — made the chart stop mid-league with no sign that it
+> had, and reported a net worth from weeks earlier as the current one, because "current" is read
+> off the last row of the series. Past about two weeks of a league at the old cap, both were
+> quietly wrong.
 
 > **▸ Why not 503 when halted:** a container health check would restart the process, and a restart
 > does not fix an expired POESESSID. It would only restart the container in a loop for days. The
@@ -139,7 +148,7 @@ unvalidated symlink path traversal during extraction. There **is no fixed versio
 pnpm test
 ```
 
-**501 tests**, not one network request:
+**517 tests**, not one network request:
 
 - **The rate limiter** — header parsing, pacing, serialisation, `Retry-After`, doubling up to the
   ceiling. The clock and sleep are faked, so testing a 30-minute backoff takes microseconds.
@@ -159,6 +168,9 @@ pnpm test
   ends in a timeout rather than spinning.
 - **Logging** — that a log written to a file redacts the credential exactly as one written to a
   terminal does.
+- **The store's SQL** — against a real SQLite file, migrated by the app's own migrator: the
+  per-tab column, its fallback for rows written before it existed, and the item series summed
+  inside the database (including a fractional sum, which is what broke it the first time).
 
 ---
 

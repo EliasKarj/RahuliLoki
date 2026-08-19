@@ -37,6 +37,43 @@ describe('parseQuery', () => {
     expect(parseQuery({ limit: '999999' }, 'Settlers').limit).toBe(10_000);
     expect(parseQuery({ limit: '999999', full: '1' }, 'Settlers').limit).toBe(2_000);
   });
+
+  it('no longer treats per-tab totals as heavy', () => {
+    // They come from a column now instead of from every breakdown in the range, so the tighter
+    // cap has nothing left to protect — and it was costing the per-tab chart most of a league.
+    expect(parseQuery({ limit: '999999', tabs: '1' }, 'Settlers').limit).toBe(10_000);
+  });
+});
+
+describe('a range wider than the cap', () => {
+  it('keeps the newest snapshots rather than the oldest', async () => {
+    // The half of a wealth history that matters is the near one. Truncating the other way made
+    // the chart stop mid-league and — because "current" is read off the last row — reported a
+    // net worth from weeks ago as today's.
+    const { app, store } = await makeApp();
+    const body = (
+      await app.inject({ method: 'GET', url: '/api/snapshots?limit=2&league=Settlers' })
+    ).json();
+
+    const newest = [...store.rows]
+      .filter((row) => row.league === 'Settlers')
+      .sort((a, b) => a.takenAt.getTime() - b.takenAt.getTime())
+      .slice(-2)
+      .map((row) => row.takenAt.toISOString());
+
+    expect(body.snapshots.map((row: { takenAt: string }) => row.takenAt)).toEqual(newest);
+  });
+
+  it('still reports the series oldest first', async () => {
+    // The cut is at the far end; the order the charts read is unchanged.
+    const { app } = await makeApp();
+    const body = (
+      await app.inject({ method: 'GET', url: '/api/snapshots?limit=2&league=Settlers' })
+    ).json();
+    const [first, second] = body.snapshots as Array<{ takenAt: string }>;
+
+    expect(Date.parse(first!.takenAt)).toBeLessThan(Date.parse(second!.takenAt));
+  });
 });
 
 describe('GET /api/snapshots', () => {
