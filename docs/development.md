@@ -131,8 +131,16 @@ touch a league that already has snapshots unless given `--force`.
 
 ## Auditing dependencies
 
-CI runs `pnpm audit --audit-level moderate` and fails the build on a known vulnerability. One
-advisory is ignored, listed in `package.json` under `pnpm.auditConfig.ignoreGhsas`:
+CI runs `pnpm audit --audit-level moderate` and fails the build on a known vulnerability.
+
+A transitive dependency with a fix its parent has not picked up yet is forced to the fixed
+version in `package.json` under `pnpm.overrides`, rather than waited on:
+
+| Override | Why |
+|----------|-----|
+| `deepmerge-ts: >=8.0.0` | [GHSA-ggr8-5vv4-36mx](https://github.com/advisories/GHSA-ggr8-5vv4-36mx), stack exhaustion on recursive object graphs. It arrives under `prisma > @prisma/config`, so it is the CLI's config loader and not the shipped server, but the fix is a version bump and the alternative is another standing exception. |
+
+One advisory has no fix and is ignored, listed under `pnpm.auditConfig.ignoreGhsas`:
 
 **[GHSA-jmr9-qjv8-65gv](https://github.com/advisories/GHSA-jmr9-qjv8-65gv)** — `extract-zip`,
 unvalidated symlink path traversal during extraction. There **is no fixed version**
