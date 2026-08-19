@@ -131,7 +131,10 @@ export function TopItemsTable({
       </div>
       ) : null}
 
-      <div className="max-h-[32rem] overflow-auto">
+      {/* Tall as the window allows rather than a fixed 32rem. On a full-screen window that box
+          scrolled two hundred rows through a porthole with empty page underneath it; the cap is
+          now a share of the viewport, so a taller window simply shows more. */}
+      <div className="max-h-[min(70vh,56rem)] overflow-auto">
         <table className="w-full text-sm">
           <thead className="sticky top-0 z-10 bg-ink-900">
             <tr className="border-b border-ink-800 text-xs uppercase tracking-wider text-ink-400">
@@ -170,7 +173,7 @@ export function TopItemsTable({
                   {/* The row's share of the largest holding, drawn behind it. A hundred rows of
                       right-aligned numbers are hard to weigh against each other; this makes the
                       shape of a stash readable without a second chart to look at. */}
-                  <td className="relative py-1.5 pr-3 text-ink-100">
+                  <td className="relative py-2 pr-3 text-ink-100">
                     <span
                       aria-hidden="true"
                       className="pointer-events-none absolute inset-y-0.5 left-0 z-0 rounded-r-sm bg-accent-500/[0.13] transition-colors group-hover:bg-accent-500/25"
@@ -191,12 +194,12 @@ export function TopItemsTable({
                       )}
                     </span>
                   </td>
-                  <td className="py-1.5 pr-3 text-ink-500" title={row.tabs.join(', ')}>
+                  <td className="py-2 pr-3 text-ink-500" title={row.tabs.join(', ')}>
                     {row.tabs.length === 1 ? row.tabs[0] : `${row.tabs[0]} +${row.tabs.length - 1}`}
                   </td>
-                  <td className="num py-1.5 pr-3 text-ink-200">{formatCount(row.qty)}</td>
-                  <td className="num py-1.5 pr-3 text-ink-400">{prices.price(row.chaosEach)}</td>
-                  <td className="num py-1.5 text-accent-500">{prices.price(row.chaosTotal)}</td>
+                  <td className="num py-2 pr-3 text-ink-200">{formatCount(row.qty)}</td>
+                  <td className="num py-2 pr-3 text-ink-400">{prices.price(row.chaosEach)}</td>
+                  <td className="num py-2 text-accent-500">{prices.price(row.chaosTotal)}</td>
                 </tr>
               );
             })}

@@ -47,7 +47,7 @@ export function NetWorthChart({ snapshots, intervals, wide }: Props) {
   }
 
   return (
-    <div className="h-80 w-full">
+    <div className="h-80 w-full xl:h-[26rem]">
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
           <defs>

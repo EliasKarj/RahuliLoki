@@ -72,10 +72,14 @@ body {
   margin: 0;
   min-height: 100vh;
   background-color: var(--color-ink-950);
+  /* Sized in viewport widths rather than rems: at a fixed 90rem the violet covered most of a
+     laptop and a third of a full-screen monitor, so the same page looked lit from above on one
+     and flat on the other. The vertical extents stay in rems — the light comes from a height,
+     not from a share of the window. */
   background-image:
-    radial-gradient(90rem 40rem at 50% -12rem, rgba(120, 86, 200, 0.18), transparent 70%),
-    radial-gradient(70rem 26rem at 50% 108%, rgba(226, 169, 79, 0.07), transparent 70%),
-    radial-gradient(120rem 90rem at 50% 40%, transparent 35%, rgba(2, 1, 6, 0.9) 100%);
+    radial-gradient(130vw 40rem at 50% -12rem, rgba(120, 86, 200, 0.18), transparent 70%),
+    radial-gradient(100vw 26rem at 50% 108%, rgba(226, 169, 79, 0.07), transparent 70%),
+    radial-gradient(170vw 90rem at 50% 40%, transparent 35%, rgba(2, 1, 6, 0.9) 100%);
   background-attachment: fixed;
   color: var(--color-ink-100);
   font-family: var(--font-sans);

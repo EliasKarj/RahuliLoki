@@ -31,7 +31,7 @@ export function TabAreaChart({ snapshots, wide }: { snapshots: SnapshotWithTabs[
   }
 
   return (
-    <div className="h-72 w-full">
+    <div className="h-72 w-full xl:h-[24rem]">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
           <CartesianGrid stroke={PALETTE.grid} vertical={false} />

@@ -38,8 +38,12 @@ export function SnapshotTable({ snapshots, intervals, limit = 25 }: Props) {
   const byToId = new Map(intervals.map((interval) => [interval.toId, interval]));
   const rows = [...snapshots].reverse().slice(0, limit);
 
+  // Capped, and left-aligned rather than stretched. A table of short cells pulled across a
+  // full-screen window puts a timestamp at one edge and its value at the other, and reading a
+  // row becomes a journey. The item table earns the full width because its first column holds
+  // real names and a bar behind them; this one does not.
   return (
-    <div className="overflow-x-auto">
+    <div className="max-w-6xl overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-ink-800 text-xs uppercase tracking-wider text-ink-400">
@@ -64,7 +68,7 @@ export function SnapshotTable({ snapshots, intervals, limit = 25 }: Props) {
 
             return (
               <tr key={snapshot.id} className="border-b border-ink-850 last:border-0">
-                <td className="py-1.5 pr-3 text-ink-200">
+                <td className="py-2 pr-3 text-ink-200">
                   {formatDateTime(snapshot.takenAt)}
                   {interval?.annotated ? (
                     <span className="ml-2 text-xs text-cool-500" title="More than 3× the trailing median">
@@ -72,14 +76,14 @@ export function SnapshotTable({ snapshots, intervals, limit = 25 }: Props) {
                     </span>
                   ) : null}
                 </td>
-                <td className="num py-1.5 pr-3 text-ink-100">{prices.price(snapshot.totalChaos)}</td>
-                <td className={`num py-1.5 pr-3 ${changeColour}`}>
+                <td className="num py-2 pr-3 text-ink-100">{prices.price(snapshot.totalChaos)}</td>
+                <td className={`num py-2 pr-3 ${changeColour}`}>
                   {interval === undefined ? '—' : prices.signed(interval.deltaChaos)}
                 </td>
                 {/* Chaos always. This column is the conversion itself; in divine it would
                     read 1.00 for every row and say nothing. */}
-                <td className="num py-1.5 pr-3 text-ink-400">{formatChaos(snapshot.divineRate)}c</td>
-                <td className="num py-1.5 text-ink-400">{formatCount(snapshot.itemCount)}</td>
+                <td className="num py-2 pr-3 text-ink-400">{formatChaos(snapshot.divineRate)}c</td>
+                <td className="num py-2 text-ink-400">{formatCount(snapshot.itemCount)}</td>
               </tr>
             );
           })}

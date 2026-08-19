@@ -27,7 +27,7 @@ export function RatePerHourChart({ intervals, wide }: { intervals: SeriesInterva
   }
 
   return (
-    <div className="h-64 w-full">
+    <div className="h-64 w-full xl:h-80">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
           <CartesianGrid stroke={PALETTE.grid} vertical={false} />

@@ -70,7 +70,8 @@ export function ChangesTable({
         ))}
       </div>
 
-      <div className="overflow-x-auto">
+      {/* Capped like the snapshot table, and for the same reason — see SnapshotTable.tsx. */}
+      <div className="max-w-6xl overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-ink-800 text-xs uppercase tracking-wider text-ink-400">
@@ -84,7 +85,7 @@ export function ChangesTable({
           <tbody>
             {rows.map((row) => (
               <tr key={row.name} className="border-b border-ink-850 last:border-0">
-                <td className="py-1.5 pr-3 text-ink-100">
+                <td className="py-2 pr-3 text-ink-100">
                   <span className="flex items-center gap-2">
                     <ItemIcon src={row.icon} />
                     {onSelect ? (
@@ -100,7 +101,7 @@ export function ChangesTable({
                     )}
                   </span>
                 </td>
-                <td className="num py-1.5 pr-3 text-ink-200">
+                <td className="num py-2 pr-3 text-ink-200">
                   {row.qtyDelta === 0 ? (
                     <span className="text-ink-500">{formatCount(row.qtyAfter)}</span>
                   ) : (
@@ -110,12 +111,12 @@ export function ChangesTable({
                     </>
                   )}
                 </td>
-                <td className="num py-1.5 pr-3 text-ink-400">
+                <td className="num py-2 pr-3 text-ink-400">
                   {row.chaosEachBefore === row.chaosEachAfter
                     ? prices.price(row.chaosEachAfter)
                     : `${prices.price(row.chaosEachBefore)} → ${prices.price(row.chaosEachAfter)}`}
                 </td>
-                <td className="py-1.5 pr-3 text-right">
+                <td className="py-2 pr-3 text-right">
                   <span
                     title={REASON_TITLE[row.reason]}
                     className={`rounded px-1.5 py-0.5 text-xs ${
@@ -126,7 +127,7 @@ export function ChangesTable({
                   </span>
                 </td>
                 <td
-                  className={`num py-1.5 text-right ${
+                  className={`num py-2 text-right ${
                     row.chaosDelta > 0 ? 'text-accent-500' : 'text-cool-400'
                   }`}
                 >

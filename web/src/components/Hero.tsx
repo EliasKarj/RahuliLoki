@@ -56,7 +56,7 @@ export function Hero({
           supporting numbers. Bleeding it across both put a stroke straight through a row of
           small labels — context for a number is worth nothing if it costs the number's
           neighbours their legibility. */}
-      <div className="relative min-h-[7rem] overflow-hidden">
+      <div className="relative min-h-[7rem] overflow-hidden xl:min-h-[8.5rem]">
       <svg
         className="pointer-events-none absolute inset-x-0 bottom-0 h-20 w-full"
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
@@ -87,7 +87,7 @@ export function Hero({
             figure is, and the wordmark three lines up already says what the app is. */}
         <p className="text-[0.65rem] uppercase tracking-[0.2em] text-ink-400">Net worth</p>
         <p className="mt-1 flex items-center gap-2">
-          <span className="ember num !text-left text-5xl font-medium leading-none text-ink-100 tabular-nums">
+          <span className="ember num !text-left text-5xl font-medium leading-none text-ink-100 tabular-nums xl:text-6xl">
             {formatDenominated(worth)}
           </span>
           {/* The orb itself rather than a letter. It is the unit players actually recognise, and

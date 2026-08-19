@@ -9,6 +9,23 @@ The look, the views, and how the numbers are computed.
 The page is a **ledger, not a card wall**. No boxes and no frames: hairlines separate the
 sections, and the only things with edges are the numbers themselves.
 
+## Width
+
+The page uses the window it is given, up to 108rem. It used to stop at 72rem, which is the right
+measure for prose and the wrong one for a screen made of tables and charts: full-screen, it left
+four hundred pixels of void down either side while the item table scrolled inside a box.
+
+The cap exists because a table row three thousand pixels wide puts an item's name and its value
+at opposite ends of the desk. For the same reason the two tables of short cells — Snapshots and
+What moved — keep their own narrower measure and sit left-aligned inside the page rather than
+stretching across it. The item table does stretch, because its first column holds real names and
+a bar behind them, and it has somewhere to put the room.
+
+The item table's height follows the window too, up to 70% of it: a taller window shows more rows
+rather than the same rows in the same box with empty page underneath.
+
+---
+
 ## The look: Citadel at the End of Time
 
 A void that is not quite black, gold that is the only light in it, and violet that is time

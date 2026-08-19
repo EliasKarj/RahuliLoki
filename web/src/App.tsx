@@ -65,13 +65,22 @@ export default function App() {
 
   return (
     <DenominationProvider divineRate={divineRate}>
-    <div className="page mx-auto max-w-6xl px-4 py-6 sm:px-6">
+    {/* Width scales with the window instead of stopping at a fixed column.
+     *
+     * It used to be capped at 72rem, which is a sensible measure for prose and the wrong one
+     * here: this page is tables and charts, and on a full-screen window it left four hundred
+     * pixels of empty void down either side while the item table scrolled inside a box. A table
+     * gets better with width — more of it fits, and the columns stop crowding each other.
+     *
+     * There is still a cap, because a row three thousand pixels wide puts an item's name and
+     * its value at opposite ends of the desk. 108rem is about where that starts. */}
+    <div className="page mx-auto w-full max-w-[108rem] px-4 py-6 sm:px-8 lg:px-10">
       <header className="mb-6">
         <div className="flex flex-wrap items-baseline justify-between gap-3">
           <div className="flex items-baseline gap-3">
             {/* Carved, not typeset — see .wordmark. The trailing letter's tracking is padding
                 on the right of the last glyph, so the league beside it needs no extra gap. */}
-            <h1 className="wordmark text-base font-semibold">What Remains</h1>
+            <h1 className="wordmark text-base font-semibold xl:text-lg">What Remains</h1>
             {leagues.length > 1 ? (
               <select
                 value={activeLeague}
@@ -121,7 +130,7 @@ export default function App() {
           above.
         </Empty>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-8">
           <Hero snapshots={snapshots} stats={stats} orbs={health?.prices ?? null} />
 
           {/* No heading at all, unlike every section below it. Those fold away and need a
