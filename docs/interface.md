@@ -71,9 +71,18 @@ dismissal is remembered for that version only, so the next release says so again
 downloaded or installed by the app itself — see
 [What leaves the machine](credentials.md#what-leaves-the-machine).
 
-The supporting figures sit underneath in a row divided by hairlines. Immediately after them comes
-the **item table**, where each row has a bar behind it: that row's share of the largest holding.
-The charts are further down as single-line bars, closed by default.
+Two supporting figures sit underneath in a row divided by hairlines: **gain in range** and the
+**rate while moving**, the latter with the hours it is divided by beside it. Immediately after
+them comes the **item table**, where each row has a bar behind it: that row's share of the largest
+holding. The charts are further down as single-line bars, closed by default.
+
+> **▸ Why two figures and not five:** there were five — gain, an active rate, a wall-clock rate,
+> how long the stash was moving, and the best hour in the range. Four of them were the same
+> question asked four ways, and the two rates differed by a distinction nobody remembers by their
+> second visit. One rate is kept, the active one, because the question a wealth tracker is asked
+> is "how fast am I earning while playing" and not "including the hours I was asleep". The hours
+> sit beside it as its denominator rather than as a figure of their own. Both dropped numbers are
+> still in `/api/stats`; only the row on screen got shorter.
 
 > **▸ Why the four equal cards went away:** they gave net worth, gain and two hourly rates the
 > same visual weight. Nobody reads them that way: one is the number the app was opened for, the
@@ -103,12 +112,14 @@ preceding moving intervals**. Usually a trade or a big drop.
 One bar per gap between consecutive snapshots, normalised to an hour. Faint bars are idle
 intervals.
 
-Both figures are at the top: **c/h active** and **c/h wall-clock**.
+The rate at the top is **while moving**, with the active hours and the wall-clock hours beside
+it.
 
-> **▸ Why two figures:** eight hours slept through is not a bad farming rate, it is not farming at
-> all. Count the idle hours and the number shrinks towards zero and says nothing. Leave them out
-> and the number describes the rate *while playing* — but not how many hours the league has
-> actually taken. Both, side by side.
+> **▸ Why the active hours rather than the clock:** eight hours slept through is not a bad farming
+> rate, it is not farming at all. Count the idle hours and the number shrinks towards zero and
+> says nothing. Leave them out and the number describes the rate *while playing*. Both hour counts
+> are printed next to it, so the wall-clock rate is a division away and does not need a figure of
+> its own; `/api/stats` reports it outright.
 
 ### 3. Where the wealth sits
 
@@ -143,9 +154,16 @@ area over a flat line is your doing; a rising line under a flat quantity is the 
 
 ### 6. Snapshots
 
-The rows the charts are made of: the change from the previous one, the divine rate at that moment,
-the age of the prices, and whether the interval counted as active. This is the table you read
-when a chart looks strange.
+The rows the charts are made of: the value, the change from the previous one, the divine rate at
+that moment, the item count, and a mark on the intervals that moved unusually far. This is the
+table you read when a chart looks strange.
+
+> **▸ Why one value column:** there were two, "Chaos" and "Divine", and they printed the same
+> holding. Above one divine of net worth — where this app spends its life — the column headed
+> "Chaos" read `169.28 div` and the one headed "Divine" read `169.28`. One column now, headed by
+> what it is rather than by a unit, with the unit in each cell as everywhere else. The column of
+> price ages went with it: the age of the price set is one fact, and it is in the status row at
+> the top rather than repeated down twenty-five rows.
 
 ---
 
@@ -155,7 +173,8 @@ when a chart looks strange.
 idle. It adds nothing to the active hours and does not affect the active average. It still shows
 in the chart as a faint bar, because the measurement was taken.
 
-**Best hour.** The largest rise inside **any** 60-minute window, not "the best ten minutes times
+**Best hour.** Computed and served by `/api/stats`, though no longer shown on the page. The
+largest rise inside **any** 60-minute window, not "the best ten minutes times
 six". Computed with a monotonic queue, so an uneven interval does not break it — and uneven
 intervals do happen: a container restarts, a machine sleeps, GGG's rate limiter pushes a poll into
 the next window.

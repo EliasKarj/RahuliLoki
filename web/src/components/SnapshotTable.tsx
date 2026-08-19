@@ -1,13 +1,25 @@
 /**
  * The raw snapshots behind the charts, newest first, with the change from the one before it.
  *
- * This is the table you read when a chart looks wrong: it shows the divine rate at the time,
- * how old the prices were when the snapshot was valued, and whether the interval counted as
- * active — the three things that explain most surprising-looking movements.
+ * This is the table you read when a chart looks wrong, so it carries the divine rate at the
+ * time and marks the intervals that moved unusually far — the two things that explain most
+ * surprising-looking movements.
+ *
+ * ## Why there is one value column and not two
+ *
+ * There were two: "Chaos" and "Divine". Both printed the same holding, and the first of them
+ * was denominated — so above one divine of net worth, which is where this app spends its life,
+ * the column headed "Chaos" read `169.28 div` and the one headed "Divine" read `169.28`. Two
+ * columns, one number, and a heading that named the wrong unit.
+ *
+ * Now there is one column, headed by what it is rather than by a unit, and every cell carries
+ * its own unit the way every other price on the page does. The column of price ages went with
+ * it: the age of the price set is in the status row at the top, where it is one fact rather
+ * than twenty-five repetitions of nearly the same one.
  */
 
 import type { SeriesInterval, SnapshotWithTabs } from '../lib/api.ts';
-import { formatAgo, formatChaos, formatDateTime, formatDivine, formatCount } from '../lib/format.ts';
+import { formatChaos, formatDateTime, formatCount } from '../lib/format.ts';
 import { usePrices } from '../lib/denomination.tsx';
 import { Empty } from './ui.tsx';
 
@@ -32,12 +44,10 @@ export function SnapshotTable({ snapshots, intervals, limit = 25 }: Props) {
         <thead>
           <tr className="border-b border-ink-800 text-xs uppercase tracking-wider text-ink-400">
             <th scope="col" className="py-2 text-left font-medium">Taken</th>
-            <th scope="col" className="py-2 text-right font-medium">Chaos</th>
+            <th scope="col" className="py-2 text-right font-medium">Value</th>
             <th scope="col" className="py-2 text-right font-medium">Change</th>
-            <th scope="col" className="py-2 text-right font-medium">Divine</th>
             <th scope="col" className="py-2 text-right font-medium">Rate</th>
             <th scope="col" className="py-2 text-right font-medium">Items</th>
-            <th scope="col" className="py-2 text-right font-medium">Prices</th>
           </tr>
         </thead>
         <tbody>
@@ -66,17 +76,10 @@ export function SnapshotTable({ snapshots, intervals, limit = 25 }: Props) {
                 <td className={`num py-1.5 pr-3 ${changeColour}`}>
                   {interval === undefined ? '—' : prices.signed(interval.deltaChaos)}
                 </td>
-                <td className="num py-1.5 pr-3 text-cool-500">{formatDivine(snapshot.totalDivine)}</td>
                 {/* Chaos always. This column is the conversion itself; in divine it would
                     read 1.00 for every row and say nothing. */}
                 <td className="num py-1.5 pr-3 text-ink-400">{formatChaos(snapshot.divineRate)}c</td>
-                <td className="num py-1.5 pr-3 text-ink-400">{formatCount(snapshot.itemCount)}</td>
-                <td
-                  className="num py-1.5 text-ink-400"
-                  title={`Price set fetched ${formatDateTime(snapshot.priceSetAt)}`}
-                >
-                  {formatAgo(snapshot.priceSetAt, new Date(snapshot.takenAt).getTime())}
-                </td>
+                <td className="num py-1.5 text-ink-400">{formatCount(snapshot.itemCount)}</td>
               </tr>
             );
           })}

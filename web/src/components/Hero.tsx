@@ -109,21 +109,29 @@ export function Hero({
       </div>
       </div>
 
+      {/* Two figures, not five.
+       *
+       * There were five: gain, an active rate, a wall-clock rate, how long the stash was moving,
+       * and the best hour in the range. Four of them were the same question asked four ways, and
+       * the two rates differed by a distinction — active hours against the clock — that only the
+       * person who wrote it remembers by the second visit.
+       *
+       * So one rate, the active one, because a wealth tracker is asked "how fast am I earning
+       * while playing" and not "including the hours I was asleep". The hours it is divided by
+       * sit under it as a note rather than as a column of their own, which is where they were
+       * useful in the first place: they are the denominator, not a figure. The wall-clock rate
+       * is gain over wall-clock hours, and both of those numbers are still on screen.
+       */}
       <dl className="mt-4 flex flex-wrap gap-x-8 gap-y-3 text-xs">
         <Figure
           label="Gain in range"
           value={prices.signed(gain)}
           tone={gain === 0 ? 'flat' : gain > 0 ? 'up' : 'down'}
         />
-        <Figure label="Active rate" value={prices.rate(stats?.chaosPerHourActive ?? 0)} />
-        <Figure label="Wall-clock rate" value={prices.rate(stats?.chaosPerHourWallClock ?? 0)} />
         <Figure
-          label="Moving"
-          value={`${formatHours(stats?.activeHours ?? 0)} of ${formatHours(stats?.wallClockHours ?? 0)}`}
-        />
-        <Figure
-          label="Best hour"
-          value={stats?.bestHour ? prices.signed(stats.bestHour.gainChaos) : '—'}
+          label="Rate while moving"
+          value={prices.rate(stats?.chaosPerHourActive ?? 0)}
+          note={`${formatHours(stats?.activeHours ?? 0)} of ${formatHours(stats?.wallClockHours ?? 0)}`}
         />
       </dl>
     </section>
@@ -140,10 +148,13 @@ export function Hero({
 function Figure({
   label,
   value,
+  note,
   tone = 'flat',
 }: {
   label: string;
   value: string;
+  /** What the figure is measured over, when that is what makes it readable. */
+  note?: string;
   tone?: 'flat' | 'up' | 'down';
 }) {
   return (
@@ -155,6 +166,7 @@ function Figure({
         }`}
       >
         {value}
+        {note ? <span className="ml-2 text-[0.7rem] text-ink-400">{note}</span> : null}
       </dd>
     </div>
   );

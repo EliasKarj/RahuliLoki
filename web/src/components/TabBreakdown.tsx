@@ -252,13 +252,11 @@ export function TopItemsTable({
         : { key, direction: key === 'name' || key === 'tabs' ? 'asc' : 'desc' },
     );
 
-  // A running total only means anything while the rows are ordered by value, largest first.
-  // Under any other sort it would be a column of numbers that add up to nothing, so it is not
-  // shown at all rather than shown misleadingly.
-  const cumulative = sort.key === 'chaosTotal' && sort.direction === 'desc';
-  let running = 0;
-
-  const total = rows.reduce((sum, row) => sum + row.chaosTotal, 0);
+  // There used to be a cumulative column here: a running total down the rows, shown only under
+  // the default sort because under any other one it adds up to nothing. It was a sixth column
+  // carrying a number nobody had asked for — the last row of it is the net worth, which is
+  // already the largest thing on the page, and every row above it is answered better by the
+  // bar behind the row.
   // Scaled against the largest row, not against the total: against the total, everything below
   // the top two or three holdings is a bar too short to compare with its neighbours, which is
   // the opposite of what the bar is for.
@@ -275,20 +273,28 @@ export function TopItemsTable({
           aria-label="Search items"
           className="w-64 rounded border border-ink-700 bg-ink-950 px-2.5 py-1.5 text-sm text-ink-100 outline-none placeholder:text-ink-500 focus:border-accent-600"
         />
+        {/* How many rows, and nothing else. This line used to end with the total as well, which
+            is the same figure as the hero four rems above it and as the All chip beside it. */}
         <span className="text-xs text-ink-400">
           {rows.length === grouped.length
             ? `${grouped.length} items`
             : `${rows.length} of ${grouped.length} items`}
-          {' · '}
-          {prices.price(total)}
         </span>
       </div>
 
       {/* Each category with what it is worth. The total is the point: "Scarab" alone is a
-          filter, "Scarab 3.2kc" answers the question that made someone reach for it. */}
+          filter, "Scarab 3.2kc" answers the question that made someone reach for it.
+          All carries no figure, because the total of everything is the hero.
+
+          Below two categories there is nothing to filter between — "All" and the single
+          category select the same rows and print the same number — so the row is not drawn at
+          all rather than drawn inert. It is drawn regardless while a category is selected: a
+          search that narrows the categories to one must not take away the control holding the
+          filter that is still on. */}
+      {totals.length > 1 || category !== null ? (
       <div className="mb-3 flex flex-wrap gap-1.5">
         <Chip active={category === null} onClick={() => setCategory(null)}>
-          All <span className="num !text-left text-ink-400">{prices.price(total)}</span>
+          All
         </Chip>
         {totals.map((entry) => (
           <Chip
@@ -301,6 +307,7 @@ export function TopItemsTable({
           </Chip>
         ))}
       </div>
+      ) : null}
 
       <div className="max-h-[32rem] overflow-auto">
         <table className="w-full text-sm">
@@ -329,16 +336,10 @@ export function TopItemsTable({
                   </button>
                 </th>
               ))}
-              {cumulative ? (
-                <th scope="col" className="py-2 text-right font-medium">
-                  Cumulative
-                </th>
-              ) : null}
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => {
-              running += row.chaosTotal;
               return (
                 <tr
                   key={row.name}
@@ -374,9 +375,6 @@ export function TopItemsTable({
                   <td className="num py-1.5 pr-3 text-ink-200">{formatCount(row.qty)}</td>
                   <td className="num py-1.5 pr-3 text-ink-400">{prices.price(row.chaosEach)}</td>
                   <td className="num py-1.5 text-accent-500">{prices.price(row.chaosTotal)}</td>
-                  {cumulative ? (
-                    <td className="num py-1.5 pl-3 text-ink-400">{prices.price(running)}</td>
-                  ) : null}
                 </tr>
               );
             })}

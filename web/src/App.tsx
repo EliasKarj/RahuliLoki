@@ -149,12 +149,7 @@ export default function App() {
             <RatePerHourChart intervals={intervals} wide={wide} />
           </Panel>
 
-          <Panel
-            collapsible
-            defaultOpen={false}
-            title="Where the wealth sits"
-            subtitle="Per-tab value over time."
-          >
+          <Panel collapsible defaultOpen={false} title="Where the wealth sits">
             <TabAreaChart snapshots={snapshots} wide={wide} />
           </Panel>
 
@@ -186,12 +181,7 @@ export default function App() {
             />
           ) : null}
 
-          <Panel
-            collapsible
-            defaultOpen={false}
-            title="Snapshots"
-            subtitle="The rows behind the charts, newest first."
-          >
+          <Panel collapsible defaultOpen={false} title="Snapshots">
             <SnapshotTable snapshots={snapshots} intervals={intervals} />
           </Panel>
         </div>
@@ -200,10 +190,11 @@ export default function App() {
       <footer className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-ink-800 pt-4 text-xs text-ink-400">
         <span>What Remains {config?.version ?? ''}</span>
         {config ? <span>items under {config.minItemChaos}c are not counted</span> : null}
+        {/* Only when it is not every tab. "Tracking every tab" is the default state, and a
+            footnote that says what is already true of an untouched install is a footnote that
+            is on screen for everyone and useful to nobody. */}
         {config && config.trackedTabs.length > 0 ? (
           <span>tracking {config.trackedTabs.join(', ')}</span>
-        ) : config ? (
-          <span>tracking every tab</span>
         ) : null}
         {refreshedAt ? <span>refreshed {formatAgo(new Date(refreshedAt).toISOString())}</span> : null}
       </footer>
