@@ -12,7 +12,6 @@ import {
   buildEconomy,
   namesFromBreakdown,
   reverseAliases,
-  searchEconomy,
   unslug,
 } from '../src/services/economy.ts';
 
@@ -124,26 +123,5 @@ describe('buildEconomy', () => {
   it('does not divide by a divine rate it does not have', () => {
     const rows = buildEconomy({ prices: { alt: 1 }, categories: {}, icons: {}, divineRate: 0 });
     expect(rows[0]?.divine).toBe(0);
-  });
-});
-
-describe('searchEconomy', () => {
-  const rows = build();
-
-  it('finds by name, ignoring case and punctuation', () => {
-    expect(searchEconomy(rows, 'gemcutters').map((row) => row.id)).toEqual(['gcp']);
-    expect(searchEconomy(rows, 'DOCTOR').map((row) => row.id)).toEqual(['the-doctor']);
-  });
-
-  it('finds by the id, because that is what the trade site calls it', () => {
-    expect(searchEconomy(rows, 'gcp').map((row) => row.id)).toEqual(['gcp']);
-  });
-
-  it('finds by category', () => {
-    expect(searchEconomy(rows, 'divinationcard').map((row) => row.id)).toEqual(['the-doctor']);
-  });
-
-  it('returns everything for an empty query', () => {
-    expect(searchEconomy(rows, '   ')).toHaveLength(rows.length);
   });
 });

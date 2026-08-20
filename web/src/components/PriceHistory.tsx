@@ -8,13 +8,17 @@
  *
  * A history this short is worth saying out loud rather than implying with an axis, so the panel
  * says how much of it there is.
+ *
+ * Not to be confused with ItemHistory, which the dashboard opens. That one is about your own
+ * pile — how many you held and what they were worth, out of your snapshots. This one is about
+ * the market, and does not care whether you own any.
  */
 
 import { useEffect, useState } from 'react';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { api, type PricePoint } from '../lib/api.ts';
 import { usePrices } from '../lib/denomination.tsx';
-import { formatDateTime, formatInUnit, formatTime } from '../lib/format.ts';
+import { formatChaos, formatDateTime, formatInUnit, formatPrice, formatTime } from '../lib/format.ts';
 import { AXIS, PALETTE } from '../lib/palette.ts';
 import { Empty, TooltipCard } from './ui.tsx';
 
@@ -48,7 +52,14 @@ export function PriceHistory({
     return () => controller.abort();
   }, [id, league]);
 
-  const rows = (points ?? []).map((point) => ({ t: Date.parse(point.at), chaos: point.chaos }));
+  // Each point keeps the divine rate of its own moment. Quoting a two-day-old price at today's
+  // rate would be a conversion the data does not support — the endpoint ships the rate per point
+  // for exactly this reason, and reading it back at the current one made that field decoration.
+  const rows = (points ?? []).map((point) => ({
+    t: Date.parse(point.at),
+    chaos: point.chaos,
+    divineRate: point.divineRate,
+  }));
   const unit = prices.axis(rows.map((row) => row.chaos));
 
   return (
@@ -100,12 +111,17 @@ export function PriceHistory({
                 <Tooltip
                   cursor={{ stroke: PALETTE.edge }}
                   content={({ active, payload }) => {
-                    const row = payload?.[0]?.payload as { t: number; chaos: number } | undefined;
+                    const row = payload?.[0]?.payload as
+                      | { t: number; chaos: number; divineRate: number }
+                      | undefined;
                     if (!active || !row) return null;
                     return (
                       <TooltipCard
                         title={formatDateTime(new Date(row.t).toISOString())}
-                        rows={[['price', prices.price(row.chaos), 'text-accent-500']]}
+                        rows={[
+                          ['price', formatPrice(row.chaos, row.divineRate), 'text-accent-500'],
+                          ['divine rate', `${formatChaos(row.divineRate)}c`, 'text-cool-400'],
+                        ]}
                       />
                     );
                   }}

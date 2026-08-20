@@ -4,11 +4,12 @@
  * Two failure modes this exists to stop, both of which are ordinary bad-network events rather
  * than attacks — which is exactly why they are worth handling:
  *
- * A connection that opens and then never finishes. `fetch` has no default timeout, and every
- * stash request is serialised behind the RateLimiter's single queue. One hung socket therefore
- * does not slow the poller down, it stops it: the queue never drains, every later poll finds
- * the previous one still "running", and no snapshot is ever written again until the process is
- * restarted by hand. `timeoutSignal` bounds it.
+ * A connection that opens and then never finishes. `fetch` has no default timeout, and a poll
+ * is not finished until every tab it asked for has answered. One hung socket therefore does not
+ * slow the poller down, it stops it: that tab never resolves, every later poll finds the
+ * previous one still "running", and no snapshot is ever written again until the process is
+ * restarted by hand. A handful of requests may be in flight at once, which changes how many
+ * sockets can hang and nothing about what one hanging socket costs. `timeoutSignal` bounds it.
  *
  * A response that never stops arriving. `response.json()` buffers the whole body first, so an
  * endpoint that streams without end — a proxy error page in a redirect loop, a mangled quad tab

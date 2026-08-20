@@ -7,6 +7,11 @@
  *
  * Fetched on demand rather than with the dashboard: it is the one endpoint that reads every
  * breakdown in the range, and nobody needs it until they ask a question about a specific item.
+ *
+ * Not to be confused with PriceHistory, which the Economy tab opens. That one is about the
+ * market — what an item costs, held or not, out of the stored price sets. This one is about
+ * *your* pile of it: how many you had and what they were worth, out of your own snapshots. The
+ * two answer different questions and read different data.
  */
 
 import { useEffect, useState } from 'react';

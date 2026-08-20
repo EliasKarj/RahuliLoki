@@ -195,7 +195,7 @@ unvalidated symlink path traversal during extraction. There **is no fixed versio
 pnpm test
 ```
 
-**600 tests**, not one network request:
+**602 tests**, not one network request:
 
 - **The rate limiter** — header parsing, pacing, serialisation, `Retry-After`, doubling up to the
   ceiling. The clock and sleep are faked, so testing a 30-minute backoff takes microseconds. One
@@ -266,12 +266,13 @@ pnpm test
 /scripts        with-env.mjs (loads the root .env for the Prisma CLI)
 /web
   /src
-    /components Hero, NetWorthChart, RatePerHourChart, TabBreakdown, SnapshotTable,
+    /components Hero, NetWorthChart, RatePerHourChart, TabAreaChart, ItemsTable, SnapshotTable,
                 PollerStatus, TokenGate, ChangesTable, ItemHistory, ItemIcon, DesktopSetup,
-                UpdateNotice, TabAreaChart, ItemsTable, SideNav, Economy, PriceHistory
+                UpdateNotice, SideNav, Economy, PriceHistory
     /hooks      useSnapshots
     /lib        api, format, series, palette (chart colours), schedule (the countdown), spark,
-                update (the release notice and its dismissal), items (the item table's data)
+                update (the release notice and its dismissal), items (the item table's data),
+                search (one definition of "does this row match what was typed")
 ```
 
 The statistics are computed on the server and arrive at the browser finished. The idle rule and

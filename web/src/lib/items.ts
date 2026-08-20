@@ -9,6 +9,7 @@
 
 import type { TopItem } from './api.ts';
 import type { SortDirection } from './series.ts';
+import { looseIncludes } from './search.ts';
 
 /**
  * One row of the items table: an item, wherever it sits.
@@ -30,11 +31,6 @@ export interface ItemRow {
 
 /** What an item with no category is filed under. Not a category poe.ninja has. */
 export const UNCATEGORISED = 'Other';
-
-/** poe.ninja spells its types in PascalCase; a person reads them with spaces. */
-export function categoryLabel(category: string): string {
-  return category.replace(/([a-z])([A-Z])/g, '$1 $2');
-}
 
 export function groupByItem(items: TopItem[]): ItemRow[] {
   const byName = new Map<string, ItemRow>();
@@ -98,8 +94,5 @@ export function categoryTotals(rows: ItemRow[]): Array<{ category: string; chaos
 
 /** Case- and punctuation-insensitive, so "assassins" finds "Assassin's Favour". */
 export function matchesQuery(row: ItemRow, query: string): boolean {
-  const needle = query.trim().toLowerCase();
-  if (needle === '') return true;
-  const haystack = `${row.name} ${row.tabs.join(' ')}`.toLowerCase();
-  return haystack.includes(needle) || haystack.replace(/[^a-z0-9 ]/g, '').includes(needle);
+  return looseIncludes(`${row.name} ${row.tabs.join(' ')}`, query);
 }

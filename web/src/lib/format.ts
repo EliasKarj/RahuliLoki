@@ -199,3 +199,13 @@ export function formatInUnit(chaos: number, unit: ChartUnit): string {
   const scaled = chaos / unit.divisor;
   return unit.unit === 'divine' ? formatDivine(scaled) : formatChaos(scaled);
 }
+
+/**
+ * poe.ninja spells its categories in PascalCase; a person reads them with spaces.
+ *
+ * `DivinationCard` -> `Divination Card`. Lived in two components and one lib as three copies of
+ * the same regex.
+ */
+export function categoryLabel(category: string): string {
+  return category.replace(/([a-z])([A-Z])/g, '$1 $2');
+}

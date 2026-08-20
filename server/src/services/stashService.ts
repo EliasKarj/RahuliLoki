@@ -7,8 +7,10 @@
  * initial listing call doubles as the fetch for whichever tab we point it at. That is one
  * fewer request against a limit we care a great deal about.
  *
- * Every request goes through the RateLimiter, which serialises them. Nothing in here fires
- * requests in parallel, and nothing in here should ever be changed to.
+ * Every request goes through the RateLimiter, and the whole rate-limit policy lives there — how
+ * many may be in the air, when each one is allowed to start, what to do when GGG says stop. This
+ * module asks for the tabs it wants and lets the limiter decide the timing. That division is the
+ * point: a second copy of the pacing rules here is how two of them come to disagree.
  */
 
 import { scrub, silentLogger, type Logger } from '../lib/logger.ts';

@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   UNCATEGORISED,
-  categoryLabel,
   categoryTotals,
   groupByItem,
   matchesQuery,
   sortItemRows,
 } from '../src/lib/items.ts';
+import { categoryLabel } from '../src/lib/format.ts';
 import type { TopItem } from '../src/lib/api.ts';
 
 const item = (over: Partial<TopItem>): TopItem => ({

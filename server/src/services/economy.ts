@@ -147,21 +147,3 @@ export function buildEconomy(input: EconomyInput): EconomyRow[] {
 
   return rows.sort((a, b) => b.chaos - a.chaos || a.name.localeCompare(b.name));
 }
-
-/**
- * Case- and punctuation-insensitive search over the name, the id and the category.
- *
- * The id is searchable on purpose: it is what poe.ninja and the trade site call the thing, and
- * somebody who knows an item as `gcp` should not have to guess that this app calls it
- * "Gemcutter's Prism".
- */
-export function searchEconomy(rows: EconomyRow[], query: string): EconomyRow[] {
-  const needle = query.trim().toLowerCase();
-  if (needle === '') return rows;
-  const bare = needle.replace(/[^a-z0-9 ]/g, '');
-
-  return rows.filter((row) => {
-    const haystack = `${row.name} ${row.id} ${row.category ?? ''}`.toLowerCase();
-    return haystack.includes(needle) || haystack.replace(/[^a-z0-9 ]/g, '').includes(bare);
-  });
-}

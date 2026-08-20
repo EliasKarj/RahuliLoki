@@ -13,7 +13,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, type EconomyResponse, type EconomyRow } from '../lib/api.ts';
 import { usePrices } from '../lib/denomination.tsx';
-import { formatAgo } from '../lib/format.ts';
+import { categoryLabel, formatAgo } from '../lib/format.ts';
+import { looseIncludes } from '../lib/search.ts';
 import { Empty } from './ui.tsx';
 import { ItemIcon } from './ItemIcon.tsx';
 import { PriceHistory } from './PriceHistory.tsx';
@@ -28,13 +29,7 @@ type SortKey = 'name' | 'chaos' | 'change' | 'volume';
  * that this app writes it out as "Gemcutter's Prism".
  */
 export function matches(row: EconomyRow, query: string): boolean {
-  const needle = query.trim().toLowerCase();
-  if (needle === '') return true;
-  const haystack = `${row.name} ${row.id} ${row.category ?? ''}`.toLowerCase();
-  return (
-    haystack.includes(needle) ||
-    haystack.replace(/[^a-z0-9 ]/g, '').includes(needle.replace(/[^a-z0-9 ]/g, ''))
-  );
+  return looseIncludes(`${row.name} ${row.id} ${row.category ?? ''}`, query);
 }
 
 /** Each category present, largest first, so the chips read as a shape and not a list. */
@@ -154,7 +149,7 @@ export function Economy({ league }: { league: string | undefined }) {
               active={category === name}
               onClick={() => setCategory(category === name ? null : name)}
             >
-              {name.replace(/([a-z])([A-Z])/g, '$1 $2')}
+              {categoryLabel(name)}
             </Chip>
           ))}
         </div>
@@ -211,7 +206,7 @@ export function Economy({ league }: { league: string | undefined }) {
                   </span>
                 </td>
                 <td className="py-2 pr-3 text-ink-500">
-                  {row.category === null ? '—' : row.category.replace(/([a-z])([A-Z])/g, '$1 $2')}
+                  {row.category === null ? '—' : categoryLabel(row.category)}
                 </td>
                 {anyMovement ? (
                   <td
@@ -233,7 +228,7 @@ export function Economy({ league }: { league: string | undefined }) {
                 ) : null}
                 {anyMovement ? (
                   <td className="py-2 pl-3">
-                    <Trend values={row.sparkline} rising={(row.change ?? 0) >= 0} />
+                    <Trend values={row.sparkline} change={row.change} />
                   </td>
                 ) : null}
                 <td className="num py-2 text-accent-500">{prices.price(row.chaos)}</td>
@@ -262,8 +257,12 @@ export function Economy({ league }: { league: string | undefined }) {
  * beside it is the magnitude, this is only the path it took. Fewer than two points is not a
  * trend and draws nothing rather than a dot pretending to be one.
  */
-function Trend({ values, rising }: { values: number[]; rising: boolean }) {
+function Trend({ values, change }: { values: number[]; change: number | null }) {
   if (values.length < 2) return null;
+  // The published change when there is one; otherwise where the series itself ended up. It used
+  // to fall back to zero, which counts as rising, so a falling line with no change published was
+  // drawn in the colour of a rising one.
+  const rising = (change ?? (values.at(-1) as number) - (values[0] as number)) >= 0;
   const path = sparklinePath(values, 64, 16);
   if (path.line === '') return null;
 

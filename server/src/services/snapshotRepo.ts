@@ -106,7 +106,14 @@ function asBreakdown(value: unknown): Breakdown {
 
 /** Narrows a string→string Json column. Unknown-shaped entries are dropped. Used for both the
  *  icon map and the category map, which have the same shape and the same tolerances. */
-function asIcons(value: unknown): Record<string, string> {
+/**
+ * A `string -> string` map, narrowed back out of a JSON column.
+ *
+ * Named for the shape rather than for one of its callers: it was `asIcons`, and then the
+ * categories column arrived and called it too, so half its uses were reading something the name
+ * said they were not.
+ */
+function asStringMap(value: unknown): Record<string, string> {
   const out: Record<string, string> = Object.create(null) as Record<string, string>;
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return out;
   for (const [name, icon] of Object.entries(value as Record<string, unknown>)) {
@@ -379,10 +386,10 @@ export class PrismaPriceSetStore implements PriceSetStore {
       divineRate: prices[DIVINE_ID] ?? 0,
       // Null on rows written before the icons column existed. An empty map is the right
       // reading: the UI falls back to no icon, and the next fetch fills it in.
-      icons: asIcons(row.icons),
+      icons: asStringMap(row.icons),
       // Same narrowing as the icons, and the same reason for being nullable: a row written
       // before this column existed simply has no categories, and the next fetch fills it in.
-      categories: asIcons(row.categories),
+      categories: asStringMap(row.categories),
       // Null on rows written before this column existed, which reads as "no movement was
       // published" — the truth about those rows, and not the same claim as "it did not move".
       meta: asMeta(row.meta),

@@ -11,14 +11,13 @@ import { useMemo, useState } from 'react';
 import type { TopItem } from '../lib/api.ts';
 import type { SortDirection } from '../lib/series.ts';
 import {
-  categoryLabel,
   categoryTotals,
   groupByItem,
   matchesQuery,
   sortItemRows,
   type SortKey,
 } from '../lib/items.ts';
-import { formatCount } from '../lib/format.ts';
+import { categoryLabel, formatCount } from '../lib/format.ts';
 import { usePrices } from '../lib/denomination.tsx';
 import { Empty } from './ui.tsx';
 import { ItemIcon } from './ItemIcon.tsx';
