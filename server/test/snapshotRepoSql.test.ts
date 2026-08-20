@@ -240,6 +240,7 @@ describe('the unique index, across a save and a restore', () => {
       icons: {},
       categories: {},
       meta: {},
+      names: {},
       uniques: lines as PriceSet['uniques'],
     };
   }

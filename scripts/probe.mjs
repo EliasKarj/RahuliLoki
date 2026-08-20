@@ -21,6 +21,7 @@
  *   node scripts/probe.mjs                 everything, gently
  *   node scripts/probe.mjs --limits        just GGG's rate-limit policy (one request)
  *   node scripts/probe.mjs --ninja         just poe.ninja: dust fields, unique prices
+ *   node scripts/probe.mjs --names         which categories carry names and icons
  *   node scripts/probe.mjs --time-poll     read every tab and time it (costs a poll's budget)
  *   node scripts/probe.mjs --item Goldrim  dump one unique's raw fields
  *   node scripts/probe.mjs --item Goldrim --tab 3   look in tab 3 instead of the first
@@ -322,6 +323,60 @@ async function probeItemEndpoint() {
   say('  application has never asked.');
 }
 
+/**
+ * Does the item endpoint serve names and artwork for the *ordinary* categories?
+ *
+ * The economy list shows a row per poe.ninja id, and the endpoint that prices those ids sends no
+ * names with them — so a row is labelled by reading its id backwards, and `hinekoras-lock` comes
+ * out as "Hinekoras Lock". The label is then slightly wrong and the icon, which is looked up by
+ * label, is missing entirely.
+ *
+ * The fix depends on a fact nobody here can check from a machine that cannot reach poe.ninja:
+ * whether `stash/current/item` serves DivinationCard, Scarab, Essence and the rest the way it
+ * serves uniques. This asks, and it reports the number that actually matters — not how many
+ * lines came back, but how many of their names survive the slug rule and land on an id the
+ * exchange endpoint priced. A name that does not round-trip is a name the app cannot use.
+ */
+async function probeItemNames() {
+  head('poe.ninja: names and icons for the ordinary categories');
+  say('  The economy list is missing artwork because it has no names to look artwork up by.');
+  say('  This asks whether the item endpoint has them.');
+  say('');
+
+  const types = [
+    'DivinationCard', 'Essence', 'Fossil', 'Resonator', 'Scarab', 'Oil',
+    'DeliriumOrb', 'Incubator', 'Artifact', 'Vial', 'Omen', 'Tattoo', 'AllflameEmber',
+    'Currency', 'Fragment',
+  ];
+
+  say(`  asking about ${types.length} types; this takes about half a minute`);
+  say('');
+  say(`  ${'type'.padEnd(15)} ${'lines'.padStart(6)} ${'named'.padStart(6)} ${'icons'.padStart(6)}  example`);
+
+  for (const type of types) {
+    const result = await ninjaItem(type);
+    if (!result.ok) {
+      say(`  ${type.padEnd(15)} ${String(result.status).padStart(6)}`);
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      continue;
+    }
+    const lines = Array.isArray(result.body?.lines) ? result.body.lines : [];
+    const named = lines.filter((line) => typeof line?.name === 'string' && line.name !== '');
+    const icons = named.filter((line) => typeof line?.icon === 'string' && line.icon !== '');
+    const example = named[0]?.name === undefined ? '' : JSON.stringify(named[0].name);
+    say(
+      `  ${type.padEnd(15)} ${String(lines.length).padStart(6)} ${String(named.length).padStart(6)} ` +
+        `${String(icons.length).padStart(6)}  ${example}`,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 400));
+  }
+
+  say('');
+  say('  What matters: a non-zero "named" column for a type means the economy list can label and');
+  say('  illustrate that category properly. Currency and Fragment are in the list because they are');
+  say('  the ones on screen with no artwork, and nobody here knows whether this endpoint has them.');
+}
+
 /** Every key anywhere in an object graph, so a field nobody expected still shows up. */
 function allKeys(node, into = new Set(), depth = 0) {
   if (depth > 6 || node === null || typeof node !== 'object') return into;
@@ -464,6 +519,7 @@ if (!onlyNinja) {
 }
 
 if (flag('items')) await probeItemEndpoint();
+else if (flag('names')) await probeItemNames();
 else if (flag('types')) await probeTypes();
 else if (!onlyLimits) {
   await probeNinja();

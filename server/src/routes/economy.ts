@@ -43,6 +43,7 @@ export async function economyRoutes(app: FastifyInstance, deps: ApiDeps): Promis
       prices: priceSet.prices,
       categories: priceSet.categories,
       icons: priceSet.icons,
+      names: priceSet.names,
       divineRate: priceSet.divineRate,
       meta: priceSet.meta,
       ...(known ? { known } : {}),

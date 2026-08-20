@@ -29,7 +29,7 @@
 import { describeError, silentLogger, type Logger } from '../lib/logger.ts';
 import { readJsonCapped, timeoutSignal } from '../lib/http.ts';
 import { DEFAULT_UNIQUE_CATEGORIES } from '../lib/config.ts';
-import { verifyAliases } from './ninjaId.ts';
+import { ninjaId, verifyAliases } from './ninjaId.ts';
 import {
   CHAOS_ID,
   DEFAULT_NINJA_ITEM_URL,
@@ -37,6 +37,7 @@ import {
   PriceFetchError,
   coreItems,
   divineRateFrom,
+  itemOverviewNames,
   fromGameCdn,
   iconUrl,
   mergeOverview,
@@ -83,6 +84,16 @@ export interface PriceSet {
    * payload published no movement for. Absent movement is shown as absent, never as flat.
    */
   meta: Record<string, LineMeta>;
+  /**
+   * poe.ninja id → poe.ninja's own name for it, e.g. `hinekoras-lock` → `Hinekora's Lock`.
+   *
+   * The authoritative spelling, and the only source of one: the exchange endpoint that prices
+   * these ids sends no names, and an id cannot be read backwards into the name it came from.
+   * Empty for the categories the item endpoint does not serve — currency among them, as far as
+   * anything here has recorded — and those rows keep falling back to the alias table and the
+   * unslugged id.
+   */
+  names: Record<string, string>;
   /**
    * poe.ninja id → the category it was fetched under, e.g. `gilded-bestiary-scarab` → `Scarab`.
    *
@@ -155,6 +166,13 @@ export class PriceService {
   readonly #log: Logger;
   readonly #baseUrl: string;
   readonly #itemBaseUrl: string;
+  /**
+   * Categories the item endpoint answered about with no lines at all.
+   *
+   * In memory only, and deliberately: it is a fact about poe.ninja's current shape, not about
+   * this league or this database, and a restart is the right moment to ask again.
+   */
+  readonly #namelessTypes = new Set<string>();
   #cached: PriceSet | null = null;
   /** Collapses concurrent callers onto one refetch. */
   #inFlight: Promise<PriceSet> | null = null;
@@ -272,6 +290,8 @@ export class PriceService {
     const meta: Record<string, LineMeta> = Object.create(null) as Record<string, LineMeta>;
 
     let divineRate: number | null = null;
+    /** poe.ninja id → poe.ninja's own name. Filled from two places; see both below. */
+    const names: Record<string, string> = Object.create(null) as Record<string, string>;
 
     for (const type of [...currencyCategories, ...itemCategories]) {
       const payload = await this.#getJson(league, type);
@@ -286,6 +306,14 @@ export class PriceService {
 
       // Only chaos and divine are named, so this can check little — but those two are what every
       // other price is quoted in, and an error there would be an error everywhere.
+      // `core.items` is the one place the exchange endpoint does put a name and an id on the
+      // same object, so no slug rule is involved and nothing can be lost in the round trip.
+      // It is a handful of entries today; taking them costs nothing and needs no request.
+      for (const item of coreItems(payload)) {
+        if (names[item.id] === undefined) names[item.id] = item.name;
+        if (item.icon !== null && icons[item.name] === undefined) icons[item.name] = item.icon;
+      }
+
       const problems = verifyAliases(coreItems(payload));
       if (problems.length > 0) {
         this.#log.warn(
@@ -318,6 +346,47 @@ export class PriceService {
       }
     }
 
+    // Names and artwork for the ordinary categories, from the same item endpoint the uniques
+    // come from.
+    //
+    // The economy list is the reason. Its rows are poe.ninja ids, and the exchange endpoint
+    // sends no names with them, so a row is labelled by unslugging its id — `hinekoras-lock`
+    // becomes "Hinekoras Lock", missing the apostrophe, and the icon lookup that keys off the
+    // name then misses too. That is most of the blank artwork and most of the "name is a guess"
+    // markers in that view. The item endpoint still carries both fields.
+    //
+    // Currency is asked about too, and on no evidence: the most visibly unillustrated rows in
+    // that view are currency, and nothing here has recorded whether this endpoint serves them.
+    // Asking is cheap precisely because of the skip below — a category that answers with
+    // nothing is never asked again — so the cost of being wrong is one request, once.
+    //
+    // Failure here is survivable and stays local: a category that cannot be read loses its
+    // names, not its prices, which came from the other endpoint and are already in hand.
+    for (const type of [...currencyCategories, ...itemCategories]) {
+      if (this.#namelessTypes.has(type)) continue;
+      try {
+        const lines = itemOverviewNames(await this.#getItemJson(league, type));
+        if (lines.length === 0) {
+          // Asked once, answered with nothing, not asked again while this process lives. The
+          // set of categories this endpoint serves is not documented anywhere and was found by
+          // probing, so being wrong about one should cost a single request rather than one an
+          // hour forever.
+          this.#namelessTypes.add(type);
+          this.#log.info({ type }, 'item endpoint serves no names for this category; not asking again');
+          continue;
+        }
+        for (const line of lines) {
+          const id = ninjaId(line.name);
+          if (id === '') continue;
+          if (names[id] === undefined) names[id] = line.name;
+          if (line.icon !== null && icons[line.name] === undefined) icons[line.name] = line.icon;
+        }
+        this.#log.debug({ type, lines: lines.length }, 'merged item names and icons');
+      } catch (error) {
+        this.#log.warn({ type, err: error }, 'could not read item names; continuing without them');
+      }
+    }
+
     // Chaos prices itself at one. The payload does carry a `chaos` line, but asserting it here
     // means a response that omits it cannot produce a set where chaos is unpriced.
     prices[CHAOS_ID] = 1;
@@ -338,6 +407,7 @@ export class PriceService {
       uniques,
       categories,
       meta,
+      names,
     };
     this.#log.info(
       {

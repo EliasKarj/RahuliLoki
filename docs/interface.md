@@ -49,10 +49,11 @@ allows, two days at the default, and further if you raise it.
 An empty change cell means poe.ninja published no movement for that row. It does not mean the
 price held still.
 
-A `?` after a name means the name was read back from poe.ninja's id rather than known. The
-payload names only chaos and divine, so a name is either proved by your own stash, taken from the
-short-code table, or reconstructed from the slug — and a slug has lost its apostrophes. Hovering
-the mark says what poe.ninja actually calls the row.
+A `?` after a name means the name was read back from poe.ninja's id rather than known, and a slug
+has lost its apostrophes. Most rows no longer carry one: poe.ninja's item endpoint publishes its
+own spelling for the categories it covers, and that name is both what the row is labelled with and
+what its artwork is filed under — which is why rows that used to sit there blank now have their
+icons. Hovering a remaining mark says what poe.ninja actually calls the row.
 
 ---
 

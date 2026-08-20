@@ -286,3 +286,36 @@ export function unmatchedIds(
   }
   return missing.sort().slice(0, limit);
 }
+
+/** One line of an item overview: the old shape, which the exchange endpoint no longer serves. */
+interface ItemLine {
+  name?: unknown;
+  icon?: unknown;
+}
+
+/**
+ * The names and artwork on an item overview.
+ *
+ * This is the endpoint's whole value to the economy list. `exchange/current` answers with ids
+ * and numbers — `{ "id": "alt", "primaryValue": 0.1238 }` — so a row's name has to be guessed
+ * backwards from its id, and `hinekoras-lock` cannot say where the apostrophe belonged. The
+ * item endpoint still answers the old way, with the name and the icon on every line.
+ *
+ * Pairing the two is what `ninjaId` is for: it turns poe.ninja's own name back into poe.ninja's
+ * own id, which is the key the price came under. A name whose id nothing prices is kept anyway
+ * and simply goes unused — the cost of a spare entry is nothing beside the cost of dropping a
+ * name that a later league does price.
+ */
+export function itemOverviewNames(payload: unknown): Array<{ name: string; icon: string | null }> {
+  const lines = (payload as { lines?: unknown })?.lines;
+  if (!Array.isArray(lines)) return [];
+
+  const out: Array<{ name: string; icon: string | null }> = [];
+  for (const raw of lines as ItemLine[]) {
+    const name = typeof raw?.name === 'string' ? raw.name.trim() : '';
+    if (name === '') continue;
+    // Validated, never trusted: this string ends up in an <img src>. See iconUrl.
+    out.push({ name, icon: iconUrl(raw?.icon) });
+  }
+  return out;
+}

@@ -3,7 +3,14 @@ name: Release
 # Tag a version and the installers build themselves.
 #
 #   pnpm version 1.0.1 --no-git-tag-version   # or edit the four package.json files
+#   # …and VERSION in server/src/lib/config.ts, which the tests check for you
+#   git commit -am 'Release 1.0.1' && git push
 #   git tag v1.0.1 && git push origin v1.0.1
+#
+# The bump is committed *before* the tag, and the tag must name the version the manifests
+# already carry. v1.4.1 was cut the other way round — tagged on a tree that still said 1.4.0 —
+# and the installers it produced announced themselves by the wrong number. The first job below
+# now refuses that build rather than publishing it.
 #
 # Each platform's installer has to be built on that platform: an NSIS installer needs Windows
 # tooling and a dmg needs macOS, and cross-building either from Linux means wine and a stack of
@@ -18,7 +25,30 @@ permissions:
   contents: write
 
 jobs:
+  # Cheap, and it runs before three runners spend ten minutes each packaging something that is
+  # named wrong. A published release is not recallable: people download it, the update check
+  # compares against it, and an installer whose contents disagree with its tag tells every user
+  # it is out of date forever.
+  version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: The tag must be the version the manifests carry
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          for manifest in package.json server/package.json web/package.json desktop/package.json; do
+            found=$(node -p "require('./$manifest').version")
+            if [ "$found" != "$tag" ]; then
+              echo "::error::$manifest says $found but the tag is v$tag."
+              echo "::error::Bump the manifests and VERSION in server/src/lib/config.ts, commit, then move the tag."
+              exit 1
+            fi
+          done
+          echo "Tag v$tag matches all four manifests."
+
   build:
+    needs: version
     strategy:
       # One platform failing should not throw away the two that worked; the release can be
       # completed by re-running the one that broke.

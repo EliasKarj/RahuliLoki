@@ -453,6 +453,9 @@ export class PrismaPriceSetStore implements PriceSetStore {
       // Null on rows written before this column existed, which reads as "no movement was
       // published" — the truth about those rows, and not the same claim as "it did not move".
       meta: asMeta(row.meta),
+      // poe.ninja's own spelling per id. Absent on rows written before the column existed, and
+      // an empty map is the honest reading of that: no names known, fall back as before.
+      names: asStringMap(row.names),
       // From its own table, and it has to survive the restart: without it the first poll after
       // a reboot values every unique at nothing and writes a snapshot showing a collapse that
       // never happened. That is worse than a stale price, because it goes into the history and
@@ -470,6 +473,7 @@ export class PrismaPriceSetStore implements PriceSetStore {
         icons: set.icons as object,
         categories: set.categories as object,
         meta: set.meta as object,
+        names: set.names as object,
       },
     });
 

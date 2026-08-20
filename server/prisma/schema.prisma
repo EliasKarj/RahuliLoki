@@ -84,6 +84,11 @@ model PriceSet {
   // the number you go and check somewhere else. Nullable for the same reason as the two above:
   // a row written before the column existed has none, and that is the honest reading of it.
   meta       Json?
+  // { [poeNinjaId]: name }, e.g. { "hinekoras-lock": "Hinekora's Lock" }. poe.ninja's own
+  // spelling, from the item endpoint — the exchange endpoint that prices these ids sends no
+  // names at all, and an id cannot be read backwards into one. Nullable like the three above: a
+  // row written before the column existed has none, and the next fetch fills it.
+  names      Json?
 
   @@index([league, fetchedAt])
 }

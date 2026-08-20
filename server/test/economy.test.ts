@@ -125,3 +125,58 @@ describe('buildEconomy', () => {
     expect(rows[0]?.divine).toBe(0);
   });
 });
+
+/**
+ * The apostrophe problem, which is what the missing artwork in the economy list actually was.
+ *
+ * A row is a poe.ninja id. The endpoint that prices it sends no name, so the name was read
+ * backwards out of the id — and `hinekoras-lock` cannot say that the real name is
+ * "Hinekora's Lock". The label was then slightly wrong, and the icon lookup, which keys off the
+ * label, found nothing at all. Hundreds of blank rows from one missing character.
+ */
+describe('buildEconomy, when poe.ninja has told us its own names', () => {
+  const base = {
+    prices: { 'hinekoras-lock': 162.91 },
+    categories: {},
+    divineRate: 1,
+    icons: { "Hinekora's Lock": 'https://web.poecdn.com/hinekora.png' },
+  };
+
+  it('finds the icon that unslugging the id could never have found', () => {
+    const without = buildEconomy(base)[0];
+    const with_ = buildEconomy({ ...base, names: { 'hinekoras-lock': "Hinekora's Lock" } })[0];
+
+    // The same icons map both times. The only thing that changed is knowing the name.
+    expect(without?.icon).toBeNull();
+    expect(without?.name).toBe('Hinekoras Lock');
+    expect(with_?.icon).toBe('https://web.poecdn.com/hinekora.png');
+    expect(with_?.name).toBe("Hinekora's Lock");
+  });
+
+  it('stops marking the name as a guess, because it is no longer a guess', () => {
+    expect(buildEconomy(base)[0]?.nameSource).toBe('slug');
+    expect(buildEconomy({ ...base, names: { 'hinekoras-lock': "Hinekora's Lock" } })[0]?.nameSource).toBe(
+      'ninja',
+    );
+  });
+
+  it('still lets the stash win, because the player holds the thing', () => {
+    const row = buildEconomy({
+      ...base,
+      names: { 'hinekoras-lock': 'Something poe.ninja Calls It' },
+      known: new Map([['hinekoras-lock', "Hinekora's Lock"]]),
+    })[0];
+
+    expect(row?.name).toBe("Hinekora's Lock");
+    expect(row?.nameSource).toBe('stash');
+  });
+
+  it('changes nothing for an id poe.ninja does not name', () => {
+    // Currency is not on the item endpoint as far as anything here has recorded, so these rows
+    // must keep working exactly as they did — the alias table, then the unslugged id.
+    const row = buildEconomy({ ...base, prices: { alt: 0.12 }, names: {} })[0];
+
+    expect(row?.name).toBe('Orb of Alteration');
+    expect(row?.nameSource).toBe('alias');
+  });
+});

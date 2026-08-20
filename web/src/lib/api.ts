@@ -243,7 +243,7 @@ export interface EconomyRow {
    * proved, the short-code alias table, or the id read back as words. The last of those loses
    * punctuation, so the interface says which is which rather than presenting a guess as fact.
    */
-  nameSource: 'stash' | 'alias' | 'slug';
+  nameSource: 'stash' | 'ninja' | 'alias' | 'slug';
   category: string | null;
   chaos: number;
   divine: number;

@@ -152,13 +152,30 @@ change without one.
 > puts those rows at the far end of a sort by change whichever way it points, rather than mixed
 > in among the ones that really held steady.
 
-> **▸ Why every economy row says where its name came from:** poe.ninja's redesigned payload
-> names exactly two items, chaos and divine. Everything else is an id. A name is therefore
-> either proved by your own stash, taken from the short-code alias table, or read back off the
-> slug — and the last of those loses punctuation, because the slug rule drops it and nothing
-> records where it went. `awakeners-orb` cannot become "Awakener's Orb" by rule. The row carries
-> `nameSource` so a reconstruction can be marked as one rather than presented as the item's
-> real name.
+> **▸ Why every economy row says where its name came from:** the endpoint that prices these ids
+> names exactly two of them, chaos and divine, in `core.items`. Everything else arrives as an id,
+> and reading an id backwards loses punctuation: the slug rule drops it and records nothing about
+> where it went, so `awakeners-orb` cannot become "Awakener's Orb" by rule.
+>
+> Four sources, best first, and `nameSource` says which one a row used:
+>
+> | source | where it comes from | can it be wrong |
+> |--------|--------------------|-----------------|
+> | `stash` | you hold the item and GGG spelled it | no |
+> | `ninja` | poe.ninja's item endpoint, joined by running its name back through the slug rule | no |
+> | `alias` | this repo's hand-kept table of trade-site short codes | only if the table is |
+> | `slug` | the id read backwards | yes — punctuation is gone |
+>
+> The `ninja` source is also what fixed the missing artwork. Icons are filed under the display
+> name, so a row labelled "Hinekoras Lock" looked for artwork under that spelling and found none;
+> with poe.ninja's own "Hinekora's Lock" the lookup lands. One apostrophe was the whole of it.
+
+> **▸ Why a category that answers with nothing is not asked twice:** which `type=` values the
+> item endpoint serves is documented nowhere and was established by probing. Rather than pin the
+> list to a guess, the service asks for everything it prices — currency included, on no evidence
+> at all — and remembers, in memory for the life of the process, which categories came back
+> empty. Being wrong then costs one request rather than one an hour, and a restart re-asks, which
+> is right because the answer is a fact about poe.ninja rather than about this database.
 
 > **▸ Why the update check hangs off the health endpoint:** the dashboard already reads it every
 > minute, and the answer changes about once a month. Its own endpoint would be a second poll for
@@ -202,6 +219,7 @@ node scripts/probe.mjs --limits           # GGG's rate-limit policy, from one re
 node scripts/probe.mjs --ninja            # poe.ninja: any dust field, and the unique overviews
 node scripts/probe.mjs --types            # which poe.ninja type= values return anything at all
 node scripts/probe.mjs --items            # whether the OTHER poe.ninja endpoint serves uniques
+node scripts/probe.mjs --names            # which categories carry names and icons on it
 node scripts/probe.mjs --time-poll        # read every tab and time it (spends real budget)
 node scripts/probe.mjs --item Goldrim     # one unique's raw fields, to see what GGG really sends
 ```

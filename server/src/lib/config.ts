@@ -125,7 +125,22 @@ export interface ConfigResult {
   leagueDefaulted: boolean;
 }
 
-export const VERSION = '1.2.0';
+/**
+ * The version this build reports — in the update banner, in the outbound User-Agent, and in
+ * /api/config.
+ *
+ * It is a literal because the build cannot import package.json: `tsconfig.build.json` sets
+ * `rootDir: "src"`, and a file above that root would land the emitted output somewhere nobody
+ * expects. A literal is therefore a second source of truth for one number, which is exactly how
+ * this went wrong: it sat at 1.2.0 through four releases while the manifests said 1.4.0, so a
+ * freshly installed 1.4.1 introduced itself as 1.2.0 and was told, permanently, that an update
+ * was available.
+ *
+ * The duplication is therefore checked rather than trusted. `version.test.ts` reads the four
+ * manifests and fails if this line disagrees with any of them, and the release workflow fails
+ * if the tag being built disagrees with the manifests.
+ */
+export const VERSION = '1.4.2';
 
 export class ConfigError extends Error {}
 

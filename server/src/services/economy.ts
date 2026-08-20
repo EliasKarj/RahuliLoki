@@ -29,7 +29,16 @@
 import { SHORT_CODES, ninjaId } from './ninjaId.ts';
 import type { LineMeta } from './ninjaPayload.ts';
 
-export type NameSource = 'stash' | 'alias' | 'slug';
+/**
+ * Where a row's name came from, best first.
+ *
+ * `stash` is proof — the player holds the item and GGG spelled it. `ninja` is poe.ninja's own
+ * spelling from the item endpoint, which is authoritative for everything it covers. `alias` is
+ * this repository's hand-kept table for the trade-site shorthands. `slug` is the id read
+ * backwards and is the only one that can be wrong, because a slug cannot say where an
+ * apostrophe belonged.
+ */
+export type NameSource = 'stash' | 'ninja' | 'alias' | 'slug';
 
 export interface EconomyRow {
   /** poe.ninja's own identifier. Unique, and the thing the price is actually keyed by. */
@@ -106,6 +115,11 @@ export interface EconomyInput {
   categories: Record<string, string>;
   /** Icons are keyed by display name, which is why they are looked up after the name is known. */
   icons: Record<string, string>;
+  /**
+   * poe.ninja id → poe.ninja's own name. Empty for the categories its item endpoint does not
+   * serve, and those rows fall back exactly as they did before this existed.
+   */
+  names?: Record<string, string>;
   divineRate: number;
   /** Names proved by the stash — see namesFromBreakdown. */
   known?: Map<string, string>;
@@ -123,10 +137,20 @@ export function buildEconomy(input: EconomyInput): EconomyRow[] {
     if (!Number.isFinite(chaos) || chaos <= 0) continue;
 
     const fromStash = known.get(id);
+    const fromNinja = input.names?.[id];
     const fromAlias = aliases.get(id);
-    const name = fromStash ?? fromAlias ?? unslug(id);
+    // The stash first: the player holds the thing and GGG spelled it, which beats a third
+    // party. Then poe.ninja's own name, which is right for every category it covers and is what
+    // the icons are filed under. The alias table and the unslugged id are what is left.
+    const name = fromStash ?? fromNinja ?? fromAlias ?? unslug(id);
     const nameSource: NameSource =
-      fromStash !== undefined ? 'stash' : fromAlias !== undefined ? 'alias' : 'slug';
+      fromStash !== undefined
+        ? 'stash'
+        : fromNinja !== undefined
+          ? 'ninja'
+          : fromAlias !== undefined
+            ? 'alias'
+            : 'slug';
 
     const meta = input.meta?.[id];
 

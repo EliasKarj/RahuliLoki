@@ -138,6 +138,9 @@ export async function makeApp(
             ],
           },
           categories: { chaos: 'Currency', divine: 'Currency' },
+          // Empty on purpose: the rows in this fake are named by the stash and by the alias
+          // table, and filling this in would quietly change which source those tests exercise.
+          names: {},
           meta: {
             divine: { change: 4.2, volume: 19156804, sparkline: [0, 2.1, 4.2] },
             // Chaos deliberately has none, so a test can tell "no movement published" from

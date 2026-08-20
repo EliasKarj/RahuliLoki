@@ -34,6 +34,27 @@ function memoryStore(initial: PriceSet | null = null) {
   return { store, saved };
 }
 
+/**
+ * The exchange-endpoint calls only.
+ *
+ * The service talks to two poe.ninja endpoints with the same `type=` vocabulary, and the tests
+ * about caching and collapsing are about the priced one. Counting every call would make them
+ * fail whenever the other endpoint's category list changes, which is a fact about names and
+ * artwork rather than about the cache.
+ */
+function exchangeCalls(fetchFn: typeof fetch): string[] {
+  const { calls } = (fetchFn as unknown as { mock: { calls: unknown[][] } }).mock;
+  return calls.map((call) => String(call[0])).filter((url) => url.includes('/exchange/current/'));
+}
+
+/** How many times the item endpoint was asked about one `type=`. */
+function itemTypeCalls(fetchFn: typeof fetch, type: string): number {
+  const { calls } = (fetchFn as unknown as { mock: { calls: unknown[][] } }).mock;
+  return calls
+    .map((call) => String(call[0]))
+    .filter((url) => url.includes('/stash/current/item/') && url.includes(`type=${type}`)).length;
+}
+
 /** Serves the recorded fixtures by `type=` query parameter. */
 function fixtureFetch(overrides: Record<string, () => Response> = {}) {
   return vi.fn(async (input: string | URL | Request) => {
@@ -251,17 +272,15 @@ describe('PriceService', () => {
     const subject = service({ fetchFn, now: () => now });
 
     await subject.getPrices();
-    const callsAfterFirst = (fetchFn as unknown as { mock: { calls: unknown[] } }).mock.calls.length;
+    const callsAfterFirst = exchangeCalls(fetchFn).length;
 
     now = 59 * 60_000;
     await subject.getPrices();
-    expect((fetchFn as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(callsAfterFirst);
+    expect(exchangeCalls(fetchFn).length).toBe(callsAfterFirst);
 
     now = 61 * 60_000;
     await subject.getPrices();
-    expect((fetchFn as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(
-      callsAfterFirst * 2,
-    );
+    expect(exchangeCalls(fetchFn).length).toBe(callsAfterFirst * 2);
   });
 
   it('collapses concurrent callers onto a single refetch', async () => {
@@ -271,7 +290,7 @@ describe('PriceService', () => {
     await Promise.all([subject.getPrices(), subject.getPrices(), subject.getPrices()]);
 
     // Four configured categories, fetched once between them.
-    expect((fetchFn as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(4);
+    expect(exchangeCalls(fetchFn).length).toBe(4);
   });
 
   it('persists each fetched set so a restart does not refetch immediately', async () => {
@@ -291,6 +310,7 @@ describe('PriceService', () => {
       uniques: {},
       categories: {},
       meta: {},
+      names: {},
     };
     const fetchFn = fixtureFetch();
     const subject = service({ fetchFn, store: memoryStore(stored).store, now: () => 60_000 });
@@ -314,6 +334,7 @@ describe('PriceService', () => {
       uniques: {},
       categories: {},
       meta: {},
+      names: {},
     };
     const subject = service({ store: memoryStore(stale).store, now: () => 0 });
 
@@ -729,11 +750,118 @@ describe('PriceService and the item endpoint', () => {
     expect(set.prices.chaos).toBe(1);
   });
 
-  it('asks for nothing when the category list is empty', async () => {
+  it('asks for no uniques when the unique category list is empty', async () => {
     const fetchFn = vi.fn(bothEndpoints(itemBody) as never) as unknown as typeof fetch;
     await service({ fetchFn, uniqueCategories: [] }).getPrices();
 
+    // The item endpoint is still reached, for the names and artwork the economy list needs —
+    // that is a different list of categories and a different reason. What must not happen is a
+    // request for a unique type nobody asked to price.
     const urls = (fetchFn as unknown as { mock: { calls: unknown[][] } }).mock.calls.map((call) => String(call[0]));
-    expect(urls.some((url) => url.includes('/stash/current/item/'))).toBe(false);
+    expect(urls.filter((url) => url.includes('type=Unique'))).toEqual([]);
+  });
+});
+
+/**
+ * Names and artwork for the ordinary categories, which is what the economy list was missing.
+ *
+ * The prices come from the exchange endpoint, keyed by id and carrying no names. These tests
+ * are about the second request that puts a name and an icon against those ids, and about it
+ * costing nothing when poe.ninja has nothing to give.
+ */
+describe('PriceService and item names', () => {
+  /** Exchange fixtures as usual; the item endpoint answers with whatever is handed in. */
+  function withItemNames(byType: Record<string, unknown>): typeof fetch {
+    const exchange = fixtureFetch();
+    return vi.fn((async (url: string, init?: RequestInit) => {
+      const parsed = new URL(String(url));
+      if (parsed.pathname.includes('/stash/current/item/')) {
+        const body = byType[parsed.searchParams.get('type') ?? ''] ?? { lines: [] };
+        return new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      return (exchange as unknown as (u: string, i?: RequestInit) => Promise<Response>)(url, init);
+    }) as unknown as typeof fetch);
+  }
+
+  const cards = {
+    lines: [
+      {
+        name: "Hinekora's Lock",
+        icon: 'https://web.poecdn.com/hinekora.png',
+      },
+      { name: 'The Doctor', icon: 'https://web.poecdn.com/doctor.png' },
+    ],
+  };
+
+  it('files the name under the id the price came under', async () => {
+    const set = await service({ fetchFn: withItemNames({ DivinationCard: cards }) }).getPrices();
+
+    // The join that makes the whole thing work: poe.ninja's name, run through the same slug
+    // rule the prices are keyed by, lands on the id the exchange endpoint used.
+    expect(set.names['hinekoras-lock']).toBe("Hinekora's Lock");
+    expect(set.names['the-doctor']).toBe('The Doctor');
+  });
+
+  it('files the artwork under that same name, which is where the views look for it', async () => {
+    const set = await service({ fetchFn: withItemNames({ DivinationCard: cards }) }).getPrices();
+
+    expect(set.icons["Hinekora's Lock"]).toBe('https://web.poecdn.com/hinekora.png');
+  });
+
+  it('refuses artwork from anywhere but the two CDNs, name or no name', async () => {
+    const hostile = {
+      lines: [{ name: 'Nice Try', icon: 'https://example.invalid/tracker.png' }],
+    };
+    const set = await service({ fetchFn: withItemNames({ DivinationCard: hostile }) }).getPrices();
+
+    // The name is fine to keep — it is only ever text. The URL is the thing that would end up
+    // in an <img src>, and this one is not from poecdn or poe.ninja.
+    expect(set.names['nice-try']).toBe('Nice Try');
+    expect(set.icons['Nice Try']).toBeUndefined();
+  });
+
+  it('stops asking a category that answered with nothing', async () => {
+    // The set of categories this endpoint serves is not documented and was found by probing.
+    // Being wrong about one should cost a single request, not one an hour for as long as the
+    // program runs.
+    const fetchFn = withItemNames({ DivinationCard: cards });
+    const subject = service({ fetchFn, ttlMs: 0 });
+
+    await subject.getPrices();
+    await subject.getPrices();
+
+    // Scarab answered with no lines the first time, so the second refresh does not ask again;
+    // DivinationCard answered with names, so it is asked every time.
+    expect(itemTypeCalls(fetchFn, 'Scarab')).toBe(1);
+    expect(itemTypeCalls(fetchFn, 'DivinationCard')).toBe(2);
+  });
+
+  it('loses names rather than prices when the endpoint is down', async () => {
+    const exchange = fixtureFetch();
+    const fetchFn = (async (url: string, init?: RequestInit) => {
+      if (String(url).includes('/stash/current/item/')) return new Response('nope', { status: 503 });
+      return (exchange as unknown as (u: string, i?: RequestInit) => Promise<Response>)(url, init);
+    }) as unknown as typeof fetch;
+
+    const set = await service({ fetchFn }).getPrices();
+
+    // Not empty: `core.items` rides along on the price payload, so chaos and divine keep their
+    // names even with the other endpoint refusing. What is lost is the long tail it would have
+    // added — and no price is lost at all, which is the point.
+    expect(set.names).toEqual({ chaos: 'Chaos Orb', divine: 'Divine Orb' });
+    expect(set.prices.chaos).toBe(1);
+    expect(Object.keys(set.prices).length).toBeGreaterThan(1);
+  });
+
+  it('takes a name straight from core.items without going through the slug rule', async () => {
+    // The only place the exchange endpoint puts an id and a name on the same object. Everywhere
+    // else the name has to be turned back into an id, and a name that does not round-trip is
+    // lost; here nothing can be.
+    const set = await service({ fetchFn: withItemNames({}) }).getPrices();
+
+    expect(set.names.divine).toBe('Divine Orb');
   });
 });
