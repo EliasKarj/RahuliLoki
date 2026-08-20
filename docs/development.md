@@ -170,6 +170,25 @@ pnpm typecheck
 The server runs TypeScript directly through Node's type stripping — there is no build step in
 development, and `tsc` only produces `dist` for a release.
 
+### Asking GGG and poe.ninja things this repository cannot
+
+```bash
+node scripts/probe.mjs                    # everything, gently
+node scripts/probe.mjs --limits           # GGG's rate-limit policy, from one request
+node scripts/probe.mjs --ninja            # poe.ninja: any dust field, and the unique overviews
+node scripts/probe.mjs --time-poll        # read every tab and time it (spends real budget)
+node scripts/probe.mjs --item Goldrim     # one unique's raw fields, to see what GGG really sends
+```
+
+Read-only, no dependencies, no files written. It takes POESESSID from the settings file the
+desktop app already wrote, so nothing is pasted anywhere, and every line it prints goes through a
+scrub that blanks the session even if GGG echoed it back in an error.
+
+> **▸ Why this exists:** several numbers this project depends on are only observable from a
+> machine that can reach GGG with a real account behind it. Writing a guess into the source
+> instead is how the rate-limit policy came to be quoted as two different values in two comments
+> in one file. A script whose output is evidence is the alternative to a constant nobody checked.
+
 ### Believable data without the wait
 
 ```bash
@@ -291,6 +310,7 @@ pnpm test
   /src          main (Electron), login (the login window), settings, preload,
                 adoptOldData (the old name's data directory), sessionWait, loginHosts
 /scripts        with-env.mjs (loads the root .env for the Prisma CLI)
+                probe.mjs (asks GGG and poe.ninja what this repo cannot)
 /web
   /src
     /components Hero, NetWorthChart, RatePerHourChart, TabAreaChart, ItemsTable, SnapshotTable,
