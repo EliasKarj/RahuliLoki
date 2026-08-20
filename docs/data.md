@@ -190,6 +190,11 @@ every unique at nothing and writes a collapse into the history that never happen
 > written into the icons map: stored, it would be indistinguishable from real artwork everywhere
 > downstream, including in the database, where it would outlive whatever that file says today.
 >
+> That table is the second choice, not the first. The economy list already holds real artwork for
+> every item the player has ever been seen holding, so a category with one illustrated row lends
+> its picture to the others — art for something genuinely in that category and that league,
+> arrived at with no path guessed and no request made. The table only covers what the list cannot.
+>
 > Five categories are in it, each confirmed against the live CDN by `probe.mjs --art`. One of
 > them — the card back — is art for the kind. The other four are a specific item's picture used as
 > a marker because no generic art was found, and the table records which is which: a borrowed

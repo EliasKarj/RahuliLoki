@@ -83,6 +83,61 @@ export function categoryIcon(category: string | null): string | undefined {
   return CATEGORY_ICONS[category]?.url;
 }
 
+/**
+ * A picture per category, taken from the rows themselves.
+ *
+ * This is the better half of the fallback and it needs no table at all. The list on screen
+ * already contains real artwork for every item the player holds — the app fills those in from
+ * the stash — so a category with even one illustrated row has a picture available for the rest
+ * of that category, at no cost and with no guessed CDN path behind it. A stash with essences in
+ * it illustrates every essence row; a stash with scarabs illustrates every scarab row.
+ *
+ * The donor is the lowest id in the category that has art, rather than the most valuable or the
+ * first on screen. Both of those move when prices move, and an icon that changes as the market
+ * shifts is a distraction pretending to be information.
+ */
+export function donorIcons(
+  rows: ReadonlyArray<{ id: string; category: string | null; icon: string | null }>,
+): Record<string, string> {
+  // Null-prototype: the keys are category strings out of a remote payload.
+  const best = Object.create(null) as Record<string, { id: string; icon: string }>;
+
+  for (const row of rows) {
+    if (row.category === null || row.icon === null) continue;
+    const held = best[row.category];
+    if (held === undefined || row.id < held.id) best[row.category] = { id: row.id, icon: row.icon };
+  }
+
+  const out = Object.create(null) as Record<string, string>;
+  for (const category of Object.keys(best)) out[category] = best[category]?.icon as string;
+  return out;
+}
+
+/**
+ * The picture to stand in for this category: a real row's art first, the table second.
+ *
+ * A donor beats the table even where the table has a generic entry, because a donor is art for
+ * something that is genuinely in this category and in this league, while the table is a fixed
+ * guess made somewhere else. The exception would be a category whose generic art is better than
+ * any single member — divination cards, whose back is the whole point — and that is why the card
+ * back is checked for first.
+ */
+export function fallbackIcon(
+  category: string | null,
+  donors: Record<string, string>,
+): string | undefined {
+  if (category === null) return undefined;
+
+  // Art for the kind wins outright — the card back is what every card shares, and no single card
+  // improves on it. Everything else in the table is one item's art guessed at from a CDN path,
+  // and a donor beats that: it is art for something genuinely priced in this league, and it
+  // needed no path written down anywhere.
+  const table = Object.hasOwn(CATEGORY_ICONS, category) ? CATEGORY_ICONS[category] : undefined;
+  if (table?.kind === 'generic') return table.url;
+  if (Object.hasOwn(donors, category)) return donors[category];
+  return table?.url;
+}
+
 /** Which categories are still standing in with another item's art. Read by the tests. */
 export function borrowedCategories(): string[] {
   return Object.entries(CATEGORY_ICONS)

@@ -17,7 +17,7 @@ import { categoryLabel, formatAgo } from '../lib/format.ts';
 import { looseIncludes } from '../lib/search.ts';
 import { Empty } from './ui.tsx';
 import { ItemIcon } from './ItemIcon.tsx';
-import { categoryIcon } from '../lib/categoryIcon.ts';
+import { donorIcons, fallbackIcon } from '../lib/categoryIcon.ts';
 import { PriceHistory } from './PriceHistory.tsx';
 import { sparklinePath } from '../lib/spark.ts';
 
@@ -71,6 +71,9 @@ export function Economy({ league }: { league: string | undefined }) {
 
   const all = data?.rows ?? [];
   const chips = useMemo(() => categories(all), [all]);
+  // From every priced row, not the filtered ones: a search for "essence" should still illustrate
+  // its results with the essence art, and the donor for that would have been filtered out.
+  const donors = useMemo(() => donorIcons(all), [all]);
 
   const rows = useMemo(() => {
     const filtered = all.filter(
@@ -186,7 +189,7 @@ export function Economy({ league }: { league: string | undefined }) {
               <tr key={row.id} className="border-b border-ink-850 last:border-0">
                 <td className="py-2 pr-3 text-ink-100">
                   <span className="flex items-center gap-2">
-                    <ItemIcon src={row.icon ?? undefined} fallback={categoryIcon(row.category)} />
+                    <ItemIcon src={row.icon ?? undefined} fallback={fallbackIcon(row.category, donors)} />
                     <button
                       type="button"
                       onClick={() => setOpen({ id: row.id, name: row.name })}

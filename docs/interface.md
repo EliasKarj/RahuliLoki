@@ -52,11 +52,16 @@ price held still.
 Rows with no artwork of their own show a **category** picture instead, dimmed. It says what kind
 of thing the row is, not which thing, and the dimming is what keeps those two apart.
 
-Divination cards get the card back — art GGG drew for the whole kind, the same image poe.ninja
-uses. Currency, fragments, essences and oils get one specific item's art standing in for the
-category, because no generic art for those kinds was found: a currency row shows a Chaos Orb
-whatever it actually is. Every other category stays blank rather than borrowing something
-misleading. `probe.mjs --art` is what confirms a path before it goes in.
+Most of it comes from the list itself. Every item you hold arrives with its real artwork from the
+stash, so a category with one illustrated row lends that picture to the rest of that category —
+no CDN path written down, no request made, and it fills in further every time a poll sees
+something new. The donor is the lowest id in the category rather than the dearest or the topmost,
+so the picture does not change when the market does.
+
+Where the list has nothing to lend, a small table steps in: the divination card back, which GGG
+drew for the whole kind and which beats any donor, and a Chaos Orb, a Vaal fragment, an essence
+and an oil for their categories, which do not — a donor replaces those the moment one exists.
+A category with neither stays blank.
 
 A `?` after a name means the name was read back from poe.ninja's id rather than known, and a slug
 has lost its apostrophes. Most rows no longer carry one: poe.ninja's item endpoint publishes its
