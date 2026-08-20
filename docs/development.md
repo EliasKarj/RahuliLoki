@@ -36,17 +36,30 @@ All of it in `.env`; `.env.example` is the template.
 | `LOG_LEVEL` | `info` | pino's level. |
 
 The default price categories: `DivinationCard, Essence, Fossil, Resonator, Scarab, Oil,
-DeliriumOrb, Incubator, Artifact, Vial, Omen, Tattoo`.
+DeliriumOrb, Incubator, Artifact, Vial, Omen, Tattoo, AllflameEmber`.
+
+> **▸ How that list was checked:** `node scripts/probe.mjs --types` asks poe.ninja which `type=`
+> values return anything at all, rather than trusting a list assembled from memory. It found
+> `AllflameEmber` priced and missing here — items this app was quietly valuing at nothing,
+> because an unpriced item is simply absent from the breakdown and absent looks exactly like not
+> owning any. It also found `Incubator` and `Vial` answering with zero lines in that league; they
+> are kept, because one league's emptiness is not evidence that a category is gone, and an empty
+> answer costs one request an hour.
 
 > **▸ Why gems and maps are not in the default:** they are not priced by name. A gem's price
 > depends on level, quality and corruption; a map's on tier; a cluster jewel's on whatever rolled
 > on it. Valuing them by name would give them *a* number, and that number would be wrong in a way
 > the chart cannot show.
 
-> **▸ Why uniques are not priced either:** poe.ninja redesigned its API, and price rows no longer
-> carry `links` or `corrupted`. Without them the variant cannot be identified, and pricing a
-> unique by name alone would silently pick one of them: the same Bronn's Lithe is ~5 chaos with no
-> links and ~210 as a six-link.
+> **▸ Why uniques are not priced either:** it is worse than the variant problem. Every unique
+> type poe.ninja serves — `UniqueArmour`, `UniqueWeapon`, `UniqueAccessory`, `UniqueFlask`,
+> `UniqueJewel`, `UniqueMap`, `UniqueRelic`, and a bare `Unique` — answers 200 with **zero
+> lines**, recorded by `scripts/probe.mjs`. There are no unique prices to fetch, with or without
+> the variant fields.
+>
+> The variant problem stands behind it and is why this cannot be worked around by matching on
+> name: price rows no longer carry `links` or `corrupted`, and the same Bronn's Lithe is ~5 chaos
+> with no links and ~210 as a six-link.
 >
 > The options were a number wrong by fortyfold with nothing to indicate it, or no number at all.
 > So uniques go unpriced and appear in the poll's "no price" warning. If poe.ninja starts

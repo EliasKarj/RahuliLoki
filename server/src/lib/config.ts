@@ -30,6 +30,11 @@ export const DEFAULT_ITEM_CATEGORIES = [
   'Vial',
   'Omen',
   'Tattoo',
+  // Priced and worth real chaos, and this app was blind to it until scripts/probe.mjs asked
+  // poe.ninja which type= values return anything at all. Nothing announced the gap: an item
+  // nobody prices is simply absent from the breakdown, and absent looks exactly like "you do
+  // not own any".
+  'AllflameEmber',
 ] as const;
 
 /**
@@ -48,6 +53,11 @@ export const DEFAULT_ITEM_CATEGORIES = [
  *
  * Set PRICE_UNIQUE_CATEGORIES explicitly to opt back in if poe.ninja starts publishing the
  * variant fields again.
+ *
+ * As of 2026-08-20 there is nothing to opt back into. Every unique type poe.ninja serves —
+ * UniqueArmour, UniqueWeapon, UniqueAccessory, UniqueFlask, UniqueJewel, UniqueMap, UniqueRelic
+ * and a bare Unique — answers 200 with **zero lines**. It is not that the variant fields are
+ * missing from the unique prices; there are no unique prices. Recorded by scripts/probe.mjs.
  */
 export const DEFAULT_UNIQUE_CATEGORIES = [] as const;
 
@@ -114,7 +124,7 @@ export interface ConfigResult {
   leagueDefaulted: boolean;
 }
 
-export const VERSION = '1.1.1';
+export const VERSION = '1.1.2';
 
 export class ConfigError extends Error {}
 

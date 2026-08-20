@@ -325,22 +325,32 @@ async function probeTypes() {
     'Memory', 'BaseType', 'HelmetEnchant', 'Beast',
   ];
 
+  // Printed as it goes rather than gathered and shown at the end. Thirty-three requests at a
+  // polite spacing is half a minute, and half a minute of silence looks exactly like a hang —
+  // which is how this was first reported.
+  say(`  asking about ${candidates.length} types; this takes about half a minute`);
+  say('');
+
   const served = [];
   const empty = [];
   const failed = [];
 
   for (const type of candidates) {
     const result = await ninja(type);
-    if (!result.ok) failed.push(`${type} (${result.status})`);
-    else {
+    if (!result.ok) {
+      failed.push(`${type} (${result.status})`);
+      say(`  ${type.padEnd(16)} ${result.status}`);
+    } else {
       const lines = Array.isArray(result.body?.lines) ? result.body.lines.length : 0;
       if (lines > 0) served.push(`${type}=${lines}`);
       else empty.push(type);
+      say(`  ${type.padEnd(16)} ${lines === 0 ? '—' : `${lines} lines`}`);
     }
     // Somebody else's free service. One every 300 ms is polite for a one-off probe.
     await new Promise((resolve) => setTimeout(resolve, 300));
   }
 
+  say('');
   say(`  returns lines: ${served.length === 0 ? 'none' : served.join(', ')}`);
   say('');
   say(`  answers but empty: ${empty.length === 0 ? 'none' : empty.join(', ')}`);

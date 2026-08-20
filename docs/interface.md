@@ -16,8 +16,8 @@ a row above the page instead.
 
 **Kingsmarch** is your uniques as the disenchanting bench sees them: one row per item level,
 quality and tab, because those are what dust reads and what the dashboard's item table folds
-away. There is no dust column — see the note at the top of the view, and
-[Development](development.md) for why.
+away. There is no dust column and no price column — the dust numbers have no verified source,
+and poe.ninja serves no unique prices at all any more. See the note at the top of the view.
 
 **Dashboard** is everything below — what you own, what it is worth, and what it has been doing.
 

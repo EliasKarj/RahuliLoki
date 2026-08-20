@@ -89,6 +89,17 @@ export function Kingsmarch({ league }: { league: string | undefined }) {
     return <Empty>The last poll found no identified uniques in the tracked tabs.</Empty>;
   }
 
+  /**
+   * Whether anything here has a price at all.
+   *
+   * poe.ninja serves no unique prices — every unique type answers with zero lines, recorded by
+   * scripts/probe.mjs — so in practice this is false and the column is not drawn. It is a
+   * condition rather than a deletion because the column becomes right again the day those
+   * endpoints have something in them, and an always-empty column is exactly the clutter this
+   * page has been cleared of twice.
+   */
+  const anyPriced = all.some((row) => row.chaos !== null);
+
   const toggle = (key: SortKey) =>
     setSort((current) =>
       current.key === key ? { key, desc: !current.desc } : { key, desc: key !== 'name' },
@@ -117,11 +128,13 @@ export function Kingsmarch({ league }: { league: string | undefined }) {
       {/* Stated once, at the top, rather than as a footnote nobody reads. The dust column is the
           point of this view and it is missing; saying why is the least it can do. */}
       <p className="max-w-3xl rounded border border-ink-800 bg-ink-900/40 px-3 py-2 text-xs text-ink-400">
-        No dust column yet. Dust scales with item level and quality — both are here — but this
-        app has no verified source for the numbers themselves, and a bench decision made from a
-        guessed formula is worse than one made by hand. Prices are looked up{' '}
-        <strong className="font-medium text-ink-300">by name only</strong>: poe.ninja publishes no
-        links or corruption any more, so a six-linked copy and a plain one share a price here.
+        No dust column, and no prices. Dust scales with item level and quality — both are here —
+        but this app has no verified source for the numbers themselves, and a bench decision made
+        from a guessed formula is worse than one made by hand. Prices are missing for a plainer
+        reason:{' '}
+        <strong className="font-medium text-ink-300">poe.ninja serves no unique prices at all</strong>{' '}
+        any more. Every unique category it offers answers with an empty list, so there is nothing
+        to look up and nothing to rank a dust-per-chaos by.
       </p>
 
       <div className="max-h-[min(70vh,56rem)] max-w-6xl overflow-auto">
@@ -149,11 +162,13 @@ export function Kingsmarch({ league }: { league: string | undefined }) {
                   Quality{arrow('quality')}
                 </button>
               </th>
-              <th scope="col" className="py-2 text-right font-medium">
-                <button type="button" onClick={() => toggle('chaos')} className="transition-colors hover:text-ink-200">
-                  Each{arrow('chaos')}
-                </button>
-              </th>
+              {anyPriced ? (
+                <th scope="col" className="py-2 text-right font-medium">
+                  <button type="button" onClick={() => toggle('chaos')} className="transition-colors hover:text-ink-200">
+                    Each{arrow('chaos')}
+                  </button>
+                </th>
+              ) : null}
             </tr>
           </thead>
           <tbody>
@@ -185,9 +200,11 @@ export function Kingsmarch({ league }: { league: string | undefined }) {
                 <td className="num py-2 pr-3 text-ink-400">
                   {row.quality === 0 ? '' : `${row.quality}%`}
                 </td>
-                <td className="num py-2 text-accent-500">
-                  {row.chaos === null ? '' : prices.price(row.chaos)}
-                </td>
+                {anyPriced ? (
+                  <td className="num py-2 text-accent-500">
+                    {row.chaos === null ? '' : prices.price(row.chaos)}
+                  </td>
+                ) : null}
               </tr>
             ))}
           </tbody>
