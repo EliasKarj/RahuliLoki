@@ -71,10 +71,9 @@ export async function healthRoutes(app: FastifyInstance, deps: ApiDeps): Promise
   /**
    * Start a poll. Answers as soon as it has started, not when it has finished.
    *
-   * A poll paces itself against GGG's rate limit, and the tightest bucket on the stash endpoint
-   * refills slowly enough that one request every eighteen seconds is the honest rate. A stash
-   * with twenty tabs is therefore several minutes of work — and this used to hold the HTTP
-   * request open for all of it.
+   * A poll paces itself against GGG's rate limit. A small stash is a few seconds of work; a
+   * large one waits for the sixty-second window to roll and can take a minute or two — and this
+   * used to hold the HTTP request open for all of it.
    *
    * Nothing survives that. The client gives up long before the poll does and reports a network
    * failure, so a poll that was running perfectly well looked like a broken server: "Failed to

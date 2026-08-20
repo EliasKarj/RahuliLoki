@@ -57,7 +57,21 @@ export interface RateLimiterOptions {
   minBackoffMs?: number;
   /** Ceiling for the doubling. The spec's 30 minutes. */
   maxBackoffMs?: number;
-  /** Never fire two requests closer together than this, even with an empty bucket. */
+  /**
+   * A hard floor between requests. **Zero by default, and that is the right default.**
+   *
+   * It used to be one second, and it was the whole reason a poll crawled. GGG's policy allows
+   * forty-five requests a minute; this app spent a second between every one of them, so a
+   * twenty-four-tab stash took twenty-six seconds to read when the allowance covered it in
+   * under four — with the bucket barely touched the entire time. The allowance was there and we
+   * simply refused to spend it.
+   *
+   * There is no moment where a constant beats the headers. Before the first response there is
+   * no previous request to be too close to; after it, `computeDelayMs` knows how much of the
+   * real bucket is left, which is strictly more than a constant knows. It stays as an option
+   * because it is the one way to deliberately slow this app down — behind a proxy that has its
+   * own limits, say — and never because the pacing needs help.
+   */
   minIntervalMs?: number;
   /** Ceiling on a single attempt. Without one, a hung socket stops the poller permanently. */
   timeoutMs?: number;
@@ -205,7 +219,7 @@ export class RateLimiter {
     this.#maxRetries = options.maxRetries ?? 3;
     this.#minBackoffMs = options.minBackoffMs ?? 10_000;
     this.#maxBackoffMs = options.maxBackoffMs ?? 30 * 60_000;
-    this.#minIntervalMs = options.minIntervalMs ?? 1_000;
+    this.#minIntervalMs = options.minIntervalMs ?? 0;
     this.#timeoutMs = options.timeoutMs ?? 30_000;
     // A restrictedSeconds of 999999999 — a garbled header, a proxy inventing one — would
     // otherwise put the poller to sleep for thirty years. An hour is longer than any real

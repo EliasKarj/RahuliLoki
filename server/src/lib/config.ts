@@ -114,7 +114,7 @@ export interface ConfigResult {
   leagueDefaulted: boolean;
 }
 
-export const VERSION = '1.0.8';
+export const VERSION = '1.0.9';
 
 export class ConfigError extends Error {}
 

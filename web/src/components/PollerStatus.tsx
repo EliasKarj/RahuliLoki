@@ -68,10 +68,10 @@ export function PollerStatus({ health, onPolled }: { health: HealthResponse | nu
     setMessage(null);
     try {
       // Returns as soon as the poll has started, not when it has finished. Reading a stash is
-      // minutes of paced requests; waiting here is what made a healthy poll read as a network
+      // paced against GGG's buckets; waiting here is what made a healthy poll read as a network
       // error on screen. The outcome arrives through /api/health instead.
       await api.poll();
-      setMessage('Polling. A full stash takes a few minutes — this page updates itself.');
+      setMessage('Polling. A large stash waits on GGG\'s rate limit — this page updates itself.');
       onPolled();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));

@@ -40,6 +40,29 @@ The triple is `hits:period:penalty`. The limiter
 > The knob is one number, `PACING_RESERVE`. It is deliberately one: it answers the question "how
 > close to GGG's ceiling is this application willing to run".
 
+> **▸ Why a poll used to crawl anyway, long after that was fixed:** underneath the pacing sat a
+> flat one-second floor between requests, and it applied whatever the buckets said. GGG allows
+> forty-five requests a minute; this app spent a second between every one of them. Measured on a
+> fake clock against the real policy `45:60:120,200:3600:3600`:
+>
+> | Tabs | With the floor | Without |
+> |------|----------------|---------|
+> | 8 | 8.0 s | **1.0 s** |
+> | 12 | 12.4 s | **1.4 s** |
+> | 24 | 25.9 s | **2.9 s** |
+> | 40 | 43.8 s | **13.4 s** |
+> | 60 | 126 s | **82 s** |
+>
+> The floor is off by default now. There is no moment where a constant beats the headers: before
+> the first response there is no previous request to be too close to, and after it the pacing
+> knows how much of the real bucket is left. It remains as an option for an operator who wants
+> to run slower on purpose — behind a proxy with limits of its own — and never because the
+> pacing needs the help.
+>
+> Past forty tabs the time is GGG's limit rather than ours: forty-five requests a minute is
+> forty-five requests a minute, and the second half of a sixty-tab stash waits for the window to
+> roll. No client can read that account faster.
+
 The first call returns the tab list **and** the first tab's items in the same response, so it is
 never read twice.
 

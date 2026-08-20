@@ -310,3 +310,60 @@ describe('RateLimiter', () => {
     expect(limiter.view().consecutive429).toBe(0);
   });
 });
+
+describe('the floor, and how long it applies', () => {
+  const POLICY = '45:60:120,200:3600:3600';
+
+  /** Reads `tabs` requests through the limiter on a fake clock; returns the elapsed time. */
+  async function readTabs(tabs: number, minIntervalMs = 0): Promise<number> {
+    let now = 0;
+    let used = 0;
+    const fetchFn = (async () => {
+      now += 100;
+      used += 1;
+      return new Response('{}', {
+        status: 200,
+        headers: {
+          'x-rate-limit-account': POLICY,
+          'x-rate-limit-account-state': `${Math.min(used, 45)}:60:0,${used}:3600:0`,
+        },
+      });
+    }) as unknown as typeof fetch;
+
+    const limiter = new RateLimiter({
+      now: () => now,
+      sleep: async (ms: number) => {
+        now += ms;
+      },
+      fetchFn,
+      minIntervalMs,
+    });
+
+    for (let i = 0; i < tabs; i += 1) await limiter.request('https://example.test/stash');
+    return now;
+  }
+
+  it('spends the allowance GGG actually grants instead of one request a second', async () => {
+    // The regression this exists for: a permanent one-second floor made a twenty-four-tab stash
+    // take twenty-six seconds against a policy that allows forty-five requests a minute. The
+    // bucket was barely touched the whole time.
+    const elapsed = await readTabs(24);
+
+    expect(elapsed).toBeLessThan(5_000);
+  });
+
+  it('still throttles when somebody asks it to', async () => {
+    // The floor is off by default and stays available: behind a proxy with limits of its own,
+    // "one a second whatever the headers say" is a thing an operator may want.
+    expect(await readTabs(6, 1000)).toBeGreaterThanOrEqual(5_000);
+  });
+
+  it('slows down again as the bucket empties, rather than running into the cap', async () => {
+    // Past the reserve the pacing ramps toward the refill rate. Forty tabs is more than half of
+    // forty-five, so the tail of it is paced and the whole read takes real time.
+    const elapsed = await readTabs(40);
+
+    expect(elapsed).toBeGreaterThan(10_000);
+    expect(elapsed).toBeLessThan(30_000);
+  });
+});
