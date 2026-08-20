@@ -518,55 +518,58 @@ async function probeDump(type) {
  */
 async function probeArt() {
   head("GGG's CDN: which generic category art exists");
-  say('  The economy list has no per-item artwork for most categories. These are the candidate');
-  say('  paths for one picture per category. Only the ones that answer 200 are usable.');
+  say('  The economy list has no per-item artwork for most categories, so a row falls back to one');
+  say('  picture per category. These are the candidate paths. Only 200s are usable.');
+  say('');
+  say('  InventoryIcon.png is listed first for every category and is the one worth having:');
+  say('  Divination/InventoryIcon.png is a card back, art GGG made to stand for the whole kind.');
+  say('  A named file underneath it is one specific item\'s art borrowed as a category marker,');
+  say('  which is a weaker thing — a Chaos Orb drawn beside a Mirror of Kalandra.');
   say('');
 
   const base = 'https://web.poecdn.com/image/Art/2DItems';
-  // The first is confirmed and is here as a control: if it fails, the probe is wrong, not the CDN.
+  // First entry per category is the generic-art guess; the rest are named files to fall back on.
   const candidates = [
-    ['DivinationCard', `${base}/Divination/InventoryIcon.png`],
-    ['Currency', `${base}/Currency/CurrencyRerollRare.png`],
-    ['Fragment', `${base}/Maps/Vaal01.png`],
-    ['Essence', `${base}/Currency/Essence/Greed7.png`],
-    ['Fossil', `${base}/Currency/Delve/Reroll.png`],
-    ['Resonator', `${base}/Currency/Delve/Resonator1x1.png`],
-    ['Scarab', `${base}/Currency/Scarabs/GildedScarab.png`],
-    ['Oil', `${base}/Currency/Oils/GoldenOil.png`],
-    ['DeliriumOrb', `${base}/Currency/Delirium/DeliriumOrb.png`],
-    ['Incubator', `${base}/Currency/Incubation/Incubation1.png`],
-    ['Artifact', `${base}/Currency/Expedition/CurrencyExpeditionRerollRare.png`],
-    ['Vial', `${base}/Currency/Vials/VialGhost.png`],
-    ['Omen', `${base}/Currency/Omens/OmenAmelioration.png`],
-    ['Tattoo', `${base}/Currency/Tattoos/TattooDexterity.png`],
-    ['AllflameEmber', `${base}/Currency/Kalguur/AllflameEmber.png`],
+    ['DivinationCard', ['Divination/InventoryIcon.png']],
+    ['Currency', ['Currency/InventoryIcon.png', 'Currency/CurrencyRerollRare.png']],
+    ['Fragment', ['Maps/InventoryIcon.png', 'Maps/Vaal01.png']],
+    ['Essence', ['Currency/Essence/InventoryIcon.png', 'Currency/Essence/Greed7.png']],
+    ['Fossil', ['Currency/Delve/InventoryIcon.png', 'Currency/Fossil/InventoryIcon.png']],
+    ['Resonator', ['Currency/Delve/ResonatorInventoryIcon.png', 'Currency/Delve/InventoryIcon.png']],
+    ['Scarab', ['Currency/Scarabs/InventoryIcon.png', 'Currency/Scarab/InventoryIcon.png']],
+    ['Oil', ['Currency/Oils/InventoryIcon.png', 'Currency/Oils/GoldenOil.png']],
+    ['DeliriumOrb', ['Currency/Delirium/InventoryIcon.png']],
+    ['Incubator', ['Currency/Incubation/InventoryIcon.png']],
+    ['Artifact', ['Currency/Expedition/InventoryIcon.png']],
+    ['Vial', ['Currency/Vials/InventoryIcon.png']],
+    ['Omen', ['Currency/Omens/InventoryIcon.png']],
+    ['Tattoo', ['Currency/Tattoos/InventoryIcon.png']],
+    ['AllflameEmber', ['Currency/Kalguur/InventoryIcon.png']],
   ];
 
-  say(`  ${'category'.padEnd(15)} ${'status'.padStart(8)} ${'bytes'.padStart(8)}  path`);
+  say(`  ${'category'.padEnd(15)} ${'status'.padStart(6)} ${'bytes'.padStart(7)}  path`);
 
-  for (const [category, url] of candidates) {
-    const full = `${url}?scale=1&w=1&h=1`;
-    try {
-      const response = await fetch(full, { headers: { 'user-agent': USER_AGENT } });
-      let bytes = '—';
-      if (response.ok) {
-        const buffer = await response.arrayBuffer();
-        bytes = String(buffer.byteLength);
+  for (const [category, paths] of candidates) {
+    for (const path of paths) {
+      const url = `${base}/${path}?scale=1&w=1&h=1`;
+      let line;
+      try {
+        const response = await fetch(url, { headers: { 'user-agent': USER_AGENT } });
+        let bytes = '—';
+        if (response.ok) bytes = String((await response.arrayBuffer()).byteLength);
+        line = `  ${category.padEnd(15)} ${String(response.status).padStart(6)} ${bytes.padStart(7)}  ${path}`;
+      } catch (error) {
+        line = `  ${category.padEnd(15)} ${'failed'.padStart(6)} ${'—'.padStart(7)}  ${error?.cause?.code ?? 'error'}`;
       }
-      say(
-        `  ${category.padEnd(15)} ${String(response.status).padStart(8)} ${bytes.padStart(8)}  ` +
-          url.replace(`${base}/`, ''),
-      );
-    } catch (error) {
-      say(`  ${category.padEnd(15)} ${'failed'.padStart(8)} ${'—'.padStart(8)}  ${error?.cause?.code ?? 'error'}`);
+      say(line);
+      await new Promise((resolve) => setTimeout(resolve, 250));
     }
-    await new Promise((resolve) => setTimeout(resolve, 250));
   }
 
   say('');
-  say('  DivinationCard is the control: it is already in the app and known to work, so a failure');
-  say('  on that line means this probe is wrong rather than the path. Everything else is a guess');
-  say('  at GGG\'s naming convention, and a 404 simply means that guess was wrong.');
+  say('  DivinationCard is the control: it is in the app already and known to work, so a failure');
+  say('  on that line means this probe is wrong rather than the path. A 404 anywhere else just');
+  say('  means that guess at the naming convention was wrong.');
 }
 
 /** Every key anywhere in an object graph, so a field nobody expected still shows up. */
