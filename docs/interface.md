@@ -16,8 +16,11 @@ a row above the page instead.
 
 **Kingsmarch** is your uniques as the disenchanting bench sees them: one row per item level,
 quality and tab, because those are what dust reads and what the dashboard's item table folds
-away. There is no dust column and no price column — the dust numbers have no verified source,
-and poe.ninja serves no unique prices at all any more. See the note at the top of the view.
+away, with the dust each one yields at its own level and quality. Item level dominates: the same
+unique at level 65 gives a twentieth of what it gives at 84. A `≥` marks a figure that is a
+floor — a corrupted item may carry implicits the stash payload does not list, each worth half
+again. There is no dust-per-chaos column yet, because poe.ninja's exchange endpoint serves no
+unique prices at all.
 
 **Dashboard** is everything below — what you own, what it is worth, and what it has been doing.
 

@@ -247,6 +247,16 @@ async function probeItem(firstTabItems, wanted, tabIndex) {
 }
 
 const NINJA = 'https://poe.ninja/poe1/api/economy/exchange/current/overview';
+/**
+ * The other endpoint.
+ *
+ * This app has only ever asked the `exchange` one, which serves currency-like things keyed by
+ * id with no names on the lines. deronek/poe-disenchant-tool reads a different path for unique
+ * prices — `stash/current/item` — and if that one carries names and chaos values, the
+ * "poe.ninja publishes no names any more" conclusion in this repository is true of one endpoint
+ * and false of the other.
+ */
+const NINJA_ITEM = 'https://poe.ninja/poe1/api/economy/stash/current/item/overview';
 
 async function ninja(type) {
   const url = `${NINJA}?league=${encodeURIComponent(LEAGUE)}&type=${encodeURIComponent(type)}`;
@@ -261,6 +271,55 @@ async function ninja(type) {
     // which of its questions it could not ask.
     return { ok: false, status: `unreachable (${error?.cause?.code ?? error?.message ?? 'error'})` };
   }
+}
+
+async function ninjaItem(type) {
+  const url = `${NINJA_ITEM}?type=${encodeURIComponent(type)}&league=${encodeURIComponent(LEAGUE)}`;
+  try {
+    const response = await fetch(url, {
+      headers: { accept: 'application/json', 'user-agent': USER_AGENT },
+    });
+    if (!response.ok) return { ok: false, status: response.status };
+    return { ok: true, body: await response.json() };
+  } catch (error) {
+    return { ok: false, status: `unreachable (${error?.cause?.code ?? error?.message ?? 'error'})` };
+  }
+}
+
+/**
+ * Does the item endpoint serve unique prices, with names on them?
+ *
+ * If it does, the Kingsmarch view gets its dust-per-chaos and this application has been blind to
+ * a whole endpoint. If it does not, that is worth knowing just as definitely.
+ */
+async function probeItemEndpoint() {
+  head('poe.ninja: the OTHER endpoint — stash/current/item');
+  say('  This app has only ever asked the exchange endpoint. This is the one a working');
+  say('  disenchanting tool uses for unique prices.');
+  say('');
+
+  for (const type of ['UniqueArmour', 'UniqueWeapon', 'UniqueAccessory', 'UniqueJewel', 'UniqueFlask']) {
+    const result = await ninjaItem(type);
+    if (!result.ok) {
+      say(`  ${type.padEnd(16)} ${result.status}`);
+      continue;
+    }
+    const lines = Array.isArray(result.body?.lines) ? result.body.lines : [];
+    say(`  ${type.padEnd(16)} ${lines.length} lines`);
+    if (lines.length > 0) {
+      const first = lines[0];
+      say(`    keys: ${Object.keys(first).sort().join(', ')}`);
+      say(`    e.g.: name=${JSON.stringify(first.name)} baseType=${JSON.stringify(first.baseType)} chaos=${first.chaosValue}`);
+      const named = lines.filter((line) => typeof line?.name === 'string' && line.name !== '').length;
+      say(`    lines carrying a name: ${named} of ${lines.length}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 400));
+  }
+
+  say('');
+  say('  What matters here: a `name` and a `chaosValue` on the lines. That is the missing half of');
+  say('  dust per chaos, and it would mean unique prices exist after all — under a path this');
+  say('  application has never asked.');
 }
 
 /** Every key anywhere in an object graph, so a field nobody expected still shows up. */
@@ -404,8 +463,12 @@ if (!onlyNinja) {
   }
 }
 
-if (flag('types')) await probeTypes();
-else if (!onlyLimits) await probeNinja();
+if (flag('items')) await probeItemEndpoint();
+else if (flag('types')) await probeTypes();
+else if (!onlyLimits) {
+  await probeNinja();
+  await probeItemEndpoint();
+}
 
 head('done');
 say('Paste the output above into the conversation. Nothing in it contains your session.');

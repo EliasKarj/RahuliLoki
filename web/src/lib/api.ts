@@ -285,6 +285,19 @@ export interface UniqueRow {
   chaos: number | null;
   /** True when a price was found — and by name only, so a variant may move it. */
   priceIsApproximate: boolean;
+  /**
+   * Thaumaturgic Dust for **one** of these, at this item's level and quality. Null when the
+   * dust table has never heard of the unique — a new one, most likely.
+   */
+  dust: number | null;
+  /** True when the dust figure is a floor: corrupted, or an item level GGG did not send. */
+  dustAtLeast: boolean;
+  /** Gold to disenchant one. Null alongside a null dust. */
+  goldCost: number | null;
+  /** Inventory slots one takes up, for comparing items of different sizes. */
+  slots: number | null;
+  /** Null until unique prices are available from somewhere. */
+  dustPerChaos: number | null;
 }
 
 export interface UniquesResponse {

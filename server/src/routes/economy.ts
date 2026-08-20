@@ -19,6 +19,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { ApiDeps } from './deps.ts';
 import { buildEconomy, namesFromBreakdown } from '../services/economy.ts';
 import { ninjaId } from '../services/ninjaId.ts';
+import { dustFor } from '../services/dust.ts';
 
 export async function economyRoutes(app: FastifyInstance, deps: ApiDeps): Promise<void> {
   app.get('/economy', async (request: FastifyRequest, reply: FastifyReply) => {
@@ -102,12 +103,28 @@ export async function economyRoutes(app: FastifyInstance, deps: ApiDeps): Promis
     const prices = deps.prices.cached?.prices ?? {};
     const rows = stored.holdings.map((holding) => {
       const chaos = prices[ninjaId(holding.name)] ?? null;
+      // Per item, not per row: the row may stand for twelve copies, but the decision at the
+      // bench is about one of them and multiplying is the reader's business.
+      const dust = dustFor(holding.name, {
+        ilvl: holding.ilvl,
+        quality: holding.quality,
+        corrupted: holding.corrupted,
+      });
+
       return {
         ...holding,
         chaos,
         // A corrupted or linked item is where a name-level price stops being a ballpark. The
         // row carries the caveat so the table can mark it rather than quietly averaging it in.
         priceIsApproximate: chaos !== null,
+        dust: dust?.dust ?? null,
+        /** True when the dust figure is a floor: corrupted, or an item level GGG did not send. */
+        dustAtLeast: dust?.atLeast ?? false,
+        goldCost: dust?.goldCost ?? null,
+        slots: dust?.slots ?? null,
+        // Lights up the moment unique prices are available; null until then rather than absent,
+        // so the client has one thing to test instead of two.
+        dustPerChaos: dust !== null && chaos !== null && chaos > 0 ? dust.dust / chaos : null,
       };
     });
 

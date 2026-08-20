@@ -111,10 +111,23 @@ change without one.
 > overwritten each time. The question is "what is in my stash now", and there is no version of it
 > that also wants Tuesday's answer.
 
-> **▸ Why there is no dust column:** dust scales with item level and quality, and this project
-> has no verified source for the actual numbers. A decision tool full of half-remembered
-> constants is worse than one that says what it does not know, so the fields a formula needs are
-> captured and named and the column is absent until there is something to base it on.
+> **▸ Where the dust numbers come from:** a table of 1,103 uniques published by
+> [deronek/poe-disenchant-tool](https://github.com/deronek/poe-disenchant-tool) under the MIT
+> licence, vendored in `server/src/data` with the notice. It gives two figures per unique — item
+> level 84 at no quality, and at 20% — and the formula is derived from the pair rather than
+> assumed: the ratio between them is `(F + 40) / F`, which solves for the inherent influence and
+> corruption multiplier the item already carries. Across the table that yields exactly four
+> values, 100, 150, 200 and 400, which is one influence, two, and six units of influence or
+> corruption. An item whose published dust is already boosted is therefore not boosted twice.
+>
+> The check is the test, not the paragraph: every row goes back through the formula and both
+> published columns have to come out again.
+
+> **▸ Why dust-per-chaos is still missing:** the chaos half is. poe.ninja's exchange endpoint
+> serves no unique prices — every unique type answers with zero lines. `probe.mjs --items` asks
+> the *other* endpoint, `stash/current/item`, which a working disenchanting tool uses and which
+> may carry names and chaos values that the exchange endpoint does not. That is the open
+> question; the column appears the moment any row has a price.
 
 > **▸ Why the price on that view is by name, and why it stops there:** poe.ninja's payload
 > carries no links and no corruption, so a six-linked Bronn's Lithe and a plain one are one line
@@ -190,6 +203,7 @@ node scripts/probe.mjs                    # everything, gently
 node scripts/probe.mjs --limits           # GGG's rate-limit policy, from one request
 node scripts/probe.mjs --ninja            # poe.ninja: any dust field, and the unique overviews
 node scripts/probe.mjs --types            # which poe.ninja type= values return anything at all
+node scripts/probe.mjs --items            # whether the OTHER poe.ninja endpoint serves uniques
 node scripts/probe.mjs --time-poll        # read every tab and time it (spends real budget)
 node scripts/probe.mjs --item Goldrim     # one unique's raw fields, to see what GGG really sends
 ```
@@ -252,7 +266,7 @@ unvalidated symlink path traversal during extraction. There **is no fixed versio
 pnpm test
 ```
 
-**616 tests**, not one network request:
+**630 tests**, not one network request:
 
 - **The rate limiter** — header parsing, pacing, serialisation, `Retry-After`, doubling up to the
   ceiling. The clock and sleep are faked, so testing a 30-minute backoff takes microseconds. One
@@ -290,6 +304,12 @@ pnpm test
   oldest-first with the divine rate of each moment, that a set which did not price the item is a
   gap rather than a zero, that the limit keeps the recent end, and that an id cannot smuggle
   anything into the JSON path it is interpolated into.
+- **The dust formula** — every one of the 1,103 rows of the published table is run back through
+  it and both published columns have to come out again. 1,102 reproduce exactly; the last is
+  asserted to be one dust short, because that is a rounding artefact in the source and hiding it
+  would let a real regression hide behind it. Also: that an already-influenced item is not
+  boosted twice, that an item level nobody sent is treated as the floor rather than the ceiling,
+  and that a unique the table has never heard of gets null rather than an estimate.
 - **Uniques for the bench** — that quality is parsed out of a rendered tooltip string rather
   than trusted, that an item level GGG did not send stays null instead of becoming zero, that
   copies differing in anything dust reads stay separate rows, and that the same unique in two
@@ -310,6 +330,7 @@ pnpm test
   /src
     /services   priceService (fetching and caching), ninjaPayload (reading what comes back),
                 economy (naming every priced id), kingsmarch (uniques as the bench sees them),
+                dust (what an item yields at the disenchanting bench),
                 stashService, valuationService, uniques, snapshotRepo, leagueService,
                 profileService, updateService
     /routes     snapshots, health, config, economy
@@ -318,6 +339,7 @@ pnpm test
     app.ts      assembling Fastify (testable without a listening port)
     server.ts   assembling the server as a function (the desktop build embeds the same one)
     index.ts    the command-line wrapper: startup and a clean shutdown
+  /data         dust.json + NOTICE.md (third-party, MIT — see the notice)
   /prisma       schema.prisma + migrations
   /tools        seed.ts
 /desktop

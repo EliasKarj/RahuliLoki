@@ -23,7 +23,7 @@ import { looseIncludes } from '../lib/search.ts';
 import { Empty } from './ui.tsx';
 import { ItemIcon } from './ItemIcon.tsx';
 
-type SortKey = 'name' | 'count' | 'ilvl' | 'quality' | 'chaos';
+type SortKey = 'name' | 'count' | 'ilvl' | 'quality' | 'chaos' | 'dust' | 'dustPerChaos';
 
 export function matchesUnique(row: UniqueRow, query: string): boolean {
   return looseIncludes(`${row.name} ${row.baseType} ${row.tab}`, query);
@@ -33,7 +33,7 @@ export function Kingsmarch({ league }: { league: string | undefined }) {
   const [data, setData] = useState<UniquesResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
-  const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: 'count', desc: true });
+  const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: 'dust', desc: true });
   const prices = usePrices();
 
   useEffect(() => {
@@ -58,8 +58,8 @@ export function Kingsmarch({ league }: { league: string | undefined }) {
     const sign = sort.desc ? -1 : 1;
     return [...filtered].sort((a, b) => {
       if (sort.key === 'name') return sign * a.name.localeCompare(b.name);
-      const left = sort.key === 'chaos' ? a.chaos : sort.key === 'ilvl' ? a.ilvl : a[sort.key];
-      const right = sort.key === 'chaos' ? b.chaos : sort.key === 'ilvl' ? b.ilvl : b[sort.key];
+      const left = a[sort.key];
+      const right = b[sort.key];
       // A row with nothing to sort by goes to the far end whichever way the column points,
       // rather than mixing in among the rows that do have a value.
       if (left === null && right === null) return 0;
@@ -99,6 +99,8 @@ export function Kingsmarch({ league }: { league: string | undefined }) {
    * page has been cleared of twice.
    */
   const anyPriced = all.some((row) => row.chaos !== null);
+  /** False only if the dust table knows none of these — a stash of brand new uniques. */
+  const anyDust = all.some((row) => row.dust !== null);
 
   const toggle = (key: SortKey) =>
     setSort((current) =>
@@ -128,13 +130,15 @@ export function Kingsmarch({ league }: { league: string | undefined }) {
       {/* Stated once, at the top, rather than as a footnote nobody reads. The dust column is the
           point of this view and it is missing; saying why is the least it can do. */}
       <p className="max-w-3xl rounded border border-ink-800 bg-ink-900/40 px-3 py-2 text-xs text-ink-400">
-        No dust column, and no prices. Dust scales with item level and quality — both are here —
-        but this app has no verified source for the numbers themselves, and a bench decision made
-        from a guessed formula is worse than one made by hand. Prices are missing for a plainer
-        reason:{' '}
-        <strong className="font-medium text-ink-300">poe.ninja serves no unique prices at all</strong>{' '}
-        any more. Every unique category it offers answers with an empty list, so there is nothing
-        to look up and nothing to rank a dust-per-chaos by.
+        Dust is for <strong className="font-medium text-ink-300">one</strong> of the item, at its
+        own level and quality. Item level dominates it: the same unique at level 65 yields a
+        twentieth of what it does at 84, and below 65 it stops falling.{' '}
+        <span className="text-ink-500">
+          A ≥ means the figure is a floor — a corrupted item may carry implicits the stash payload
+          does not list, and each is worth half again.
+        </span>{' '}
+        There is no dust-per-chaos yet because poe.ninja's exchange endpoint serves no unique
+        prices at all.
       </p>
 
       <div className="max-h-[min(70vh,56rem)] max-w-6xl overflow-auto">
@@ -162,10 +166,24 @@ export function Kingsmarch({ league }: { league: string | undefined }) {
                   Quality{arrow('quality')}
                 </button>
               </th>
+              {anyDust ? (
+                <th scope="col" className="py-2 text-right font-medium">
+                  <button type="button" onClick={() => toggle('dust')} className="transition-colors hover:text-ink-200">
+                    Dust{arrow('dust')}
+                  </button>
+                </th>
+              ) : null}
               {anyPriced ? (
                 <th scope="col" className="py-2 text-right font-medium">
                   <button type="button" onClick={() => toggle('chaos')} className="transition-colors hover:text-ink-200">
                     Each{arrow('chaos')}
+                  </button>
+                </th>
+              ) : null}
+              {anyPriced ? (
+                <th scope="col" className="py-2 text-right font-medium">
+                  <button type="button" onClick={() => toggle('dustPerChaos')} className="transition-colors hover:text-ink-200">
+                    Dust/chaos{arrow('dustPerChaos')}
                   </button>
                 </th>
               ) : null}
@@ -200,9 +218,26 @@ export function Kingsmarch({ league }: { league: string | undefined }) {
                 <td className="num py-2 pr-3 text-ink-400">
                   {row.quality === 0 ? '' : `${row.quality}%`}
                 </td>
+                {anyDust ? (
+                  <td
+                    className="num py-2 pr-3 text-accent-500"
+                    title={
+                      row.goldCost === null
+                        ? undefined
+                        : `${formatCount(row.goldCost)} gold to disenchant, ${row.slots ?? '?'} slots`
+                    }
+                  >
+                    {row.dust === null ? '' : `${row.dustAtLeast ? '≥' : ''}${formatCount(row.dust)}`}
+                  </td>
+                ) : null}
+                {anyPriced ? (
+                  <td className="num py-2 pr-3 text-ink-200">
+                    {row.chaos === null ? '' : prices.price(row.chaos)}
+                  </td>
+                ) : null}
                 {anyPriced ? (
                   <td className="num py-2 text-accent-500">
-                    {row.chaos === null ? '' : prices.price(row.chaos)}
+                    {row.dustPerChaos === null ? '' : formatCount(Math.round(row.dustPerChaos))}
                   </td>
                 ) : null}
               </tr>
