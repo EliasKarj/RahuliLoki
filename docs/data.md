@@ -181,6 +181,17 @@ every unique at nothing and writes a collapse into the history that never happen
 > So for most categories the only name is the id read backwards, punctuation and all, and the
 > only artwork is what your own stash supplies for the items you actually hold. That is a real
 > gap, not a resolved question.
+>
+> What partly covers it is that GGG's CDN serves its generic inventory art **by path** rather than
+> by hash — `web.poecdn.com/image/Art/2DItems/Divination/InventoryIcon.png` is the divination card
+> back, and poe.ninja uses that same image. A path can be written down where a hash cannot, so the
+> economy list falls back to one picture per category, drawn dimmed because it identifies the kind
+> and not the item. It lives in `web/src/lib/categoryIcon.ts` as a display fallback and is never
+> written into the icons map: stored, it would be indistinguishable from real artwork everywhere
+> downstream, including in the database, where it would outlive whatever that file says today.
+>
+> One category is in it, because one has been confirmed against the live CDN. `probe.mjs --art`
+> asks which other candidate paths resolve; entries earn their place by appearing in that output.
 
 > **▸ Why there are two kinds of id and what follows from it:** newer items use a slug derived from
 > the name (`accelerating-catalyst`, `awakeners-orb`), but older currency uses trade-site

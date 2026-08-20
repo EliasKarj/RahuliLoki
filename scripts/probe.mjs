@@ -23,6 +23,7 @@
  *   node scripts/probe.mjs --ninja         just poe.ninja: dust fields, unique prices
  *   node scripts/probe.mjs --names         which categories carry names and icons
  *   node scripts/probe.mjs --dump TYPE    one category's whole payload, and other URL shapes
+ *   node scripts/probe.mjs --art          which generic category art GGG's CDN serves
  *   node scripts/probe.mjs --time-poll     read every tab and time it (costs a poll's budget)
  *   node scripts/probe.mjs --item Goldrim  dump one unique's raw fields
  *   node scripts/probe.mjs --item Goldrim --tab 3   look in tab 3 instead of the first
@@ -503,6 +504,71 @@ async function probeDump(type) {
   say('  the categories this endpoint really has. Everything else is another dead end recorded.');
 }
 
+/**
+ * Which generic inventory-art paths GGG's CDN actually serves.
+ *
+ * poe.ninja's payload has no per-item artwork and no other source has been found, so the economy
+ * list falls back to one picture per category. GGG serves this art by path rather than by hash,
+ * which is the only reason a URL for it can be written down at all — but the paths are a naming
+ * convention, not a documented API, and three previous rounds of reasoning about where poe.ninja
+ * keeps things have been wrong.
+ *
+ * So this asks the CDN instead of guessing. Every candidate that comes back 200 with an image
+ * can go in web/src/lib/categoryIcon.ts; every one that does not, cannot.
+ */
+async function probeArt() {
+  head("GGG's CDN: which generic category art exists");
+  say('  The economy list has no per-item artwork for most categories. These are the candidate');
+  say('  paths for one picture per category. Only the ones that answer 200 are usable.');
+  say('');
+
+  const base = 'https://web.poecdn.com/image/Art/2DItems';
+  // The first is confirmed and is here as a control: if it fails, the probe is wrong, not the CDN.
+  const candidates = [
+    ['DivinationCard', `${base}/Divination/InventoryIcon.png`],
+    ['Currency', `${base}/Currency/CurrencyRerollRare.png`],
+    ['Fragment', `${base}/Maps/Vaal01.png`],
+    ['Essence', `${base}/Currency/Essence/Greed7.png`],
+    ['Fossil', `${base}/Currency/Delve/Reroll.png`],
+    ['Resonator', `${base}/Currency/Delve/Resonator1x1.png`],
+    ['Scarab', `${base}/Currency/Scarabs/GildedScarab.png`],
+    ['Oil', `${base}/Currency/Oils/GoldenOil.png`],
+    ['DeliriumOrb', `${base}/Currency/Delirium/DeliriumOrb.png`],
+    ['Incubator', `${base}/Currency/Incubation/Incubation1.png`],
+    ['Artifact', `${base}/Currency/Expedition/CurrencyExpeditionRerollRare.png`],
+    ['Vial', `${base}/Currency/Vials/VialGhost.png`],
+    ['Omen', `${base}/Currency/Omens/OmenAmelioration.png`],
+    ['Tattoo', `${base}/Currency/Tattoos/TattooDexterity.png`],
+    ['AllflameEmber', `${base}/Currency/Kalguur/AllflameEmber.png`],
+  ];
+
+  say(`  ${'category'.padEnd(15)} ${'status'.padStart(8)} ${'bytes'.padStart(8)}  path`);
+
+  for (const [category, url] of candidates) {
+    const full = `${url}?scale=1&w=1&h=1`;
+    try {
+      const response = await fetch(full, { headers: { 'user-agent': USER_AGENT } });
+      let bytes = '—';
+      if (response.ok) {
+        const buffer = await response.arrayBuffer();
+        bytes = String(buffer.byteLength);
+      }
+      say(
+        `  ${category.padEnd(15)} ${String(response.status).padStart(8)} ${bytes.padStart(8)}  ` +
+          url.replace(`${base}/`, ''),
+      );
+    } catch (error) {
+      say(`  ${category.padEnd(15)} ${'failed'.padStart(8)} ${'—'.padStart(8)}  ${error?.cause?.code ?? 'error'}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+
+  say('');
+  say('  DivinationCard is the control: it is already in the app and known to work, so a failure');
+  say('  on that line means this probe is wrong rather than the path. Everything else is a guess');
+  say('  at GGG\'s naming convention, and a 404 simply means that guess was wrong.');
+}
+
 /** Every key anywhere in an object graph, so a field nobody expected still shows up. */
 function allKeys(node, into = new Set(), depth = 0) {
   if (depth > 6 || node === null || typeof node !== 'object') return into;
@@ -645,7 +711,8 @@ if (!onlyNinja) {
 }
 
 const dumpType = value('dump');
-if (dumpType) await probeDump(dumpType);
+if (flag('art')) await probeArt();
+else if (dumpType) await probeDump(dumpType);
 else if (flag('items')) await probeItemEndpoint();
 else if (flag('names')) await probeItemNames();
 else if (flag('types')) await probeTypes();

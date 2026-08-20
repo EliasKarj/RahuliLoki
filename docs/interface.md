@@ -49,6 +49,11 @@ allows, two days at the default, and further if you raise it.
 An empty change cell means poe.ninja published no movement for that row. It does not mean the
 price held still.
 
+Rows with no artwork of their own show their **category's** picture instead, dimmed — GGG's
+generic inventory art, the same card back poe.ninja itself uses for divination cards. It says what
+kind of thing the row is, not which thing, and the dimming is what keeps those two apart. Only
+divination cards have one so far; `probe.mjs --art` is how the rest get confirmed.
+
 A `?` after a name means the name was read back from poe.ninja's id rather than known, and a slug
 has lost its apostrophes. Most rows no longer carry one: poe.ninja's item endpoint publishes its
 own spelling for the categories it covers, and that name is both what the row is labelled with and

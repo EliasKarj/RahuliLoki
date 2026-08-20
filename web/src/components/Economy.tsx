@@ -17,6 +17,7 @@ import { categoryLabel, formatAgo } from '../lib/format.ts';
 import { looseIncludes } from '../lib/search.ts';
 import { Empty } from './ui.tsx';
 import { ItemIcon } from './ItemIcon.tsx';
+import { categoryIcon } from '../lib/categoryIcon.ts';
 import { PriceHistory } from './PriceHistory.tsx';
 import { sparklinePath } from '../lib/spark.ts';
 
@@ -185,7 +186,7 @@ export function Economy({ league }: { league: string | undefined }) {
               <tr key={row.id} className="border-b border-ink-850 last:border-0">
                 <td className="py-2 pr-3 text-ink-100">
                   <span className="flex items-center gap-2">
-                    <ItemIcon src={row.icon ?? undefined} />
+                    <ItemIcon src={row.icon ?? undefined} fallback={categoryIcon(row.category)} />
                     <button
                       type="button"
                       onClick={() => setOpen({ id: row.id, name: row.name })}

@@ -9,22 +9,38 @@
  * `alt=""` and `aria-hidden` because the name is already right there in the same cell. An alt
  * text here would make a screen reader announce every item twice.
  */
-export function ItemIcon({ src, size = 5 }: { src?: string | undefined; size?: 5 | 6 }) {
+export function ItemIcon({
+  src,
+  fallback,
+  size = 5,
+}: {
+  src?: string | undefined;
+  /**
+   * Stand-in art for the whole category, used only when the item has none of its own.
+   *
+   * Dimmed, because it is a category marker rather than this item's picture and should not read
+   * as one. See lib/categoryIcon.ts for where these come from and why they are not stored.
+   */
+  fallback?: string | undefined;
+  size?: 5 | 6;
+}) {
   const box = size === 6 ? 'h-6 w-6' : 'h-5 w-5';
   const image = size === 6 ? 'max-h-6 max-w-6' : 'max-h-5 max-w-5';
+  const shown = src ?? fallback;
+  const isFallback = src === undefined && fallback !== undefined;
 
   return (
     <span className={`flex ${box} shrink-0 items-center justify-center`}>
-      {src ? (
+      {shown ? (
         <img
-          src={src}
+          src={shown}
           alt=""
           aria-hidden="true"
           loading="lazy"
           decoding="async"
           // The CDN has no business knowing which dashboard page linked it.
           referrerPolicy="no-referrer"
-          className={image}
+          className={isFallback ? `${image} opacity-40` : image}
         />
       ) : null}
     </span>
