@@ -112,7 +112,22 @@ export function fromGameCdn(url: string): boolean {
   }
 }
 
-export class PriceFetchError extends Error {}
+export class PriceFetchError extends Error {
+  /**
+   * The HTTP status, when there was one.
+   *
+   * Carried because the caller has to tell two failures apart. A 404 means poe.ninja does not
+   * serve this category at all and never will on this URL — asking again every hour is waste.
+   * A 503 or a dropped connection means it could not answer right now, and giving up on it
+   * permanently would turn a blip into a missing feature until the next restart.
+   */
+  readonly status: number | undefined;
+
+  constructor(message: string, status?: number) {
+    super(message);
+    this.status = status;
+  }
+}
 
 export const DEFAULT_NINJA_URL = 'https://poe.ninja/poe1/api/economy/exchange/current';
 

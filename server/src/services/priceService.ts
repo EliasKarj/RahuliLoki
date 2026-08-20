@@ -46,6 +46,22 @@ import {
 } from './ninjaPayload.ts';
 import { mergeUniqueOverview, uniqueKey, type UniqueIndex } from './uniques.ts';
 
+/**
+ * The ordinary categories the item endpoint will actually answer about, recorded by
+ * `scripts/probe.mjs --names` against Allflame.
+ *
+ * One of them. The endpoint that serves 2,223 uniques answers **404** for DivinationCard,
+ * Essence, Fossil, Resonator, Scarab, Oil, DeliriumOrb, Artifact, Omen, Tattoo and AllflameEmber,
+ * and 200 with no lines for Incubator, Currency and Fragment. Only Vial returns anything: nine
+ * lines, all named, all with artwork.
+ *
+ * This list shipped for one commit as "every category the app prices", on the reasoning that an
+ * endpoint serving uniques would serve the rest. It does not, and the guess cost fourteen
+ * pointless requests an hour. The runtime still skips a category that 404s or comes back empty,
+ * so widening this is safe to try — but the reason to widen it should be a probe run.
+ */
+export const DEFAULT_NAMED_ITEM_CATEGORIES = ['Vial'] as const;
+
 export interface PriceSet {
   league: string;
   fetchedAt: Date;
@@ -153,6 +169,11 @@ export interface PriceServiceOptions {
   baseUrl?: string;
   /** poe.ninja's item endpoint. Separate from `baseUrl`; it is a different service shape. */
   itemBaseUrl?: string;
+  /**
+   * Categories to read names and artwork for from the item endpoint. Defaults to the recorded
+   * list; an empty array turns it off, which is what the tests that are not about it pass.
+   */
+  namedItemCategories?: readonly string[];
   /** Ceiling on one overview request. Without it a hung poe.ninja never releases the poll. */
   timeoutMs?: number;
   maxBytes?: number;
@@ -355,22 +376,19 @@ export class PriceService {
     // name then misses too. That is most of the blank artwork and most of the "name is a guess"
     // markers in that view. The item endpoint still carries both fields.
     //
-    // Currency is asked about too, and on no evidence: the most visibly unillustrated rows in
-    // that view are currency, and nothing here has recorded whether this endpoint serves them.
-    // Asking is cheap precisely because of the skip below — a category that answers with
-    // nothing is never asked again — so the cost of being wrong is one request, once.
+    // The list is short because it is recorded rather than assumed — see
+    // DEFAULT_NAMED_ITEM_CATEGORIES. An earlier version asked for every category the app prices,
+    // on the reasoning that the endpoint serving uniques would serve the rest. Eleven of the
+    // thirteen answer 404.
     //
     // Failure here is survivable and stays local: a category that cannot be read loses its
     // names, not its prices, which came from the other endpoint and are already in hand.
-    for (const type of [...currencyCategories, ...itemCategories]) {
+    for (const type of this.#options.namedItemCategories ?? DEFAULT_NAMED_ITEM_CATEGORIES) {
       if (this.#namelessTypes.has(type)) continue;
       try {
         const lines = itemOverviewNames(await this.#getItemJson(league, type));
         if (lines.length === 0) {
-          // Asked once, answered with nothing, not asked again while this process lives. The
-          // set of categories this endpoint serves is not documented anywhere and was found by
-          // probing, so being wrong about one should cost a single request rather than one an
-          // hour forever.
+          // Asked once, answered with nothing, not asked again while this process lives.
           this.#namelessTypes.add(type);
           this.#log.info({ type }, 'item endpoint serves no names for this category; not asking again');
           continue;
@@ -383,7 +401,16 @@ export class PriceService {
         }
         this.#log.debug({ type, lines: lines.length }, 'merged item names and icons');
       } catch (error) {
-        this.#log.warn({ type, err: error }, 'could not read item names; continuing without them');
+        // A 404 is poe.ninja saying it does not serve this category here, and that will not have
+        // changed by the next poll. Anything else — a 503, a dropped connection — is a bad
+        // moment, and dropping the category over one would turn a blip into a feature that stays
+        // missing until somebody restarts the program.
+        if (error instanceof PriceFetchError && error.status === 404) {
+          this.#namelessTypes.add(type);
+          this.#log.info({ type }, 'item endpoint has no such category; not asking again');
+        } else {
+          this.#log.warn({ type, err: error }, 'could not read item names; continuing without them');
+        }
       }
     }
 
@@ -440,7 +467,9 @@ export class PriceService {
       },
       signal: timeoutSignal(this.#options.timeoutMs ?? 30_000),
     });
-    if (!response.ok) throw new PriceFetchError(`poe.ninja ${type} returned HTTP ${response.status}`);
+    if (!response.ok) {
+      throw new PriceFetchError(`poe.ninja ${type} returned HTTP ${response.status}`, response.status);
+    }
     return readJsonCapped(response, this.#options.maxBytes, `poe.ninja ${type}`);
   }
 

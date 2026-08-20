@@ -338,9 +338,13 @@ async function probeItemEndpoint() {
  * exchange endpoint priced. A name that does not round-trip is a name the app cannot use.
  */
 async function probeItemNames() {
-  head('poe.ninja: names and icons for the ordinary categories');
-  say('  The economy list is missing artwork because it has no names to look artwork up by.');
-  say('  This asks whether the item endpoint has them.');
+  head('poe.ninja: where can names and icons come from?');
+  say('  The economy list shows a row per poe.ninja id. The endpoint that prices those ids sends');
+  say('  no names, so a row is labelled by reading its id backwards and its artwork, which is');
+  say('  filed under the name, is then not found. This asks both endpoints where names live.');
+  say('');
+  say('  core.items  — rides along on the price response the app already fetches. Free.');
+  say('  item lines  — the separate stash/current/item endpoint. One request per category.');
   say('');
 
   const types = [
@@ -349,32 +353,66 @@ async function probeItemNames() {
     'Currency', 'Fragment',
   ];
 
-  say(`  asking about ${types.length} types; this takes about half a minute`);
+  say(`  asking about ${types.length} types on two endpoints; this takes about a minute`);
   say('');
-  say(`  ${'type'.padEnd(15)} ${'lines'.padStart(6)} ${'named'.padStart(6)} ${'icons'.padStart(6)}  example`);
+  say(
+    `  ${'type'.padEnd(15)} ${'priced'.padStart(6)} ${'core'.padStart(6)} ${'core+img'.padStart(8)}` +
+      `  ${'item'.padStart(10)} ${'named'.padStart(6)} ${'icons'.padStart(6)}  example`,
+  );
 
   for (const type of types) {
-    const result = await ninjaItem(type);
-    if (!result.ok) {
-      say(`  ${type.padEnd(15)} ${String(result.status).padStart(6)}`);
-      await new Promise((resolve) => setTimeout(resolve, 400));
-      continue;
+    // The priced endpoint first: this is the response the app already pays for every hour.
+    const priced = await ninja(type);
+    let pricedLines = '—';
+    let core = '—';
+    let coreImg = '—';
+    let example = '';
+    if (priced.ok) {
+      const lines = Array.isArray(priced.body?.lines) ? priced.body.lines : [];
+      const items = Array.isArray(priced.body?.core?.items) ? priced.body.core.items : [];
+      const named = items.filter((item) => typeof item?.name === 'string' && item.name !== '');
+      pricedLines = String(lines.length);
+      core = String(named.length);
+      coreImg = String(named.filter((item) => typeof item?.image === 'string' && item.image !== '').length);
+      if (named[0]?.name !== undefined) example = JSON.stringify(named[0].name);
+    } else {
+      pricedLines = `HTTP ${priced.status}`;
     }
-    const lines = Array.isArray(result.body?.lines) ? result.body.lines : [];
-    const named = lines.filter((line) => typeof line?.name === 'string' && line.name !== '');
-    const icons = named.filter((line) => typeof line?.icon === 'string' && line.icon !== '');
-    const example = named[0]?.name === undefined ? '' : JSON.stringify(named[0].name);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+
+    // Then the item endpoint, which is where the uniques come from.
+    const item = await ninjaItem(type);
+    let itemLines = '—';
+    let itemNamed = '—';
+    let itemIcons = '—';
+    if (item.ok) {
+      const lines = Array.isArray(item.body?.lines) ? item.body.lines : [];
+      const named = lines.filter((line) => typeof line?.name === 'string' && line.name !== '');
+      itemLines = String(lines.length);
+      itemNamed = String(named.length);
+      itemIcons = String(named.filter((line) => typeof line?.icon === 'string' && line.icon !== '').length);
+      if (example === '' && named[0]?.name !== undefined) example = JSON.stringify(named[0].name);
+    } else {
+      // Printed as a status, not as a count. An earlier version of this put "404" in the lines
+      // column, which reads as four hundred and four lines and is how a run of this got read
+      // exactly backwards.
+      itemLines = `HTTP ${item.status}`;
+    }
+
     say(
-      `  ${type.padEnd(15)} ${String(lines.length).padStart(6)} ${String(named.length).padStart(6)} ` +
-        `${String(icons.length).padStart(6)}  ${example}`,
+      `  ${type.padEnd(15)} ${pricedLines.padStart(6)} ${core.padStart(6)} ${coreImg.padStart(8)}` +
+        `  ${itemLines.padStart(10)} ${itemNamed.padStart(6)} ${itemIcons.padStart(6)}  ${example}`,
     );
     await new Promise((resolve) => setTimeout(resolve, 400));
   }
 
   say('');
-  say('  What matters: a non-zero "named" column for a type means the economy list can label and');
-  say('  illustrate that category properly. Currency and Fragment are in the list because they are');
-  say('  the ones on screen with no artwork, and nobody here knows whether this endpoint has them.');
+  say('  What matters, in order:');
+  say('   1. A non-zero "core" column would mean the names are already in a response the app');
+  say('      fetches anyway, and the whole problem costs nothing to fix.');
+  say('   2. Failing that, a non-zero "named" column means one extra request per category buys');
+  say('      that category its labels and artwork.');
+  say('   3. A type where both are zero has no name source anywhere yet found.');
 }
 
 /** Every key anywhere in an object graph, so a field nobody expected still shows up. */

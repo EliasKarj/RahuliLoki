@@ -170,12 +170,26 @@ change without one.
 > name, so a row labelled "Hinekoras Lock" looked for artwork under that spelling and found none;
 > with poe.ninja's own "Hinekora's Lock" the lookup lands. One apostrophe was the whole of it.
 
-> **▸ Why a category that answers with nothing is not asked twice:** which `type=` values the
-> item endpoint serves is documented nowhere and was established by probing. Rather than pin the
-> list to a guess, the service asks for everything it prices — currency included, on no evidence
-> at all — and remembers, in memory for the life of the process, which categories came back
-> empty. Being wrong then costs one request rather than one an hour, and a restart re-asks, which
-> is right because the answer is a fact about poe.ninja rather than about this database.
+> **▸ Which categories the item endpoint actually serves:** one of the thirteen, and this was
+> got wrong once already. The reasoning was that an endpoint serving 2,223 uniques would serve
+> ordinary items too. `probe.mjs --names` against Allflame says otherwise:
+>
+> | answer | categories |
+> |--------|-----------|
+> | HTTP 404 | DivinationCard, Essence, Fossil, Resonator, Scarab, Oil, DeliriumOrb, Artifact, Omen, Tattoo, AllflameEmber |
+> | 200, no lines | Incubator, Currency, Fragment |
+> | 200, with lines | Vial — 9 lines, all named, all with artwork |
+>
+> So `DEFAULT_NAMED_ITEM_CATEGORIES` is `['Vial']`, recorded rather than assumed, and the guess
+> that preceded it cost fourteen pointless requests an hour.
+>
+> The runtime still guards both failures, because the list is a snapshot of someone else's
+> service. A category that answers with no lines is not asked again; a category that answers 404
+> is not asked again either — and that second half is the part that was missing. A 404 threw past
+> the empty-reply skip, so the eleven that 404 were re-requested on every poll. A 503 or a
+> dropped connection is deliberately *not* treated this way: that is a bad minute, not a missing
+> category, and giving up on it would lose the names until the next restart. Both directions have
+> a test.
 
 > **▸ Why the update check hangs off the health endpoint:** the dashboard already reads it every
 > minute, and the answer changes about once a month. Its own endpoint would be a second poll for

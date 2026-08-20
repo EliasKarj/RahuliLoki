@@ -85,12 +85,15 @@ function service(options: {
   maxBytes?: number;
   /** Off by default: these tests are about the exchange endpoint, and it is a separate service. */
   uniqueCategories?: string[];
+  /** Off by default for the same reason. The name tests below opt in. */
+  namedItemCategories?: readonly string[];
 } = {}) {
   return new PriceService({
     league: 'Allflame',
     currencyCategories: ['Currency', 'Fragment'],
     itemCategories: ['DivinationCard', 'Scarab'],
     uniqueCategories: options.uniqueCategories ?? [],
+    namedItemCategories: options.namedItemCategories ?? [],
     ttlMs: options.ttlMs ?? 3_600_000,
     store: options.store ?? memoryStore().store,
     fetchFn: options.fetchFn ?? fixtureFetch(),
@@ -771,6 +774,9 @@ describe('PriceService and the item endpoint', () => {
  */
 describe('PriceService and item names', () => {
   /** Exchange fixtures as usual; the item endpoint answers with whatever is handed in. */
+  /** The categories these tests pretend the endpoint serves. */
+  const named = ['DivinationCard', 'Scarab'];
+
   function withItemNames(byType: Record<string, unknown>): typeof fetch {
     const exchange = fixtureFetch();
     return vi.fn((async (url: string, init?: RequestInit) => {
@@ -797,7 +803,7 @@ describe('PriceService and item names', () => {
   };
 
   it('files the name under the id the price came under', async () => {
-    const set = await service({ fetchFn: withItemNames({ DivinationCard: cards }) }).getPrices();
+    const set = await service({ fetchFn: withItemNames({ DivinationCard: cards }), namedItemCategories: named }).getPrices();
 
     // The join that makes the whole thing work: poe.ninja's name, run through the same slug
     // rule the prices are keyed by, lands on the id the exchange endpoint used.
@@ -806,7 +812,7 @@ describe('PriceService and item names', () => {
   });
 
   it('files the artwork under that same name, which is where the views look for it', async () => {
-    const set = await service({ fetchFn: withItemNames({ DivinationCard: cards }) }).getPrices();
+    const set = await service({ fetchFn: withItemNames({ DivinationCard: cards }), namedItemCategories: named }).getPrices();
 
     expect(set.icons["Hinekora's Lock"]).toBe('https://web.poecdn.com/hinekora.png');
   });
@@ -815,7 +821,7 @@ describe('PriceService and item names', () => {
     const hostile = {
       lines: [{ name: 'Nice Try', icon: 'https://example.invalid/tracker.png' }],
     };
-    const set = await service({ fetchFn: withItemNames({ DivinationCard: hostile }) }).getPrices();
+    const set = await service({ fetchFn: withItemNames({ DivinationCard: hostile }), namedItemCategories: named }).getPrices();
 
     // The name is fine to keep — it is only ever text. The URL is the thing that would end up
     // in an <img src>, and this one is not from poecdn or poe.ninja.
@@ -828,7 +834,7 @@ describe('PriceService and item names', () => {
     // Being wrong about one should cost a single request, not one an hour for as long as the
     // program runs.
     const fetchFn = withItemNames({ DivinationCard: cards });
-    const subject = service({ fetchFn, ttlMs: 0 });
+    const subject = service({ fetchFn, ttlMs: 0, namedItemCategories: named });
 
     await subject.getPrices();
     await subject.getPrices();
@@ -839,6 +845,43 @@ describe('PriceService and item names', () => {
     expect(itemTypeCalls(fetchFn, 'DivinationCard')).toBe(2);
   });
 
+  it('stops asking a category the endpoint has never heard of', async () => {
+    // The failure that actually happens, and the one this originally got wrong. Eleven of the
+    // thirteen categories the app prices answer 404 here. A 404 threw straight past the "asked
+    // once, answered with nothing" skip, which only covered a successful reply with no lines —
+    // so those eleven were re-requested on every poll, for as long as the program ran.
+    const exchange = fixtureFetch();
+    const fetchFn = vi.fn((async (url: string, init?: RequestInit) => {
+      if (String(url).includes('/stash/current/item/')) return new Response('nope', { status: 404 });
+      return (exchange as unknown as (u: string, i?: RequestInit) => Promise<Response>)(url, init);
+    }) as unknown as typeof fetch);
+    const subject = service({ fetchFn, ttlMs: 0, namedItemCategories: named });
+
+    await subject.getPrices();
+    await subject.getPrices();
+    await subject.getPrices();
+
+    expect(itemTypeCalls(fetchFn, 'DivinationCard')).toBe(1);
+    expect(itemTypeCalls(fetchFn, 'Scarab')).toBe(1);
+  });
+
+  it('keeps asking after a failure that is only a bad moment', async () => {
+    // The other half, and the reason this is not simply "give up on any error". A 503 is
+    // poe.ninja having a minute, not poe.ninja saying the category does not exist, and treating
+    // the two alike would lose the names until somebody restarted the program.
+    const exchange = fixtureFetch();
+    const fetchFn = vi.fn((async (url: string, init?: RequestInit) => {
+      if (String(url).includes('/stash/current/item/')) return new Response('later', { status: 503 });
+      return (exchange as unknown as (u: string, i?: RequestInit) => Promise<Response>)(url, init);
+    }) as unknown as typeof fetch);
+    const subject = service({ fetchFn, ttlMs: 0, namedItemCategories: named });
+
+    await subject.getPrices();
+    await subject.getPrices();
+
+    expect(itemTypeCalls(fetchFn, 'DivinationCard')).toBe(2);
+  });
+
   it('loses names rather than prices when the endpoint is down', async () => {
     const exchange = fixtureFetch();
     const fetchFn = (async (url: string, init?: RequestInit) => {
@@ -846,7 +889,7 @@ describe('PriceService and item names', () => {
       return (exchange as unknown as (u: string, i?: RequestInit) => Promise<Response>)(url, init);
     }) as unknown as typeof fetch;
 
-    const set = await service({ fetchFn }).getPrices();
+    const set = await service({ fetchFn, namedItemCategories: named }).getPrices();
 
     // Not empty: `core.items` rides along on the price payload, so chaos and divine keep their
     // names even with the other endpoint refusing. What is lost is the long tail it would have
@@ -860,7 +903,7 @@ describe('PriceService and item names', () => {
     // The only place the exchange endpoint puts an id and a name on the same object. Everywhere
     // else the name has to be turned back into an id, and a name that does not round-trip is
     // lost; here nothing can be.
-    const set = await service({ fetchFn: withItemNames({}) }).getPrices();
+    const set = await service({ fetchFn: withItemNames({}), namedItemCategories: named }).getPrices();
 
     expect(set.names.divine).toBe('Divine Orb');
   });
