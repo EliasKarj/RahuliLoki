@@ -303,8 +303,51 @@ async function probeNinja() {
   say('');
   say('  What matters here:');
   say('   1. Any dust-ish key at all — if poe.ninja publishes dust, the app needs no formula.');
-  say('   2. Whether UniqueArmour/UniqueWeapon return lines with usable ids. If they do, unique');
+  say('   2. Whether the unique overviews return lines with usable ids. If they do, unique');
   say('      prices can be fetched into a map of their own and dust-per-chaos becomes possible.');
+}
+
+/**
+ * Which `type=` values poe.ninja actually serves.
+ *
+ * Asked because the obvious guesses came back empty. An endpoint answering 200 with zero lines
+ * says nothing about whether the data exists under a name nobody tried, and the app's own list
+ * of categories is a list of guesses of exactly the same kind.
+ */
+async function probeTypes() {
+  head('poe.ninja: which type= values return anything');
+
+  const candidates = [
+    'Currency', 'Fragment', 'DivinationCard', 'Essence', 'Fossil', 'Resonator', 'Scarab', 'Oil',
+    'DeliriumOrb', 'Incubator', 'Artifact', 'Vial', 'Omen', 'Tattoo', 'Coffin', 'AllflameEmber',
+    'UniqueArmour', 'UniqueWeapon', 'UniqueAccessory', 'UniqueFlask', 'UniqueJewel', 'UniqueMap',
+    'UniqueRelic', 'Unique', 'SkillGem', 'ClusterJewel', 'Map', 'BlightedMap', 'Invitation',
+    'Memory', 'BaseType', 'HelmetEnchant', 'Beast',
+  ];
+
+  const served = [];
+  const empty = [];
+  const failed = [];
+
+  for (const type of candidates) {
+    const result = await ninja(type);
+    if (!result.ok) failed.push(`${type} (${result.status})`);
+    else {
+      const lines = Array.isArray(result.body?.lines) ? result.body.lines.length : 0;
+      if (lines > 0) served.push(`${type}=${lines}`);
+      else empty.push(type);
+    }
+    // Somebody else's free service. One every 300 ms is polite for a one-off probe.
+    await new Promise((resolve) => setTimeout(resolve, 300));
+  }
+
+  say(`  returns lines: ${served.length === 0 ? 'none' : served.join(', ')}`);
+  say('');
+  say(`  answers but empty: ${empty.length === 0 ? 'none' : empty.join(', ')}`);
+  say(`  failed outright:   ${failed.length === 0 ? 'none' : failed.join(', ')}`);
+  say('');
+  say('  A type in the first list that this app does not fetch is a category of prices it is');
+  say('  currently blind to. A unique type in that list is what dust-per-chaos needs.');
 }
 
 /* ------------------------------------------------------------------------------------- main */
@@ -351,7 +394,8 @@ if (!onlyNinja) {
   }
 }
 
-if (!onlyLimits) await probeNinja();
+if (flag('types')) await probeTypes();
+else if (!onlyLimits) await probeNinja();
 
 head('done');
 say('Paste the output above into the conversation. Nothing in it contains your session.');

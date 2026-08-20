@@ -14,7 +14,8 @@ import {
 } from './fixtures/poeninja.ts';
 import { dumpTabResponse, mapTabResponse, stashResponse, tabListResponse } from './fixtures/stash.ts';
 
-const HEADERS = { limit: '45:60:120', state: '1:60:0' };
+// The account rule GGG really sends on get-stash-items — see scripts/probe.mjs.
+const HEADERS = { limit: '30:60:60', state: '1:60:0' };
 
 const priceStore: PriceSetStore = { latest: async () => null, save: async () => {}, history: async () => [] };
 

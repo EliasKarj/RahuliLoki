@@ -13,9 +13,16 @@ GGG bans readily. This is the part of the code worth reading before changing any
 Every response states the rule in force and your own position in it:
 
 ```
-X-Rate-Limit-Account:       45:60:120,180:3600:3600
-X-Rate-Limit-Account-State:  2:60:0,  17:3600:0
+X-Rate-Limit-Account:       30:60:60,100:1800:600
+X-Rate-Limit-Account-State:  1:60:0,   1:1800:0
+X-Rate-Limit-Ip:            45:60:120,180:1800:600
+X-Rate-Limit-Policy:        backend-item-request-limit
+X-Rate-Limit-Rules:         Account,Ip
 ```
+
+Those are real, recorded from `get-stash-items` by `scripts/probe.mjs`. Two rules apply at once
+and the tightest wins: the account gets 30 requests a minute and 100 every half hour, the IP 45
+and 180. Breaching them costs a 60-second or 600-second timeout.
 
 The triple is `hits:period:penalty`. The limiter
 
@@ -29,9 +36,9 @@ The triple is `hits:period:penalty`. The limiter
 - **gives up** with a `RateLimitError` rather than carrying on hammering.
 
 > **▸ Why on what is left rather than on the average rate:** the earlier rule paced *every* request
-> at the slowest bucket's average. The hourly policy `200:3600` averages out to one request every
-> eighteen seconds, so a twenty-tab stash took six minutes — even when 17 of the 200 hourly
-> requests had been used. The budget was there; we simply refused to spend it.
+> at the slowest bucket's average. The half-hourly policy `100:1800` averages out to one request
+> every eighteen seconds, so a twenty-tab stash took six minutes — even when 17 of the 100 had
+> been used. The budget was there; we simply refused to spend it.
 >
 > Now a slack bucket demands nothing. Past the reserve the delay ramps evenly, so approaching the
 > ceiling is a slowdown rather than a wall. The hard protections are unchanged: an empty bucket
@@ -63,17 +70,20 @@ The triple is `hits:period:penalty`. The limiter
 > forty-five requests a minute, and the second half of a sixty-tab stash waits for the window to
 > roll. No client can read that account faster.
 
-> **▸ Where the numbers in these tables come from, and where they do not:** they are measured
-> against a *simulated* GGG whose policy is assumed to be `45:60:120,200:3600:3600`. That string
-> is not quoted from GGG's developer documentation, which this project has not verified against.
-> It is a plausible policy, and the speed-ups are real *relative to it* — but if GGG's real
-> allowance for the stash endpoint is tighter, the wall-clock figures move.
+> **▸ Where the numbers in these tables come from:** a simulated GGG paced by the policy above,
+> which was guessed until `scripts/probe.mjs` recorded the real one — and the guess was wrong in
+> every term. It assumed 45 requests a minute where the account gets 30, an hour-long second
+> window where it is half an hour, and hour-long penalties where they are ten minutes. A limiter
+> built on it would have paced against a ceiling twice as generous as the real one.
 >
-> What does not depend on it: the app never uses those numbers. `RateLimiter` starts with no
-> policy at all and paces by whatever `X-Rate-Limit-Account` and `X-Rate-Limit-Account-State`
-> say on the response in front of it. That is why the first request of a poll goes alone — there
-> is nothing to be inside yet — and why every constant in this file is a comment rather than a
-> value. A compiled-in limit would be a guess that goes stale without saying so.
+> The tables below predate that correction and are relative to the guess; the ratios hold, the
+> absolute seconds do not. Measured against the real policy, nineteen tabs at a 470 ms round trip
+> take **4.1 s** where reading them one at a time takes 9.8 s.
+>
+> What never depended on any of it: the app does not use these numbers. `RateLimiter` starts with
+> no policy at all and paces by whatever the headers on the response in front of it say. That is
+> why the first request of a poll goes alone — there is nothing to be inside yet — and why every
+> figure in the source is a comment rather than a value.
 
 > **▸ Why several requests are in the air at once:** the limiter used to hold its queue for the
 > whole round trip, so a stash was read one network latency at a time — twenty-four tabs at two

@@ -312,7 +312,8 @@ describe('RateLimiter', () => {
 });
 
 describe('the floor, and how long it applies', () => {
-  const POLICY = '45:60:120,200:3600:3600';
+  // Recorded from a real get-stash-items response — see scripts/probe.mjs.
+  const POLICY = '30:60:60,100:1800:600';
 
   /** Reads `tabs` requests through the limiter on a fake clock; returns the elapsed time. */
   async function readTabs(tabs: number, minIntervalMs = 0): Promise<number> {
@@ -325,7 +326,7 @@ describe('the floor, and how long it applies', () => {
         status: 200,
         headers: {
           'x-rate-limit-account': POLICY,
-          'x-rate-limit-account-state': `${Math.min(used, 45)}:60:0,${used}:3600:0`,
+          'x-rate-limit-account-state': `${Math.min(used, 30)}:60:0,${used}:1800:0`,
         },
       });
     }) as unknown as typeof fetch;
@@ -349,7 +350,10 @@ describe('the floor, and how long it applies', () => {
     // bucket was barely touched the whole time.
     const elapsed = await readTabs(24);
 
-    expect(elapsed).toBeLessThan(5_000);
+    // Against the policy GGG really sends — thirty a minute — twenty-four tabs is about seven
+    // seconds: fifteen at network speed and the rest ramping as the bucket empties. The floor
+    // made the same read twenty-four seconds and the bucket was barely touched.
+    expect(elapsed).toBeLessThan(10_000);
   });
 
   it('still throttles when somebody asks it to', async () => {
@@ -358,13 +362,15 @@ describe('the floor, and how long it applies', () => {
     expect(await readTabs(6, 1000)).toBeGreaterThanOrEqual(5_000);
   });
 
-  it('slows down again as the bucket empties, rather than running into the cap', async () => {
-    // Past the reserve the pacing ramps toward the refill rate. Forty tabs is more than half of
-    // forty-five, so the tail of it is paced and the whole read takes real time.
+  it('waits out the window rather than running into the cap', async () => {
+    // Forty tabs against a thirty-a-minute bucket cannot be done inside a minute by anyone. The
+    // first thirty go, and then the bucket is spent: every request after that waits a full
+    // period, because the state header says how many hits are in the window and not when the
+    // window opened. Minutes, and correctly so — an account restriction costs longer.
     const elapsed = await readTabs(40);
 
-    expect(elapsed).toBeGreaterThan(10_000);
-    expect(elapsed).toBeLessThan(30_000);
+    expect(elapsed).toBeGreaterThan(60_000);
+    expect(elapsed).toBeLessThan(20 * 60_000);
   });
 });
 
@@ -394,7 +400,7 @@ describe('concurrency', () => {
       return new Response('{}', {
         status: 200,
         headers: {
-          'x-rate-limit-account': '45:60:120,200:3600:3600',
+          'x-rate-limit-account': '30:60:60,100:1800:600',
           'x-rate-limit-account-state': state,
         },
       });
@@ -411,7 +417,7 @@ describe('concurrency', () => {
   it('overlaps requests while the bucket has room', async () => {
     // This is the whole point: GGG counts requests per window, not requests at a time, so a
     // stash should be read at network speed rather than at latency times tab count.
-    const { peak, requests } = await peakConcurrency(12, '2:60:0,2:3600:0');
+    const { peak, requests } = await peakConcurrency(12, '2:60:0,2:1800:0');
 
     expect(peak).toBeGreaterThan(1);
     expect(peak).toBeLessThanOrEqual(6);
@@ -419,14 +425,16 @@ describe('concurrency', () => {
   });
 
   it('never exceeds the ceiling it was given', async () => {
-    const { peak } = await peakConcurrency(12, '2:60:0,2:3600:0', 3);
+    const { peak } = await peakConcurrency(12, '2:60:0,2:1800:0', 3);
     expect(peak).toBeLessThanOrEqual(3);
   });
 
   it('drops to one the moment the bucket asks for pacing', async () => {
     // Past the reserve every delay has to be computed against a fresh observation, not against
     // a guess about several unfinished requests.
-    const { peak } = await peakConcurrency(4, '40:60:0,40:3600:0');
+    // Twenty-five of the thirty the account gets: past the halfway reserve, so pacing is on —
+    // but not spent, which would be a different branch entirely.
+    const { peak } = await peakConcurrency(4, '25:60:0,25:1800:0');
     expect(peak).toBe(1);
   });
 

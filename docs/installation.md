@@ -112,7 +112,8 @@ restarts in the background afterwards.
 
 > **▸ Why five minutes does not fit a large stash:** one poll costs **one request per tab** — the
 > first request returns the tab list in the same response, so there is no extra call. GGG's stash
-> policy is `200:3600:3600`, that is **200 requests an hour**.
+> policy, recorded from a real response, is `30:60:60,100:1800:600` for the account: a hundred
+> requests every half hour, so **200 an hour**, and no more than thirty in any one minute.
 >
 > Nineteen tabs every five minutes is 12 × 19 = **228 requests an hour**, over budget. At ten
 > minutes it is 114 and fits comfortably. Nothing breaks when you go over — the limiter paces

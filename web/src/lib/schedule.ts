@@ -76,11 +76,16 @@ export function describeSchedule(cron: string | null): string {
 }
 
 /**
- * GGG's hourly budget on the stash endpoint.
+ * GGG's sustained budget on the stash endpoint, per hour.
  *
- * The policy the rate limiter reads back is `45:60:120,200:3600:3600`: two hundred requests an
- * hour. Hardcoded here only to size the warning under the interval picker — the pacing itself
- * comes from the headers, which are the authority.
+ * Recorded from a real response: the account rule is `30:60:60,100:1800:600` — a hundred
+ * requests every half hour, so two hundred an hour. Hardcoded here only to size the warning
+ * under the interval picker; the pacing itself comes from the headers, which are the authority.
+ *
+ * The other half of that policy, thirty a minute, is not modelled here. It caps how fast a
+ * *single* poll can run rather than how often polls may happen, and a stash past thirty tabs
+ * therefore stretches one poll out regardless of the interval. The limiter handles that; this
+ * warning is about the interval, which is the part a person chooses.
  */
 export const HOURLY_STASH_BUDGET = 200;
 

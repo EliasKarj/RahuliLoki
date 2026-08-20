@@ -3,26 +3,32 @@
  *
  * Every response carries the policy in force and our current position in it:
  *
- *   X-Rate-Limit-Account:       45:60:120,200:3600:3600
- *   X-Rate-Limit-Account-State:  2:60:0,  17:3600:0
+ *   X-Rate-Limit-Account:       30:60:60,100:1800:600
+ *   X-Rate-Limit-Account-State:  1:60:0,   1:1800:0
+ *   X-Rate-Limit-Ip:            45:60:120,180:1800:600
+ *   X-Rate-Limit-Policy:        backend-item-request-limit
+ *   X-Rate-Limit-Rules:         Account,Ip
  *
  * Each triple is `hits:period:restrictTime`. In the limit header it is the allowance; in the
  * state header it is what we have already spent, and a non-zero `restrictTime` means we are
  * being timed out right now. There can be several policies at once — the tightest wins.
  *
- * ## The numbers above are an example, not a specification
+ * Those are real, recorded from `get-stash-items` on 2026-08-20 by scripts/probe.mjs. Two rules
+ * apply at once and the tightest wins: the account may spend 30 requests a minute and 100 every
+ * half hour, the IP 45 and 180. Breaching them costs a 60-second or 600-second timeout.
+ *
+ * ## They are still an example, not a specification
  *
  * Nothing in this file assumes them. `#limits` starts empty: until a response arrives this class
  * knows no policy at all, which is why it opens with a single request and widens only once the
  * headers have told it what the allowance is. Every figure it paces by is read from the headers
  * of the response in front of it.
  *
- * That is deliberate and it is the only defensible design, because GGG changes these numbers,
- * varies them per endpoint, and does not promise them anywhere this project has verified. Any
- * constant compiled in here would be a guess that goes stale silently. The example above is
- * illustrative — an earlier version of this comment said `180:3600:3600` a few lines from a
- * comment saying `200`, which is exactly what an unverified constant looks like once two people
- * have edited around it.
+ * That is the only defensible design, and the recording above is why. This comment previously
+ * carried a *guessed* policy — `45:60:120,200:3600:3600` — that was wrong in every term: the
+ * account bucket is 30 a minute and not 45, the long window is half an hour and not an hour, and
+ * the penalties are shorter. It also disagreed with another comment twelve lines away. A limiter
+ * built on any of that would have paced against a ceiling twice as generous as the real one.
  *
  * Rules this class enforces, all of them non-negotiable:
  *   - one admission decision at a time, each seeing what the previous one spent;
@@ -193,10 +199,10 @@ export function computeDelayMs(
 
     // Pace by how much of the bucket is left, not by its average refill rate.
     //
-    // Pacing every request at the slowest bucket's average was too blunt. GGG publishes
-    // something like `45:60:120,200:3600:3600`, and the hourly policy averages out to one
-    // request every eighteen seconds — so reading a twenty-tab stash took six minutes with the
-    // hourly budget barely touched. The allowance was there; we simply refused to spend it.
+    // Pacing every request at the slowest bucket's average was too blunt. Against the observed
+    // `100:1800`, the average is one request every eighteen seconds — so reading a twenty-tab
+    // stash took six minutes with the half-hourly budget barely touched. The allowance was
+    // there; we simply refused to spend it.
     //
     // A bucket with room to spare imposes nothing. Past the reserve the delay ramps up smoothly
     // and reaches the full refill rate exactly as the bucket empties, so approaching the cap is
@@ -252,10 +258,11 @@ export class RateLimiter {
     this.#minBackoffMs = options.minBackoffMs ?? 10_000;
     this.#maxBackoffMs = options.maxBackoffMs ?? 30 * 60_000;
     this.#minIntervalMs = options.minIntervalMs ?? 0;
-    // Six. GGG's tightest stash policy is forty-five a minute and pacing starts at half of it,
-    // so at most six requests can be unaccounted for inside a margin of twenty-two. Enough to
-    // read a stash at network speed rather than at network latency times the tab count, and far
-    // enough from the cap that the overshoot cannot reach it.
+    // Six. The tightest observed bucket is the account's thirty a minute, and pacing starts at
+    // half of it — so the margin six requests can be unaccounted for inside is fifteen, not the
+    // twenty-two an earlier guess at the policy suggested. Six is still well within it, and the
+    // arrangement is self-correcting: the moment the count reaches the halfway mark, pacing
+    // starts and concurrency drops to one, so the overshoot cannot compound.
     this.#concurrency = Math.max(1, options.concurrency ?? 6);
     this.#settled = new Promise<void>((resolve) => {
       this.#settledResolve = resolve;

@@ -5,7 +5,8 @@ import { StashError, StashService, parseTabs, selectTabs } from '../src/services
 import { dumpTabResponse, mapTabResponse, stashResponse, tabListResponse } from './fixtures/stash.ts';
 
 const SESSION = 'f00dcafe'.repeat(4);
-const HEADERS = { limit: '45:60:120', state: '1:60:0' };
+// The account rule GGG really sends on get-stash-items — see scripts/probe.mjs.
+const HEADERS = { limit: '30:60:60', state: '1:60:0' };
 
 /** Routes by tabIndex, the way the real endpoint does. */
 function stashFetch(responses: Record<string, () => Response> = {}) {
