@@ -28,7 +28,14 @@ const clients: PrismaClient[] = [];
 
 afterEach(async () => {
   while (clients.length > 0) await clients.pop()?.$disconnect();
-  while (temps.length > 0) rmSync(temps.pop() as string, { recursive: true, force: true });
+  while (temps.length > 0) {
+    // `maxRetries` is here for Windows, where this failed a CI run with EBUSY while every
+    // assertion in the file had already passed. `$disconnect()` resolves before the operating
+    // system has finished releasing the SQLite handle, and Windows refuses to unlink a file
+    // anything still holds open — where Linux is happy to. Node's own backoff is the fix; the
+    // alternative is a green test suite that reports failure on one platform at random.
+    rmSync(temps.pop() as string, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  }
 });
 
 /** A migrated database with a store on top of it. */
