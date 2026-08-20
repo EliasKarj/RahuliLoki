@@ -65,6 +65,7 @@ Everything under `/api`, everything JSON.
 | `GET /api/stats?league=&from=&to=` | Gain, c/h active and wall-clock, active hours, best hour, per-interval detail. |
 | `GET /api/changes?league=&from=&to=&minChaos=` | What moved between the ends of the range: per-item changes, the reason (`quantity`/`price`/`both`), gains and losses separately. |
 | `GET /api/item-history?name=&league=&from=` | One item's quantity and value in every snapshot in the range. |
+| `GET /api/economy?league=` | Every item poe.ninja prices, with a name, a category and a value. One response, searched in the browser. |
 | `GET /api/leagues` | The current leagues from GGG, for the desktop build's menu. Cached 6 h; the permanent leagues on failure. |
 | `GET /api/account` | Who GGG says the stored session belongs to, and whether that matches `POE_ACCOUNT_NAME`. 502 when GGG will not answer — which is itself an answer. |
 | `POST /api/poll` | Starts a poll and answers **202 immediately**, not when it finishes. 409 if one is already running, 503 if credentials are missing. The outcome is read from `/api/health`. |
@@ -86,6 +87,18 @@ change without one.
 > had, and reported a net worth from weeks earlier as the current one, because "current" is read
 > off the last row of the series. Past about two weeks of a league at the old cap, both were
 > quietly wrong.
+
+> **▸ Why the economy list arrives whole:** a price set is a few thousand rows and the client
+> is on the same machine. Paging it would trade a few hundred kilobytes, once, for a search that
+> filters after you type instead of as you type — which is the entire value of the tab.
+
+> **▸ Why every economy row says where its name came from:** poe.ninja's redesigned payload
+> names exactly two items, chaos and divine. Everything else is an id. A name is therefore
+> either proved by your own stash, taken from the short-code alias table, or read back off the
+> slug — and the last of those loses punctuation, because the slug rule drops it and nothing
+> records where it went. `awakeners-orb` cannot become "Awakener's Orb" by rule. The row carries
+> `nameSource` so a reconstruction can be marked as one rather than presented as the item's
+> real name.
 
 > **▸ Why the update check hangs off the health endpoint:** the dashboard already reads it every
 > minute, and the answer changes about once a month. Its own endpoint would be a second poll for
@@ -169,7 +182,7 @@ unvalidated symlink path traversal during extraction. There **is no fixed versio
 pnpm test
 ```
 
-**552 tests**, not one network request:
+**581 tests**, not one network request:
 
 - **The rate limiter** — header parsing, pacing, serialisation, `Retry-After`, doubling up to the
   ceiling. The clock and sleep are faked, so testing a 30-minute backoff takes microseconds.
@@ -196,6 +209,9 @@ pnpm test
   it existed, that switching it off reaches the server as `UPDATE_CHECK=off`, and that the file
   holding the credential is written `0600` — that last one only where file modes exist, since
   Windows reports `0o666` for everything and the file is protected by an ACL there instead.
+- **The economy list** — that a slug reads back as words without claiming the punctuation it
+  lost, that a name the stash has proved beats the slug reading of it, that the short-code table
+  reverses correctly, and that searching finds an item by its id as well as by its name.
 - **The store's SQL** — against a real SQLite file, migrated by the app's own migrator: the
   per-tab column, its fallback for rows written before it existed, and the item series summed
   inside the database (including a fractional sum, which is what broke it the first time).
@@ -208,9 +224,10 @@ pnpm test
 /server
   /src
     /services   priceService (fetching and caching), ninjaPayload (reading what comes back),
+                economy (naming every priced id),
                 stashService, valuationService, uniques, snapshotRepo, leagueService,
                 profileService, updateService
-    /routes     snapshots, health, config
+    /routes     snapshots, health, config, economy
     /jobs       pollJob
     /lib        rateLimiter, logger, series, changes, config, auth, http, schedule, version
     app.ts      assembling Fastify (testable without a listening port)
@@ -227,7 +244,7 @@ pnpm test
   /src
     /components Hero, NetWorthChart, RatePerHourChart, TabBreakdown, SnapshotTable,
                 PollerStatus, TokenGate, ChangesTable, ItemHistory, ItemIcon, DesktopSetup,
-                UpdateNotice, TabAreaChart, ItemsTable
+                UpdateNotice, TabAreaChart, ItemsTable, SideNav, Economy
     /hooks      useSnapshots
     /lib        api, format, series, palette (chart colours), schedule (the countdown), spark,
                 update (the release notice and its dismissal), items (the item table's data)

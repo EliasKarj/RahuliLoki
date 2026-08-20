@@ -8,6 +8,7 @@ import type { ApiDeps } from './routes/deps.ts';
 import { snapshotRoutes } from './routes/snapshots.ts';
 import { healthRoutes } from './routes/health.ts';
 import { configRoutes } from './routes/config.ts';
+import { economyRoutes } from './routes/economy.ts';
 import { loggerOptions, scrub } from './lib/logger.ts';
 import { registerAuth } from './lib/auth.ts';
 
@@ -111,6 +112,7 @@ export async function buildApp(deps: ApiDeps, options: BuildOptions = {}): Promi
       await snapshotRoutes(api, deps);
       await healthRoutes(api, deps);
       await configRoutes(api, deps);
+      await economyRoutes(api, deps);
     },
     { prefix: '/api' },
   );

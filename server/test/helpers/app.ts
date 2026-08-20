@@ -119,14 +119,18 @@ export async function makeApp(
         cached: {
           league: 'Settlers',
           fetchedAt: new Date(START),
-          prices: { 'Chaos Orb': 1, 'Divine Orb': 218.4 },
+          // Keyed by poe.ninja's ids, the way the real price set is. It used to be keyed by
+          // display name, which is how the *old* API worked and has not been true since the
+          // redesign — a double that lies about the shape of its data will let a test pass
+          // that the real thing cannot.
+          prices: { chaos: 1, divine: 218.4 },
           divineRate: 218.4,
           icons: {
             'The Doctor': 'https://web.poecdn.com/doctor.png',
             'Divine Orb': 'https://web.poecdn.com/divine.png',
           },
           uniques: {},
-          categories: {},
+          categories: { chaos: 'Currency', divine: 'Currency' },
         },
         isStale: () => false,
       },

@@ -218,6 +218,32 @@ export interface HealthResponse {
   update?: UpdateInfo;
 }
 
+/** One priced item from poe.ninja — see the server's services/economy.ts for the names. */
+export interface EconomyRow {
+  id: string;
+  name: string;
+  /**
+   * Where the name came from, in descending order of certainty: a name your own stash has
+   * proved, the short-code alias table, or the id read back as words. The last of those loses
+   * punctuation, so the interface says which is which rather than presenting a guess as fact.
+   */
+  nameSource: 'stash' | 'alias' | 'slug';
+  category: string | null;
+  chaos: number;
+  divine: number;
+  icon: string | null;
+}
+
+export interface EconomyResponse {
+  league: string;
+  /** When the price set behind this was fetched. Null before the first one. */
+  fetchedAt: string | null;
+  stale: boolean;
+  divineRate: number;
+  count: number;
+  rows: EconomyRow[];
+}
+
 export class ApiError extends Error {
   readonly status: number;
   constructor(message: string, status: number) {
@@ -319,6 +345,10 @@ export const api = {
     get<LatestResponse>(`/api/snapshots/latest${query({ league })}`, signal),
 
   config: (signal?: AbortSignal) => get<ConfigResponse>('/api/config', signal),
+
+  /** Everything poe.ninja prices. Fetched once when the tab opens; searching is local. */
+  economy: (league: string | undefined, signal?: AbortSignal) =>
+    get<EconomyResponse>(`/api/economy${query({ league })}`, signal),
 
   leagueList: (signal?: AbortSignal) => get<LeagueListResponse>('/api/leagues', signal),
 

@@ -542,3 +542,48 @@ describe('GET /api/health prices', () => {
     expect(body.prices).toMatchObject({ chaosIcon: null, divineIcon: null, divineRate: 0 });
   });
 });
+
+describe('GET /api/economy', () => {
+  it('lists every priced id, with the divine rate and when the prices were fetched', async () => {
+    const { app } = await makeApp();
+    const body = (await app.inject({ method: 'GET', url: '/api/economy' })).json();
+
+    expect(body.league).toBe('Settlers');
+    expect(body.divineRate).toBe(218.4);
+    expect(body.fetchedAt).toBe(new Date(START).toISOString());
+    expect(body.rows.map((row: { id: string }) => row.id)).toEqual(['divine', 'chaos']);
+    expect(body.count).toBe(2);
+  });
+
+  it('names a row from the stash when the stash has proved the name', async () => {
+    const { app } = await makeApp();
+    const body = (await app.inject({ method: 'GET', url: '/api/economy' })).json();
+    const divine = body.rows.find((row: { id: string }) => row.id === 'divine');
+
+    // The seeded snapshot holds Chaos Orbs and The Doctor; divine is named by the alias table.
+    expect(divine).toMatchObject({ name: 'Divine Orb', nameSource: 'alias', chaos: 218.4 });
+  });
+
+  it('answers with an empty list rather than an error before the first price set', async () => {
+    const { app } = await makeApp({ prices: { cached: null, isStale: () => true } });
+    const response = await app.inject({ method: 'GET', url: '/api/economy' });
+
+    // A fresh install has no prices until the first poll. That is an ordinary early state, and
+    // a 503 would put a failure on screen for it.
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ fetchedAt: null, count: 0, rows: [] });
+  });
+
+  it('is behind the token like everything else', async () => {
+    const token = 'a'.repeat(32);
+    const { app } = await makeApp({}, { AUTH_TOKEN: token } as NodeJS.ProcessEnv);
+
+    expect((await app.inject({ method: 'GET', url: '/api/economy' })).statusCode).toBe(401);
+    const allowed = await app.inject({
+      method: 'GET',
+      url: '/api/economy',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(allowed.statusCode).toBe(200);
+  });
+});

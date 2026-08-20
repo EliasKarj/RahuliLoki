@@ -9,6 +9,25 @@ The look, the views, and how the numbers are computed.
 The page is a **ledger, not a card wall**. No boxes and no frames: hairlines separate the
 sections, and the only things with edges are the numbers themselves.
 
+## The two views
+
+A rail down the left names them: **Dashboard** and **Economy**. On a narrow window it folds into
+a row above the page instead.
+
+**Dashboard** is everything below — what you own, what it is worth, and what it has been doing.
+
+**Economy** is the same prices seen the other way round: every item poe.ninja prices, whether or
+not you hold any. Search by name, by poe.ninja's own id (`gcp`, `alt`), or by category; filter by
+category; sort by name or value. It costs one local request when the tab opens and nothing
+leaves the machine — these are the prices the valuation already fetched.
+
+A `?` after a name means the name was read back from poe.ninja's id rather than known. The
+payload names only chaos and divine, so a name is either proved by your own stash, taken from the
+short-code table, or reconstructed from the slug — and a slug has lost its apostrophes. Hovering
+the mark says what poe.ninja actually calls the row.
+
+---
+
 ## Width
 
 The page uses the window it is given, up to 108rem. It used to stop at 72rem, which is the right
