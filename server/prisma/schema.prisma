@@ -71,6 +71,12 @@ model PriceSet {
   // the number you go and check somewhere else. Nullable for the same reason as the two above:
   // a row written before the column existed has none, and that is the honest reading of it.
   meta       Json?
+  /// { [uniqueName]: chaosValue }, from poe.ninja's *item* endpoint rather than its exchange
+  /// one. Kept apart from `prices` on purpose: that map is keyed by poe.ninja id and feeds the
+  /// valuation, and letting unique prices into it would start valuing uniques by name in every
+  /// net worth this app has ever reported. This map is name-keyed and read only by the views
+  /// that ask for it.
+  uniques    Json?
 
   @@index([league, fetchedAt])
 }

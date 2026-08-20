@@ -18,6 +18,7 @@ import type { StashService } from '../services/stashService.ts';
 import type { SnapshotMeta, SnapshotStore } from '../services/snapshotRepo.ts';
 import { valueTabs } from '../services/valuationService.ts';
 import { uniqueHoldings } from '../services/kingsmarch.ts';
+import { DUST_TABLE } from '../services/dust.ts';
 import type { UniqueStore } from '../services/snapshotRepo.ts';
 
 export interface PollDependencies {
@@ -111,6 +112,24 @@ export async function runPoll(deps: PollDependencies): Promise<PollOutcome> {
     await deps.uniques.save(deps.league, holdings, new Date(now())).catch((error: unknown) => {
       log.warn({ err: error }, 'could not record the uniques this poll saw');
     });
+
+    // Two lookups stand behind the Kingsmarch view — the dust table and poe.ninja's name-keyed
+    // unique prices — and both fail by matching nothing rather than by throwing. Counted here
+    // because an empty column looks the same whether nobody owns a priced unique or every name
+    // stopped matching at once, and only the second is a bug.
+    const names = new Set(holdings.map((holding) => holding.name));
+    const withDust = [...names].filter((name) => DUST_TABLE.has(name)).length;
+    const withPrice = [...names].filter((name) => priceSet.uniquePrices[name] !== undefined).length;
+    log.debug({ uniques: names.size, withDust, withPrice }, 'uniques recorded');
+
+    // Names on both sides, and not one of them matched. That is a mismatch rather than an
+    // absence, and it is the one shape of this failure worth waking somebody for.
+    if (names.size > 0 && withPrice === 0 && Object.keys(priceSet.uniquePrices).length > 0) {
+      log.warn(
+        { uniques: names.size, priced: Object.keys(priceSet.uniquePrices).length },
+        'poe.ninja priced uniques but none of them by a name in this stash',
+      );
+    }
   }
 
   const outcome: PollOutcome = {

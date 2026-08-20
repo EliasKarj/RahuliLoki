@@ -1,0 +1,12 @@
+-- Unique prices, from the poe.ninja endpoint this project had never asked.
+--
+-- `exchange/current` serves currency-like lines keyed by id with no names, which is where the
+-- conclusion "poe.ninja publishes no unique prices" came from. `stash/current/item` serves items
+-- and names every one of them — 2,223 priced uniques across five categories.
+--
+-- Stored in a column of its own rather than merged into `prices`. That map is keyed by
+-- poe.ninja id and is what the valuation reads; putting unique prices into it would silently
+-- start counting uniques by name in every net worth this application reports, which is a change
+-- to make deliberately or not at all.
+-- AlterTable
+ALTER TABLE "PriceSet" ADD COLUMN "uniques" JSONB;

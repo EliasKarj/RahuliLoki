@@ -294,3 +294,60 @@ describe('PollRunner', () => {
     expect(built.store.rows).toHaveLength(0);
   });
 });
+
+describe('runPoll and the uniques it records', () => {
+  /** A logger that keeps what it was told, so a warning can be asserted on rather than assumed. */
+  function recordingLog() {
+    const lines: Array<{ level: string; obj: unknown; msg: string }> = [];
+    const at = (level: string) => (obj: unknown, msg?: string) =>
+      lines.push({ level, obj, msg: typeof obj === 'string' ? obj : (msg ?? '') });
+    return { lines, log: { debug: at('debug'), info: at('info'), warn: at('warn'), error: at('error') } };
+  }
+
+  /** Collects what the poll saved, which is all the Kingsmarch view ever reads. */
+  function memoryUniques() {
+    const saved: Array<{ name: string }> = [];
+    return {
+      saved,
+      store: {
+        save: async (_league: string, holdings: Array<{ name: string }>) => {
+          saved.length = 0;
+          saved.push(...holdings);
+        },
+        latest: async () => null,
+      },
+    };
+  }
+
+  it('records the uniques a poll saw, alongside the snapshot', async () => {
+    const { deps } = world();
+    const uniques = memoryUniques();
+    await runPoll({ ...deps, uniques: uniques.store });
+
+    // The dump tab's Headhunter, with its render tags stripped by the stash reader.
+    expect(uniques.saved.map((holding) => holding.name)).toContain('Headhunter');
+  });
+
+  it('says so when poe.ninja priced uniques and not one name matched the stash', async () => {
+    // The failure this warning exists for. Both lookups behind the Kingsmarch view are by name
+    // and both fail by matching nothing — a renamed unique, a different apostrophe — which
+    // looks exactly like owning nothing worth pricing. Only one of those is a bug.
+    const { deps } = world();
+    const recorder = recordingLog();
+    const prices = await deps.prices.getPrices();
+    (prices as { uniquePrices: Record<string, number> }).uniquePrices = { 'Not A Thing You Own': 5 };
+
+    await runPoll({ ...deps, uniques: memoryUniques().store, log: recorder.log });
+
+    expect(recorder.lines.filter((line) => line.level === 'warn' && line.msg.includes('none of them'))).toHaveLength(1);
+  });
+
+  it('stays quiet when poe.ninja priced nothing, because that is an absence and not a mismatch', async () => {
+    const { deps } = world();
+    const recorder = recordingLog();
+
+    await runPoll({ ...deps, uniques: memoryUniques().store, log: recorder.log });
+
+    expect(recorder.lines.filter((line) => line.msg.includes('none of them'))).toHaveLength(0);
+  });
+});

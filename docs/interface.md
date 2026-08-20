@@ -11,16 +11,17 @@ sections, and the only things with edges are the numbers themselves.
 
 ## The two views
 
-A rail down the left names them: **Dashboard** and **Economy**. On a narrow window it folds into
-a row above the page instead.
+A rail down the left names them: **Dashboard**, **Economy** and **Kingsmarch**. On a narrow
+window it folds into a row above the page instead.
 
 **Kingsmarch** is your uniques as the disenchanting bench sees them: one row per item level,
 quality and tab, because those are what dust reads and what the dashboard's item table folds
 away, with the dust each one yields at its own level and quality. Item level dominates: the same
 unique at level 65 gives a twentieth of what it gives at 84. A `≥` marks a figure that is a
 floor — a corrupted item may carry implicits the stash payload does not list, each worth half
-again. There is no dust-per-chaos column yet, because poe.ninja's exchange endpoint serves no
-unique prices at all.
+again. The column it exists for is **dust per chaos** — what is worth destroying rather than
+selling, which dust alone cannot say. The price behind it is by name, and the cheapest variant
+of that name, so a six-link or a good roll is worth more than the column shows.
 
 **Dashboard** is everything below — what you own, what it is worth, and what it has been doing.
 

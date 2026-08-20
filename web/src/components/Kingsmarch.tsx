@@ -6,13 +6,16 @@
  * unique into one line because that is the right shape for a wealth chart and the wrong one for
  * deciding what to feed the bench.
  *
- * ## Why there is no dust column yet
+ * ## The column it is all for
  *
- * There is no verified source for the dust numbers. They scale with item level and quality —
- * that much is not in doubt — but this project has not confirmed the actual figures against
- * anything, and a decision tool full of half-remembered constants is worse than one that admits
- * what it does not know. Everything a formula needs is here and named; the column arrives with
- * a source.
+ * Dust per chaos. Dust alone ranks a stash by what is biggest, which is not the question — the
+ * question is what is worth destroying rather than selling, and that is dust divided by what
+ * somebody would pay for it. Both halves are sourced: the dust from a published table this
+ * repository re-derives and tests against (`services/dust.ts`), the price from poe.ninja's item
+ * endpoint, which does carry names.
+ *
+ * The price is by name, and the cheapest variant of that name. A row says so rather than
+ * pretending otherwise — see `priceIsApproximate` on the response.
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -92,11 +95,9 @@ export function Kingsmarch({ league }: { league: string | undefined }) {
   /**
    * Whether anything here has a price at all.
    *
-   * poe.ninja serves no unique prices — every unique type answers with zero lines, recorded by
-   * scripts/probe.mjs — so in practice this is false and the column is not drawn. It is a
-   * condition rather than a deletion because the column becomes right again the day those
-   * endpoints have something in them, and an always-empty column is exactly the clutter this
-   * page has been cleared of twice.
+   * False before the first price fetch, and false for a stash of uniques poe.ninja has never
+   * listed. Two empty columns are worse than none, so they are drawn only when there is
+   * something in them.
    */
   const anyPriced = all.some((row) => row.chaos !== null);
   /** False only if the dust table knows none of these — a stash of brand new uniques. */
@@ -137,8 +138,8 @@ export function Kingsmarch({ league }: { league: string | undefined }) {
           A ≥ means the figure is a floor — a corrupted item may carry implicits the stash payload
           does not list, and each is worth half again.
         </span>{' '}
-        There is no dust-per-chaos yet because poe.ninja's exchange endpoint serves no unique
-        prices at all.
+        Prices are per name — poe.ninja lists several variants of one unique and this takes the
+        cheapest, so a six-link or a good roll is worth more than the column says.
       </p>
 
       <div className="max-h-[min(70vh,56rem)] max-w-6xl overflow-auto">

@@ -38,26 +38,23 @@ export const DEFAULT_ITEM_CATEGORIES = [
 ] as const;
 
 /**
- * Unique categories, priced per variant rather than by name — see services/uniques.ts.
+ * Unique categories fetched through the **exchange** endpoint, priced per variant rather than by
+ * name — see services/uniques.ts.
  *
- * Empty again, and this is a loss rather than a preference. Pricing uniques needs `links` and
- * `corrupted` on each line, because the same name is several prices: a plain Bronn's Lithe is
- * about 5 chaos and a 6-linked one about 210, and valuing by name alone silently picks one of
- * them. poe.ninja's redesigned API no longer publishes those fields, so the variant index
- * cannot be built.
+ * Empty, and it stays empty: every unique type that endpoint serves — UniqueArmour,
+ * UniqueWeapon, UniqueAccessory, UniqueFlask, UniqueJewel, UniqueMap, UniqueRelic and a bare
+ * Unique — answers 200 with zero lines. Recorded by scripts/probe.mjs.
  *
- * The alternative — turning uniques back on and letting them match by name through the flat map
- * — would restore a number to the chart at the cost of that number being wrong by up to
- * fortyfold, invisibly. Leaving them unpriced puts them in the snapshot's `unresolved` list
- * instead, where the poller logs them and the omission is at least visible.
+ * That is not the whole story, and this comment used to imply it was. poe.ninja's **item**
+ * endpoint does serve uniques, with names, prices and `links` on them; PriceService reads it
+ * into `PriceSet.uniquePrices` and the Kingsmarch view uses it. What that map does not do is
+ * reach the wealth total, because a name-keyed price cannot tell a plain Bronn's Lithe from a
+ * six-linked one — about 5 chaos against about 210 — and quietly picking one would be wrong by
+ * up to fortyfold in a number nobody can see inside. Uniques stay in the snapshot's
+ * `unresolved` list, where the omission is at least visible.
  *
- * Set PRICE_UNIQUE_CATEGORIES explicitly to opt back in if poe.ninja starts publishing the
- * variant fields again.
- *
- * As of 2026-08-20 there is nothing to opt back into. Every unique type poe.ninja serves —
- * UniqueArmour, UniqueWeapon, UniqueAccessory, UniqueFlask, UniqueJewel, UniqueMap, UniqueRelic
- * and a bare Unique — answers 200 with **zero lines**. It is not that the variant fields are
- * missing from the unique prices; there are no unique prices. Recorded by scripts/probe.mjs.
+ * Valuing them properly is now possible and is a change of its own: match each stash item to a
+ * priced variant by its links, and only then let it into the total.
  */
 export const DEFAULT_UNIQUE_CATEGORIES = [] as const;
 

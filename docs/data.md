@@ -147,7 +147,22 @@ That is a better source than poe.ninja ever was: it is the artwork for exactly t
 counted, from the artists themselves. A poll stores what it saw in the price set the icon lookup
 reads anyway, and writes only when something was new.
 
-**Uniques** go unpriced — see `PRICE_UNIQUE_CATEGORIES` in the settings.
+**Uniques** are not on this endpoint at all — every unique `type` answers 200 with zero lines —
+and they are not in the wealth total. They are, however, priced: poe.ninja's *item* endpoint
+serves them, and that is a separate thing entirely.
+
+```
+https://poe.ninja/poe1/api/economy/stash/current/item/overview?type=<type>&league=<league>
+```
+
+Its rows are the old shape — `name`, `baseType`, `chaosValue`, `icon`, `listingCount`, and on
+weapons and armour `links` and `variant`. Five types return anything: `UniqueArmour` (986 lines),
+`UniqueWeapon` (667), `UniqueAccessory` (364), `UniqueJewel` (167), `UniqueFlask` (39). Recorded
+by `scripts/probe.mjs --items`.
+
+The cheapest line per name lands in `PriceSet.uniquePrices`, which the Kingsmarch view reads and
+the valuation never touches. See `PRICE_UNIQUE_CATEGORIES` in the settings for the exchange-side
+switch, and `docs/development.md` for why a name-level price must not reach a net worth.
 
 > **▸ Why there are two kinds of id and what follows from it:** newer items use a slug derived from
 > the name (`accelerating-catalyst`, `awakeners-orb`), but older currency uses trade-site

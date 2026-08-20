@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { clearSecrets, registerSecret } from '../src/lib/logger.ts';
 import { QueryError, parseQuery } from '../src/routes/snapshots.ts';
+import { dustFor } from '../src/services/dust.ts';
 import { SESSION, START, idleHealth, makeApp } from './helpers/app.ts';
 
 afterEach(() => clearSecrets());
@@ -604,22 +605,63 @@ describe('GET /api/price-history', () => {
 });
 
 describe('GET /api/uniques', () => {
-  it('gives what a poll last saw, with a price looked up by name', async () => {
+  it('gives what a poll last saw, with a price from the item endpoint', async () => {
     const { app } = await makeApp();
     const body = (await app.inject({ method: 'GET', url: '/api/uniques' })).json();
 
     expect(body).toMatchObject({ league: 'Settlers', count: 1 });
-    expect(body.rows[0]).toMatchObject({ name: 'Tabula Rasa', ilvl: 68, quality: 0, count: 3 });
+    expect(body.rows[0]).toMatchObject({
+      name: 'Tabula Rasa',
+      ilvl: 68,
+      quality: 0,
+      count: 3,
+      // The name-keyed map, not `prices`, which is keyed by poe.ninja id and would never match.
+      chaos: 12.5,
+      priceIsApproximate: true,
+    });
+  });
+
+  it('answers the question the view exists for: dust per chaos', async () => {
+    const { app } = await makeApp();
+    const body = (await app.inject({ method: 'GET', url: '/api/uniques' })).json();
+    const row = body.rows[0];
+
+    // Level 68 rather than 84, so this is also a check that the row's own item level reaches the
+    // formula: a Tabula at 68 is worth a fraction of one at the ceiling.
+    expect(row.dust).toBe(dustFor('Tabula Rasa', { ilvl: 68, quality: 0 })?.dust);
+    expect(row.dustPerChaos).toBeCloseTo(row.dust / 12.5, 9);
+    expect(row.dustAtLeast).toBe(false);
+    expect(row.goldCost).toBeGreaterThan(0);
   });
 
   it('says the price is missing rather than zero when nothing prices it', async () => {
-    // The fake price set holds chaos and divine, not Tabula Rasa. A zero here would read as
-    // "worthless", which is a different claim from "poe.ninja does not price this".
-    const { app } = await makeApp();
+    // A zero here would read as "worthless", which is a different claim from "poe.ninja does
+    // not price this". The fake item overview knows Tabula Rasa and nothing else.
+    const { app } = await makeApp({
+      uniques: {
+        save: async () => {},
+        latest: async () => ({
+          capturedAt: new Date(START),
+          holdings: [
+            {
+              name: 'A Unique Nothing Prices',
+              baseType: 'Simple Robe',
+              tab: 'Uniques',
+              ilvl: 84,
+              quality: 0,
+              corrupted: false,
+              icon: null,
+              count: 1,
+            },
+          ],
+        }),
+      },
+    });
     const body = (await app.inject({ method: 'GET', url: '/api/uniques' })).json();
 
     expect(body.rows[0].chaos).toBeNull();
     expect(body.rows[0].priceIsApproximate).toBe(false);
+    expect(body.rows[0].dustPerChaos).toBeNull();
   });
 
   it('answers empty rather than erroring before the first poll', async () => {

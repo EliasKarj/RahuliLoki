@@ -131,6 +131,7 @@ export async function makeApp(
           },
           uniques: {},
           categories: { chaos: 'Currency', divine: 'Currency' },
+          uniquePrices: { 'Tabula Rasa': 12.5 },
           meta: {
             divine: { change: 4.2, volume: 19156804, sparkline: [0, 2.1, 4.2] },
             // Chaos deliberately has none, so a test can tell "no movement published" from

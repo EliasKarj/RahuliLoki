@@ -18,7 +18,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { ApiDeps } from './deps.ts';
 import { buildEconomy, namesFromBreakdown } from '../services/economy.ts';
-import { ninjaId } from '../services/ninjaId.ts';
 import { dustFor } from '../services/dust.ts';
 
 export async function economyRoutes(app: FastifyInstance, deps: ApiDeps): Promise<void> {
@@ -81,14 +80,14 @@ export async function economyRoutes(app: FastifyInstance, deps: ApiDeps): Promis
    * GET /api/uniques — the uniques a poll last saw, for the disenchanting bench.
    *
    * Item level and quality per item, which the snapshot breakdown does not keep, plus a chaos
-   * price looked up by name where the price set has one.
+   * price from poe.ninja's item endpoint where it has one.
    *
-   * That price is **by name only**, and the response says so on every row that could be wrong
-   * about it. poe.ninja's redesigned payload carries no links and no corruption, so a six-linked
-   * Bronn's Lithe and a plain one are the same line to it — the reason uniques go unpriced in
-   * the wealth total. For a disenchanting decision a name-level figure is the right ballpark,
-   * because what goes to the bench is the cheap end where the variant barely moves the price.
-   * The distinction is kept in the data rather than argued about in the interface.
+   * That price is **by name only**, and the response says so on every row. poe.ninja prices
+   * several variants of one unique — six-linked, a particular roll — and the cheapest of them is
+   * what `uniquePrices` carries, because a stash item this app has not matched to a variant
+   * could be any of them. For a disenchanting decision that is the right ballpark: what goes to
+   * the bench is the cheap end, where the variant barely moves the price. It is not good enough
+   * for a net worth, which is why the wealth total still leaves uniques out.
    */
   app.get('/uniques', async (request: FastifyRequest, reply: FastifyReply) => {
     const raw = request.query as Record<string, unknown>;
@@ -100,9 +99,11 @@ export async function economyRoutes(app: FastifyInstance, deps: ApiDeps): Promis
       return reply.send({ league, capturedAt: null, count: 0, rows: [] });
     }
 
-    const prices = deps.prices.cached?.prices ?? {};
+    // Name-keyed, and not the `prices` map: that one is keyed by poe.ninja id and is what the
+    // valuation reads. See PriceSet.uniquePrices for why the two are kept apart.
+    const uniquePrices = deps.prices.cached?.uniquePrices ?? {};
     const rows = stored.holdings.map((holding) => {
-      const chaos = prices[ninjaId(holding.name)] ?? null;
+      const chaos = uniquePrices[holding.name] ?? null;
       // Per item, not per row: the row may stand for twelve copies, but the decision at the
       // bench is about one of them and multiplying is the reader's business.
       const dust = dustFor(holding.name, {
@@ -122,8 +123,8 @@ export async function economyRoutes(app: FastifyInstance, deps: ApiDeps): Promis
         dustAtLeast: dust?.atLeast ?? false,
         goldCost: dust?.goldCost ?? null,
         slots: dust?.slots ?? null,
-        // Lights up the moment unique prices are available; null until then rather than absent,
-        // so the client has one thing to test instead of two.
+        // The column the whole view is for: how much dust a chaos of this item buys. Null when
+        // either half is missing, rather than absent, so the client has one thing to test.
         dustPerChaos: dust !== null && chaos !== null && chaos > 0 ? dust.dust / chaos : null,
       };
     });

@@ -394,6 +394,8 @@ export class PrismaPriceSetStore implements PriceSetStore {
       // Null on rows written before this column existed, which reads as "no movement was
       // published" — the truth about those rows, and not the same claim as "it did not move".
       meta: asMeta(row.meta),
+      // Name-keyed, from the item endpoint. Null on rows written before the column existed.
+      uniquePrices: asPrices(row.uniques),
       // Not persisted. A restored set exists so a restart does not refetch immediately, and
       // the very next poll refreshes it; carrying the unique index through the database would
       // multiply the row size for a window measured in minutes. Uniques go unpriced until
@@ -411,6 +413,7 @@ export class PrismaPriceSetStore implements PriceSetStore {
         icons: set.icons as object,
         categories: set.categories as object,
         meta: set.meta as object,
+        uniques: set.uniquePrices as object,
       },
     });
     await this.#prune(set.league);

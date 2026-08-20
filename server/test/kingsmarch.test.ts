@@ -7,6 +7,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { dustFor } from '../src/services/dust.ts';
 import { qualityOf, uniqueHoldings } from '../src/services/kingsmarch.ts';
 import type { StashItem, TabContents } from '../src/services/stashService.ts';
 
@@ -110,6 +111,29 @@ describe('uniqueHoldings', () => {
 
     expect(rows).toHaveLength(1);
     expect(rows[0]?.name).toBe('Tabula Rasa');
+  });
+
+  it('strips GGG\'s localisation markup, because every lookup after this is by name', () => {
+    // What the stash actually sends for a unique. Carried through, it makes the dust table and
+    // the price map miss on every single item — the whole view empty, and nothing to say why.
+    const rows = uniqueHoldings([
+      tab('Dump', [
+        unique({ name: '<<set:MS>><<set:M>><<set:S>>Headhunter', baseType: '<<set:M>>Leather Belt' }),
+      ]),
+    ]);
+
+    expect(rows[0]?.name).toBe('Headhunter');
+    expect(rows[0]?.baseType).toBe('Leather Belt');
+    expect(dustFor(rows[0]?.name ?? '', { ilvl: 84, quality: 0 })).not.toBeNull();
+  });
+
+  it('folds the marked-up name and the bare one into one row, being the same item', () => {
+    const rows = uniqueHoldings([
+      tab('Dump', [unique(), unique({ name: '<<set:MS>><<set:M>><<set:S>>Tabula Rasa' })]),
+    ]);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.count).toBe(2);
   });
 
   it('reports a missing item level as missing rather than as zero', () => {

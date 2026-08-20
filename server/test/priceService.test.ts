@@ -6,6 +6,8 @@ import {
   coreItems,
   divineRateFrom,
   iconUrl,
+  cheapestByName,
+  itemOverview,
   mergeOverview,
   overviewMeta,
   unmatchedIds,
@@ -61,11 +63,14 @@ function service(options: {
   now?: () => number;
   ttlMs?: number;
   maxBytes?: number;
+  /** Off by default: these tests are about the exchange endpoint, and it is a separate service. */
+  uniqueItemCategories?: string[];
 } = {}) {
   return new PriceService({
     league: 'Allflame',
     currencyCategories: ['Currency', 'Fragment'],
     itemCategories: ['DivinationCard', 'Scarab'],
+    uniqueItemCategories: options.uniqueItemCategories ?? [],
     ttlMs: options.ttlMs ?? 3_600_000,
     store: options.store ?? memoryStore().store,
     fetchFn: options.fetchFn ?? fixtureFetch(),
@@ -287,6 +292,7 @@ describe('PriceService', () => {
       uniques: {},
       categories: {},
       meta: {},
+      uniquePrices: {},
     };
     const fetchFn = fixtureFetch();
     const subject = service({ fetchFn, store: memoryStore(stored).store, now: () => 60_000 });
@@ -310,6 +316,7 @@ describe('PriceService', () => {
       uniques: {},
       categories: {},
       meta: {},
+      uniquePrices: {},
     };
     const subject = service({ store: memoryStore(stale).store, now: () => 0 });
 
@@ -587,5 +594,141 @@ describe('overviewMeta', () => {
 
   it('refuses a negative volume rather than reporting one', () => {
     expect(overviewMeta({ lines: [{ id: 'x', volumePrimaryValue: -5 }] })).toEqual({});
+  });
+});
+
+describe('itemOverview', () => {
+  // Shaped exactly as scripts/probe.mjs recorded it from stash/current/item — names on every
+  // line, which is the thing the exchange endpoint does not have.
+  const payload = {
+    lines: [
+      {
+        name: 'Bronn’s Lithe',
+        baseType: "Cutthroat's Garb",
+        chaosValue: 5.2,
+        icon: 'https://web.poecdn.com/bronns.png',
+        listingCount: 412,
+        links: 0,
+      },
+      {
+        name: 'Bronn’s Lithe',
+        baseType: "Cutthroat's Garb",
+        chaosValue: 210,
+        icon: 'https://web.poecdn.com/bronns.png',
+        listingCount: 18,
+        links: 6,
+      },
+      { name: 'Progenesis', baseType: 'Amethyst Flask', chaosValue: 12518, listingCount: 7 },
+      // Rejects, one of each kind.
+      { name: '', chaosValue: 5 },
+      { name: 'No price', chaosValue: 0 },
+      { name: 'Not a number', chaosValue: 'lots' },
+    ],
+  };
+
+  it('reads the named lines and drops the unusable ones', () => {
+    const prices = itemOverview(payload);
+
+    expect(prices).toHaveLength(3);
+    expect(prices.map((price) => price.name)).toEqual(['Bronn’s Lithe', 'Bronn’s Lithe', 'Progenesis']);
+  });
+
+  it('keeps the links, which is the field the other endpoint does not have', () => {
+    // The whole reason uniques went unpriced: a price with no links on it cannot say whether it
+    // is the five-chaos one or the two-hundred-and-ten-chaos one.
+    expect(itemOverview(payload).map((price) => price.links)).toEqual([0, 6, null]);
+  });
+
+  it('validates the icon like every other URL out of a remote payload', () => {
+    const prices = itemOverview({
+      lines: [{ name: 'X', chaosValue: 1, icon: 'javascript:alert(1)' }],
+    });
+
+    expect(prices[0]?.icon).toBeNull();
+  });
+
+  it('does not merge the variants, because choosing between them is not parsing', () => {
+    expect(itemOverview(payload).filter((price) => price.name === 'Bronn’s Lithe')).toHaveLength(2);
+  });
+
+  it('survives a payload with no lines', () => {
+    expect(itemOverview({})).toEqual([]);
+    expect(itemOverview(null)).toEqual([]);
+    expect(itemOverview({ lines: 'nope' })).toEqual([]);
+  });
+
+  it('takes the cheapest per name, so an unmatched item is never valued above what it may be', () => {
+    const cheapest = cheapestByName(itemOverview(payload));
+
+    expect(cheapest['Bronn’s Lithe']).toBe(5.2);
+    expect(cheapest.Progenesis).toBe(12518);
+  });
+});
+
+describe('PriceService and the item endpoint', () => {
+  /** A fetch that answers the exchange endpoint from fixtures and the item one from here. */
+  function bothEndpoints(itemBody: unknown, options: { failItems?: boolean } = {}): typeof fetch {
+    const exchange = fixtureFetch();
+    return (async (url: string, init?: RequestInit) => {
+      if (String(url).includes('/stash/current/item/')) {
+        if (options.failItems) return new Response('nope', { status: 503 });
+        return new Response(JSON.stringify(itemBody), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      return (exchange as unknown as (u: string, i?: RequestInit) => Promise<Response>)(url, init);
+    }) as unknown as typeof fetch;
+  }
+
+  const itemBody = {
+    lines: [
+      { name: 'Tabula Rasa', baseType: 'Simple Robe', chaosValue: 12.5, listingCount: 900, links: 6 },
+      { name: 'Tabula Rasa', baseType: 'Simple Robe', chaosValue: 40, listingCount: 3, links: 0 },
+      { name: 'Headhunter', baseType: 'Leather Belt', chaosValue: 90000, listingCount: 12 },
+    ],
+  };
+
+  it('reads unique prices into a map of their own, cheapest variant per name', async () => {
+    const set = await service({
+      fetchFn: bothEndpoints(itemBody),
+      uniqueItemCategories: ['UniqueArmour'],
+    }).getPrices();
+
+    expect(set.uniquePrices['Tabula Rasa']).toBe(12.5);
+    expect(set.uniquePrices.Headhunter).toBe(90000);
+  });
+
+  it('keeps them out of the map the valuation reads', async () => {
+    const set = await service({
+      fetchFn: bothEndpoints(itemBody),
+      uniqueItemCategories: ['UniqueArmour'],
+    }).getPrices();
+
+    // The whole point of the separate column. `prices` is keyed by poe.ninja id and is what
+    // resolvePrice falls through to, so a unique in there would start counting towards net worth
+    // by name — a change to make deliberately, not as a side effect of fetching prices.
+    expect(set.prices['tabula-rasa']).toBeUndefined();
+    expect(Object.keys(set.prices)).not.toContain('Tabula Rasa');
+  });
+
+  it('still produces a price set when the item endpoint is down', async () => {
+    // Uniques are decoration on the wealth total; the exchange prices are the total. One must
+    // not be able to take the other with it.
+    const set = await service({
+      fetchFn: bothEndpoints(itemBody, { failItems: true }),
+      uniqueItemCategories: ['UniqueArmour'],
+    }).getPrices();
+
+    expect(set.uniquePrices).toEqual({});
+    expect(set.prices.chaos).toBe(1);
+  });
+
+  it('asks for nothing when the category list is empty', async () => {
+    const fetchFn = vi.fn(bothEndpoints(itemBody) as never) as unknown as typeof fetch;
+    await service({ fetchFn, uniqueItemCategories: [] }).getPrices();
+
+    const urls = (fetchFn as unknown as { mock: { calls: unknown[][] } }).mock.calls.map((call) => String(call[0]));
+    expect(urls.some((url) => url.includes('/stash/current/item/'))).toBe(false);
   });
 });

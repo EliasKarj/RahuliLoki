@@ -51,19 +51,23 @@ DeliriumOrb, Incubator, Artifact, Vial, Omen, Tattoo, AllflameEmber`.
 > on it. Valuing them by name would give them *a* number, and that number would be wrong in a way
 > the chart cannot show.
 
-> **▸ Why uniques are not priced either:** it is worse than the variant problem. Every unique
-> type poe.ninja serves — `UniqueArmour`, `UniqueWeapon`, `UniqueAccessory`, `UniqueFlask`,
-> `UniqueJewel`, `UniqueMap`, `UniqueRelic`, and a bare `Unique` — answers 200 with **zero
-> lines**, recorded by `scripts/probe.mjs`. There are no unique prices to fetch, with or without
-> the variant fields.
+> **▸ Why uniques are not in the wealth total:** not for want of prices — that was this
+> project's conclusion for months and it was half wrong. The **exchange** endpoint serves no
+> uniques: `UniqueArmour`, `UniqueWeapon`, `UniqueAccessory`, `UniqueFlask`, `UniqueJewel`,
+> `UniqueMap`, `UniqueRelic` and a bare `Unique` all answer 200 with zero lines, recorded by
+> `scripts/probe.mjs`. The **item** endpoint, `stash/current/item`, serves 2,223 of them across
+> five types, every one named and priced, and `probe.mjs --items` is what found it.
 >
-> The variant problem stands behind it and is why this cannot be worked around by matching on
-> name: price rows no longer carry `links` or `corrupted`, and the same Bronn's Lithe is ~5 chaos
-> with no links and ~210 as a six-link.
+> Those prices are fetched, into `PriceSet.uniquePrices`, keyed by display name. They stay out of
+> the valuation deliberately. `resolvePrice` falls through to the flat price map for anything the
+> variant index does not resolve, so merging them in would start valuing uniques by name in
+> everybody's net worth — and by name a plain Bronn's Lithe and a six-linked one are the same
+> row, ~5 chaos against ~210.
 >
-> The options were a number wrong by fortyfold with nothing to indicate it, or no number at all.
-> So uniques go unpriced and appear in the poll's "no price" warning. If poe.ninja starts
-> publishing the variant fields again, `PRICE_UNIQUE_CATEGORIES` switches them back on.
+> The item endpoint does carry `links` and `variant`, which the exchange endpoint never did, so
+> valuing uniques properly is now a real possibility rather than a blocked one: match each stash
+> item to a priced variant by its links, then let it into the total. That is a change of its own,
+> because it moves every reported net worth.
 
 ---
 
@@ -80,7 +84,7 @@ Everything under `/api`, everything JSON.
 | `GET /api/item-history?name=&league=&from=` | One item's quantity and value in every snapshot in the range. |
 | `GET /api/economy?league=` | Every item poe.ninja prices: name, category, value, percentage change, trade volume and poe.ninja's own sparkline. One response, searched in the browser. |
 | `GET /api/price-history?id=&league=` | What one item has cost across every price set still retained — this app's own record, oldest first. |
-| `GET /api/uniques?league=` | The identified uniques a poll last saw, with item level, quality, corruption, tab and a by-name chaos price where one exists. |
+| `GET /api/uniques?league=` | The identified uniques a poll last saw, with item level, quality, corruption, tab, the dust each yields, a by-name chaos price where one exists, and dust per chaos. |
 | `GET /api/leagues` | The current leagues from GGG, for the desktop build's menu. Cached 6 h; the permanent leagues on failure. |
 | `GET /api/account` | Who GGG says the stored session belongs to, and whether that matches `POE_ACCOUNT_NAME`. 502 when GGG will not answer — which is itself an answer. |
 | `POST /api/poll` | Starts a poll and answers **202 immediately**, not when it finishes. 409 if one is already running, 503 if credentials are missing. The outcome is read from `/api/health`. |
@@ -123,20 +127,14 @@ change without one.
 > The check is the test, not the paragraph: every row goes back through the formula and both
 > published columns have to come out again.
 
-> **▸ Why dust-per-chaos is still missing:** the chaos half is. poe.ninja's exchange endpoint
-> serves no unique prices — every unique type answers with zero lines. `probe.mjs --items` asks
-> the *other* endpoint, `stash/current/item`, which a working disenchanting tool uses and which
-> may carry names and chaos values that the exchange endpoint does not. That is the open
-> question; the column appears the moment any row has a price.
-
-> **▸ Why the price on that view is by name, and why it stops there:** poe.ninja's payload
-> carries no links and no corruption, so a six-linked Bronn's Lithe and a plain one are one line
-> to it — which is why uniques are unpriced in the wealth total, and why they must stay that
-> way. `resolvePrice` falls through to the flat price map for anything the variant index does not
-> resolve, so merging unique prices into that map would silently start valuing uniques by name in
-> everybody's net worth. The Kingsmarch view therefore reads prices the flat map already has and
-> marks them approximate; wiring unique prices in properly needs a separate map that valuation
-> never sees.
+> **▸ Where the chaos half comes from:** `PriceSet.uniquePrices`, the item endpoint above. Where
+> poe.ninja lists several variants of one unique the **cheapest** is taken, because a stash item
+> this app has not matched to a variant could be any of them, and a figure sitting next to a
+> decision to destroy something should not flatter it.
+>
+> That map is deliberately its own thing rather than part of `prices`: name-keyed, read by this
+> view and by nothing else, so it cannot leak into a net worth by accident. Every priced row
+> carries `priceIsApproximate` and the view says so in a sentence at the top.
 
 > **▸ Why the economy list arrives whole:** a price set is a few thousand rows and the client
 > is on the same machine. Paging it would trade a few hundred kilobytes, once, for a search that

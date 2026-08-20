@@ -12,13 +12,13 @@
  *
  * ## What is deliberately not here
  *
- * The dust value itself. It scales with item level and quality, and this project has not
- * verified those numbers against anything — so there is no formula in this file, and no column
- * pretending to one. Everything a formula needs is captured and named; the formula arrives when
- * there is a source for it.
+ * The dust value itself, and the price. Both are lookups by name and both live where the name
+ * is already known to be clean — services/dust.ts and the route. This file's whole job is to
+ * produce a name that will match: stripped of GGG's localisation markup, grouped by everything
+ * the bench reads, and nothing invented.
  */
 
-import { FRAME_UNIQUE } from './valuationService.ts';
+import { FRAME_UNIQUE, stripNameMarkup } from './valuationService.ts';
 import type { StashItem, TabContents } from './stashService.ts';
 
 export interface UniqueHolding {
@@ -100,12 +100,17 @@ export function uniqueHoldings(tabs: TabContents[]): UniqueHolding[] {
       // On a unique, `name` is the unique's own name and `baseType` is what it is built on. An
       // empty name means GGG sent something this code does not understand, and inventing one
       // would put a row in the table that matches nothing.
-      const name = typeof item.name === 'string' ? item.name.trim() : '';
+      //
+      // Stripped, not trimmed. GGG prefixes a unique's name with localisation markup —
+      // `<<set:MS>><<set:M>><<set:S>>Headhunter` — and carrying that through means every lookup
+      // that follows, the dust table and the price map alike, matches nothing at all. It is the
+      // same `stripNameMarkup` the valuation has always used; this file simply did not call it.
+      const name = stripNameMarkup(typeof item.name === 'string' ? item.name : '');
       if (name === '') continue;
 
       const holding: Omit<UniqueHolding, 'count'> = {
         name,
-        baseType: (item.baseType ?? item.typeLine ?? '').trim(),
+        baseType: stripNameMarkup(item.baseType ?? item.typeLine ?? ''),
         tab: tab.name,
         ilvl: typeof item.ilvl === 'number' && Number.isFinite(item.ilvl) ? item.ilvl : null,
         quality: qualityOf(item),

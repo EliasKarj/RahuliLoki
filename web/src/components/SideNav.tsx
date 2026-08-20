@@ -14,7 +14,7 @@ export type View = 'dashboard' | 'economy' | 'kingsmarch';
 const VIEWS: Array<{ id: View; label: string; hint: string }> = [
   { id: 'dashboard', label: 'Dashboard', hint: 'What you own and what it is doing' },
   { id: 'economy', label: 'Economy', hint: 'What everything is worth, held or not' },
-  { id: 'kingsmarch', label: 'Kingsmarch', hint: 'Your uniques, with the item level and quality dust reads' },
+  { id: 'kingsmarch', label: 'Kingsmarch', hint: 'Your uniques, ranked by the dust a chaos of them buys' },
 ];
 
 export function SideNav({ value, onChange }: { value: View; onChange: (next: View) => void }) {
