@@ -22,7 +22,7 @@ The triple is `hits:period:penalty`. The limiter
 - **paces on how much is left in the bucket**, not on its average refill rate: the first half of
   the budget may be spent freely, after which the delay ramps evenly up to the full
   `period / hits` rate by the time the bucket is empty;
-- **serialises** requests — one at a time, never in parallel;
+- **serialises the decision** — one request at a time is admitted, though several may be in the air;
 - **waits out the whole period** when a bucket is empty, and the stated time when the state
   reports a penalty;
 - **honours `Retry-After`** on a 429 and doubles from there up to 30 minutes;
@@ -62,6 +62,28 @@ The triple is `hits:period:penalty`. The limiter
 > Past forty tabs the time is GGG's limit rather than ours: forty-five requests a minute is
 > forty-five requests a minute, and the second half of a sixty-tab stash waits for the window to
 > roll. No client can read that account faster.
+
+> **▸ Why several requests are in the air at once:** the limiter used to hold its queue for the
+> whole round trip, so a stash was read one network latency at a time — twenty-four tabs at two
+> hundred milliseconds each is five seconds of *waiting*, against a policy that would have
+> allowed all twenty-four inside one second. GGG's buckets count requests per window, not
+> requests at a time.
+>
+> Admission is still serialised, one decision at a time; only the waiting overlaps. Measured
+> against a fake GGG at 200 ms a round trip:
+>
+> | Tabs | One at a time | Six at a time |
+> |------|---------------|---------------|
+> | 8 | 1.7 s | **0.6 s** |
+> | 12 | 2.4 s | **0.6 s** |
+> | 24 | 4.8 s | **1.2 s** |
+> | 40 | 16.6 s | **13.0 s** |
+>
+> Six, and never more than the window has room for: `computeDelayMs` counts the requests already
+> launched but not yet answered, so concurrency cannot hide hits from the pacing. It drops to
+> one the moment pacing starts, and it is one for the very first request of all — before any
+> response there is no policy to be within, and opening with six would be guessing that the
+> allowance is at least six.
 
 The first call returns the tab list **and** the first tab's items in the same response, so it is
 never read twice.

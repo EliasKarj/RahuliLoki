@@ -367,3 +367,79 @@ describe('the floor, and how long it applies', () => {
     expect(elapsed).toBeLessThan(30_000);
   });
 });
+
+describe('concurrency', () => {
+  /**
+   * Runs `count` requests and reports the most that were ever in the air at once.
+   *
+   * Real timers, tiny delays: overlap is the thing under test, and a fake clock that releases
+   * one waiter at a time would manufacture the serial behaviour this is checking for. That is
+   * not hypothetical — the first measurement written for this change did exactly that and
+   * reported no speed-up at all from a limiter that was in fact running six at a time.
+   */
+  async function peakConcurrency(
+    count: number,
+    state: string,
+    concurrency?: number,
+  ): Promise<{ peak: number; requests: number }> {
+    let live = 0;
+    let peak = 0;
+    let requests = 0;
+    const fetchFn = (async () => {
+      live += 1;
+      peak = Math.max(peak, live);
+      requests += 1;
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      live -= 1;
+      return new Response('{}', {
+        status: 200,
+        headers: {
+          'x-rate-limit-account': '45:60:120,200:3600:3600',
+          'x-rate-limit-account-state': state,
+        },
+      });
+    }) as unknown as typeof fetch;
+
+    const limiter = new RateLimiter({
+      fetchFn,
+      ...(concurrency === undefined ? {} : { concurrency }),
+    });
+    await Promise.all(Array.from({ length: count }, () => limiter.request('https://example.test/x')));
+    return { peak, requests };
+  }
+
+  it('overlaps requests while the bucket has room', async () => {
+    // This is the whole point: GGG counts requests per window, not requests at a time, so a
+    // stash should be read at network speed rather than at latency times tab count.
+    const { peak, requests } = await peakConcurrency(12, '2:60:0,2:3600:0');
+
+    expect(peak).toBeGreaterThan(1);
+    expect(peak).toBeLessThanOrEqual(6);
+    expect(requests).toBe(12);
+  });
+
+  it('never exceeds the ceiling it was given', async () => {
+    const { peak } = await peakConcurrency(12, '2:60:0,2:3600:0', 3);
+    expect(peak).toBeLessThanOrEqual(3);
+  });
+
+  it('drops to one the moment the bucket asks for pacing', async () => {
+    // Past the reserve every delay has to be computed against a fresh observation, not against
+    // a guess about several unfinished requests.
+    const { peak } = await peakConcurrency(4, '40:60:0,40:3600:0');
+    expect(peak).toBe(1);
+  });
+
+  it('counts what is in the air when it paces', () => {
+    // Thirty hits observed of forty-five, five more already launched: thirty-five used, which is
+    // past the halfway reserve and must produce a delay. Without the in-flight term this reads
+    // as thirty and waits for nothing.
+    const limits = [{ hits: 45, periodSeconds: 60, restrictedSeconds: 120 }];
+    const states = [{ hits: 30, periodSeconds: 60, restrictedSeconds: 0 }];
+
+    expect(computeDelayMs(limits, states, {})).toBeGreaterThan(0);
+    expect(computeDelayMs(limits, states, { inFlight: 5 })).toBeGreaterThan(
+      computeDelayMs(limits, states, {}),
+    );
+  });
+});

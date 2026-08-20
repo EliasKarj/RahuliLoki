@@ -252,8 +252,14 @@ export class StashService {
   }
 
   /**
-   * Fetch every tracked tab, one at a time. Any failure propagates: a partial read must never
-   * become a snapshot, because a missing tab is indistinguishable from a spent one on a chart.
+   * Fetch every tracked tab. Any failure propagates: a partial read must never become a
+   * snapshot, because a missing tab is indistinguishable from a spent one on a chart.
+   *
+   * Every tab is asked for at once and the limiter decides when each one actually goes — it
+   * holds the whole rate-limit policy, so the alternative would be a second, worse copy of that
+   * policy here. This loop used to await each response before asking for the next, which meant
+   * a stash was read one network round trip at a time however much of GGG's allowance was
+   * sitting unused.
    */
   async fetchTrackedTabs(): Promise<TabContents[]> {
     const { tabs, firstTabItems } = await this.listTabs();
@@ -272,13 +278,17 @@ export class StashService {
       );
     }
 
-    const contents: TabContents[] = [];
-    for (const tab of selected) {
-      // The listing call already carried tab 0's items. Do not spend a request re-reading it.
-      const items = tab.index === 0 ? firstTabItems : asItems((await this.#get(tab.index, false)).items);
-      this.#log.debug({ tab: tab.name, items: items.length }, 'read stash tab');
-      contents.push({ tab, items });
-    }
+    const contents = await Promise.all(
+      selected.map(async (tab) => {
+        // The listing call already carried tab 0's items. Do not spend a request re-reading it.
+        const items =
+          tab.index === 0 ? firstTabItems : asItems((await this.#get(tab.index, false)).items);
+        this.#log.debug({ tab: tab.name, items: items.length }, 'read stash tab');
+        return { tab, items };
+      }),
+    );
+    // Promise.all keeps the input order, so the breakdown is still in tab order rather than in
+    // whatever order the network happened to answer.
     return contents;
   }
 }

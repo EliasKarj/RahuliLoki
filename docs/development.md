@@ -195,12 +195,14 @@ unvalidated symlink path traversal during extraction. There **is no fixed versio
 pnpm test
 ```
 
-**596 tests**, not one network request:
+**600 tests**, not one network request:
 
 - **The rate limiter** — header parsing, pacing, serialisation, `Retry-After`, doubling up to the
   ceiling. The clock and sleep are faked, so testing a 30-minute backoff takes microseconds. One
   of them reads twenty-four tabs against GGG's real policy and fails if it takes more than five
-  seconds — the regression it exists for cost twenty-six.
+  seconds — the regression it exists for cost twenty-six. Concurrency is tested on real timers
+  rather than a fake clock, because a clock that releases one waiter at a time manufactures the
+  serial behaviour the test is looking for.
 - **Prices** — recorded poe.ninja responses, broken ones included: a null price, an empty `lines`,
   HTML instead of JSON.
 - **The stash** — recorded GGG responses, markup and all. One tab failing fails the poll; the

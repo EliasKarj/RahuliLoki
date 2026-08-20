@@ -77,6 +77,14 @@ export interface RateLimiterOptions {
   timeoutMs?: number;
   /** Ceiling on any wait this class will sit through, however long a header asks for. */
   maxWaitMs?: number;
+  /**
+   * How many requests may be in the air at once while the buckets have room to spare.
+   *
+   * Concurrency does not change how many requests a window counts, only how long they take
+   * wall-clock. It drops to one the moment pacing starts, so the paced region is still one
+   * decision per observed state.
+   */
+  concurrency?: number;
 }
 
 export class RateLimitError extends Error {
@@ -141,9 +149,13 @@ export const PACING_RESERVE = 0.5;
 export function computeDelayMs(
   limits: RateLimitPolicy[],
   states: RateLimitPolicy[],
-  options: { minIntervalMs?: number } = {},
+  options: { minIntervalMs?: number; inFlight?: number } = {},
 ): number {
   let delay = options.minIntervalMs ?? 0;
+  // Requests already launched whose response has not come back yet. GGG has counted them; our
+  // observed state has not seen them. Without this, concurrency would hide exactly as many hits
+  // as it allowed in flight, and the pacing would start late by that many.
+  const unseen = Math.max(0, options.inFlight ?? 0);
 
   for (let i = 0; i < limits.length; i += 1) {
     const limit = limits[i];
@@ -155,7 +167,7 @@ export function computeDelayMs(
       delay = Math.max(delay, state.restrictedSeconds * 1000);
     }
 
-    const used = state?.hits ?? 0;
+    const used = (state?.hits ?? 0) + unseen;
     const remaining = limit.hits - used;
 
     if (remaining <= 0) {
@@ -208,8 +220,13 @@ export class RateLimiter {
   #consecutive429 = 0;
   #totalRequests = 0;
   #total429 = 0;
-  /** The serialisation point: every request links onto this chain. */
+  /** The serialisation point: every *admission* links onto this chain. */
   #queue: Promise<unknown> = Promise.resolve();
+  /** Launched, not yet accounted for by an observed state. */
+  #inFlight = 0;
+  readonly #concurrency: number;
+  #settledResolve: (() => void) | null = null;
+  #settled: Promise<void> = Promise.resolve();
 
   constructor(options: RateLimiterOptions = {}) {
     this.#fetch = options.fetchFn ?? globalThis.fetch;
@@ -220,6 +237,14 @@ export class RateLimiter {
     this.#minBackoffMs = options.minBackoffMs ?? 10_000;
     this.#maxBackoffMs = options.maxBackoffMs ?? 30 * 60_000;
     this.#minIntervalMs = options.minIntervalMs ?? 0;
+    // Six. GGG's tightest stash policy is forty-five a minute and pacing starts at half of it,
+    // so at most six requests can be unaccounted for inside a margin of twenty-two. Enough to
+    // read a stash at network speed rather than at network latency times the tab count, and far
+    // enough from the cap that the overshoot cannot reach it.
+    this.#concurrency = Math.max(1, options.concurrency ?? 6);
+    this.#settled = new Promise<void>((resolve) => {
+      this.#settledResolve = resolve;
+    });
     this.#timeoutMs = options.timeoutMs ?? 30_000;
     // A restrictedSeconds of 999999999 — a garbled header, a proxy inventing one — would
     // otherwise put the poller to sleep for thirty years. An hour is longer than any real
@@ -239,32 +264,30 @@ export class RateLimiter {
   }
 
   /**
-   * Perform one rate-limited request. Serialised against every other call on this limiter,
-   * delayed to stay inside the buckets, and retried on 429 with honoured Retry-After.
+   * Perform one rate-limited request.
+   *
+   * Two things used to be one thing here: deciding *when* a request may start, and waiting for
+   * it to come back. Only the first has to be serialised. Holding the queue for the round trip
+   * as well meant a stash was read strictly one network latency at a time — twenty-four tabs at
+   * two hundred milliseconds each is five seconds of waiting for a policy that would have
+   * allowed all twenty-four at once.
+   *
+   * So admission is serialised and the round trip is not. GGG's buckets count requests per
+   * window, not requests at a time; what has to stay true is that we never launch more than the
+   * window has room for, and `#inFlight` is what keeps the pacing honest about the ones already
+   * in the air.
    */
-  request(url: string, init: RequestInit = {}): Promise<Response> {
-    return this.schedule(() => this.#attempt(url, init));
-  }
-
-  async #attempt(url: string, init: RequestInit): Promise<Response> {
+  async request(url: string, init: RequestInit = {}): Promise<Response> {
     for (let attempt = 0; ; attempt += 1) {
-      await this.#waitForSlot();
+      await this.schedule(() => this.#admit());
 
       let response: Response;
       try {
-        response = await this.#fetch(url, {
-          ...init,
-          signal: timeoutSignal(this.#timeoutMs, init.signal),
-        });
+        response = await this.#fire(url, init);
       } catch (error) {
-        // A transport failure still consumed a slot as far as we know. Keep the pacing.
-        this.#nextRequestAt = this.#now() + this.#minIntervalMs;
         this.#log.warn({ err: error }, 'rate-limited request failed in transport');
         throw error;
       }
-
-      this.#totalRequests += 1;
-      this.observe(response.headers);
 
       if (response.status !== 429) {
         this.#consecutive429 = 0;
@@ -275,6 +298,8 @@ export class RateLimiter {
       this.#consecutive429 += 1;
       const retryAfterMs = parseRetryAfter(response.headers.get('retry-after'), this.#now());
       const waitMs = this.#backoffMs(retryAfterMs);
+      // Global, not per-request: a 429 is the account being told to sit down, so everything
+      // waiting for admission waits with it.
       this.#restrictedUntil = this.#now() + waitMs;
 
       if (attempt >= this.#maxRetries) {
@@ -297,6 +322,67 @@ export class RateLimiter {
     }
   }
 
+  /**
+   * Take a slot: wait until the buckets allow another request, then count it as in flight.
+   *
+   * Runs on the queue, so exactly one caller is deciding at a time and each decision sees the
+   * count the previous one left behind.
+   */
+  async #admit(): Promise<void> {
+    // While pacing is active the concurrency drops to one, so every delay is computed against a
+    // fresh observation instead of against a guess about several unfinished requests.
+    while (this.#inFlight >= this.#concurrencyNow()) await this.#anySettled();
+    await this.#waitForSlot();
+    this.#inFlight += 1;
+  }
+
+  /** One request, from the wire to the recorded state. Not serialised; several may overlap. */
+  async #fire(url: string, init: RequestInit): Promise<Response> {
+    try {
+      const response = await this.#fetch(url, {
+        ...init,
+        signal: timeoutSignal(this.#timeoutMs, init.signal),
+      });
+      this.#totalRequests += 1;
+      this.observe(response.headers);
+      return response;
+    } finally {
+      // Whatever happened, it is no longer in the air: either its hits are in the observed
+      // state, or it never reached GGG. A transport failure is counted as spent anyway — we
+      // cannot know that it did not arrive.
+      this.#inFlight = Math.max(0, this.#inFlight - 1);
+      this.#nextRequestAt = this.#now() + this.#minIntervalMs;
+      const wake = this.#settledResolve;
+      this.#settled = new Promise<void>((resolve) => {
+        this.#settledResolve = resolve;
+      });
+      wake?.();
+    }
+  }
+
+  /**
+   * How many may be in the air right now.
+   *
+   * One until GGG has told us its policy, and one again as soon as the buckets ask for pacing.
+   * The first of those matters more than it looks: before any response there is no policy and
+   * no state, so opening with six concurrent requests would be guessing that the allowance is
+   * at least six — a guess with nothing behind it. One request buys the headers, and everything
+   * after it is informed.
+   */
+  #concurrencyNow(): number {
+    if (this.#observedAt === null) return 1;
+    const paced = computeDelayMs(this.#limits, this.#states, {
+      minIntervalMs: this.#minIntervalMs,
+      inFlight: this.#inFlight,
+    });
+    return paced > 0 ? 1 : this.#concurrency;
+  }
+
+  /** Resolves the next time any in-flight request finishes. */
+  #anySettled(): Promise<void> {
+    return this.#settled;
+  }
+
   /** Honour Retry-After first, then double it per consecutive 429, capped at the ceiling. */
   #backoffMs(retryAfterMs: number): number {
     const base = Math.max(retryAfterMs, this.#minBackoffMs);
@@ -305,7 +391,10 @@ export class RateLimiter {
   }
 
   async #waitForSlot(): Promise<void> {
-    const delay = computeDelayMs(this.#limits, this.#states, { minIntervalMs: this.#minIntervalMs });
+    const delay = computeDelayMs(this.#limits, this.#states, {
+      minIntervalMs: this.#minIntervalMs,
+      inFlight: this.#inFlight,
+    });
     const readyAt = Math.max(this.#nextRequestAt, this.#restrictedUntil ?? 0);
     const wanted = Math.max(readyAt - this.#now(), 0, this.#observedAt === null ? 0 : delay);
     const wait = Math.min(wanted, this.#maxWaitMs);
