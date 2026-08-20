@@ -16,8 +16,10 @@ import { usePrices } from '../lib/denomination.tsx';
 import { formatAgo } from '../lib/format.ts';
 import { Empty } from './ui.tsx';
 import { ItemIcon } from './ItemIcon.tsx';
+import { PriceHistory } from './PriceHistory.tsx';
+import { sparklinePath } from '../lib/spark.ts';
 
-type SortKey = 'name' | 'chaos';
+type SortKey = 'name' | 'chaos' | 'change' | 'volume';
 
 /**
  * Case- and punctuation-insensitive, over the name, the id and the category.
@@ -51,6 +53,8 @@ export function Economy({ league }: { league: string | undefined }) {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<string | null>(null);
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: 'chaos', desc: true });
+  /** The item whose price history is open, if any. */
+  const [open, setOpen] = useState<{ id: string; name: string } | null>(null);
   const prices = usePrices();
 
   useEffect(() => {
@@ -77,9 +81,18 @@ export function Economy({ league }: { league: string | undefined }) {
       (row) => matches(row, query) && (category === null || row.category === category),
     );
     const sign = sort.desc ? -1 : 1;
-    return [...filtered].sort((a, b) =>
-      sort.key === 'name' ? sign * a.name.localeCompare(b.name) : sign * (a.chaos - b.chaos),
-    );
+    return [...filtered].sort((a, b) => {
+      if (sort.key === 'name') return sign * a.name.localeCompare(b.name);
+      if (sort.key === 'chaos') return sign * (a.chaos - b.chaos);
+      // A row poe.ninja published nothing for sorts to the far end whichever way the column is
+      // pointing, rather than mixing in among the rows that did move.
+      const left = sort.key === 'change' ? a.change : a.volume;
+      const right = sort.key === 'change' ? b.change : b.volume;
+      if (left === null && right === null) return 0;
+      if (left === null) return 1;
+      if (right === null) return -1;
+      return sign * (left - right);
+    });
   }, [all, query, category, sort]);
 
   if (error !== null) {
@@ -101,8 +114,11 @@ export function Economy({ league }: { league: string | undefined }) {
 
   const toggle = (key: SortKey) =>
     setSort((current) =>
-      current.key === key ? { key, desc: !current.desc } : { key, desc: key === 'chaos' },
+      current.key === key ? { key, desc: !current.desc } : { key, desc: key !== 'name' },
     );
+
+  /** True when poe.ninja published movement for anything here; false hides the whole column. */
+  const anyMovement = all.some((row) => row.change !== null || row.sparkline.length > 1);
 
   const arrow = (key: SortKey) => (sort.key === key ? (sort.desc ? ' ↓' : ' ↑') : '');
 
@@ -154,6 +170,14 @@ export function Economy({ league }: { league: string | undefined }) {
                 </button>
               </th>
               <th scope="col" className="py-2 text-left font-medium">Category</th>
+              {anyMovement ? (
+                <th scope="col" className="py-2 text-right font-medium">
+                  <button type="button" onClick={() => toggle('change')} className="transition-colors hover:text-ink-200">
+                    Change{arrow('change')}
+                  </button>
+                </th>
+              ) : null}
+              {anyMovement ? <th scope="col" className="py-2 pl-3 text-left font-medium">Trend</th> : null}
               <th scope="col" className="py-2 text-right font-medium">
                 <button type="button" onClick={() => toggle('chaos')} className="transition-colors hover:text-ink-200">
                   Value{arrow('chaos')}
@@ -167,7 +191,13 @@ export function Economy({ league }: { league: string | undefined }) {
                 <td className="py-2 pr-3 text-ink-100">
                   <span className="flex items-center gap-2">
                     <ItemIcon src={row.icon ?? undefined} />
-                    {row.name}
+                    <button
+                      type="button"
+                      onClick={() => setOpen({ id: row.id, name: row.name })}
+                      className="text-left underline decoration-ink-700 underline-offset-2 transition-colors hover:decoration-accent-500"
+                    >
+                      {row.name}
+                    </button>
                     {/* A slug lost its punctuation on the way here, so the row says so instead
                         of presenting a reconstruction as the item's real name. */}
                     {row.nameSource === 'slug' ? (
@@ -183,6 +213,29 @@ export function Economy({ league }: { league: string | undefined }) {
                 <td className="py-2 pr-3 text-ink-500">
                   {row.category === null ? '—' : row.category.replace(/([a-z])([A-Z])/g, '$1 $2')}
                 </td>
+                {anyMovement ? (
+                  <td
+                    className={`num py-2 pr-3 ${
+                      row.change === null
+                        ? 'text-ink-600'
+                        : row.change > 0
+                          ? 'text-accent-500'
+                          : row.change < 0
+                            ? 'text-cool-400'
+                            : 'text-ink-400'
+                    }`}
+                    title={row.volume === null ? undefined : `volume ${Math.round(row.volume).toLocaleString()}c`}
+                  >
+                    {/* Empty, not 0%, when poe.ninja published nothing. The two are different
+                        claims and only one of them is true here. */}
+                    {row.change === null ? '' : `${row.change > 0 ? '+' : ''}${row.change.toFixed(1)}%`}
+                  </td>
+                ) : null}
+                {anyMovement ? (
+                  <td className="py-2 pl-3">
+                    <Trend values={row.sparkline} rising={(row.change ?? 0) >= 0} />
+                  </td>
+                ) : null}
                 <td className="num py-2 text-accent-500">{prices.price(row.chaos)}</td>
               </tr>
             ))}
@@ -192,7 +245,38 @@ export function Economy({ league }: { league: string | undefined }) {
           <p className="py-6 text-center text-xs text-ink-400">Nothing matches “{query}”.</p>
         ) : null}
       </div>
+
+      {open !== null ? (
+        <div className="max-w-6xl">
+          <PriceHistory id={open.id} name={open.name} league={league} onClose={() => setOpen(null)} />
+        </div>
+      ) : null}
     </div>
+  );
+}
+
+/**
+ * poe.ninja's own series as a shape, forty pixels wide.
+ *
+ * A percentage series, so it is drawn against its own range and carries no axis — the number
+ * beside it is the magnitude, this is only the path it took. Fewer than two points is not a
+ * trend and draws nothing rather than a dot pretending to be one.
+ */
+function Trend({ values, rising }: { values: number[]; rising: boolean }) {
+  if (values.length < 2) return null;
+  const path = sparklinePath(values, 64, 16);
+  if (path.line === '') return null;
+
+  return (
+    <svg width="64" height="16" viewBox="0 0 64 16" aria-hidden="true" className="block">
+      <path
+        d={path.line}
+        fill="none"
+        stroke={rising ? 'var(--color-accent-500)' : 'var(--color-cool-400)'}
+        strokeWidth="1.25"
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
   );
 }
 

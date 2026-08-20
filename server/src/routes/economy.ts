@@ -42,6 +42,7 @@ export async function economyRoutes(app: FastifyInstance, deps: ApiDeps): Promis
       categories: priceSet.categories,
       icons: priceSet.icons,
       divineRate: priceSet.divineRate,
+      meta: priceSet.meta,
       ...(known ? { known } : {}),
     });
 
@@ -53,5 +54,24 @@ export async function economyRoutes(app: FastifyInstance, deps: ApiDeps): Promis
       count: rows.length,
       rows,
     });
+  });
+
+  /**
+   * GET /api/price-history — what one item has cost, as this app watched it.
+   *
+   * Not poe.ninja's sparkline, which is a percentage series over a window it chooses. This is
+   * the actual chaos value out of every price set still retained, which is `PRICE_SET_RETENTION`
+   * fetches — two days at the defaults, and as long as you care to keep if you raise it.
+   */
+  app.get('/price-history', async (request: FastifyRequest, reply: FastifyReply) => {
+    const raw = request.query as Record<string, unknown>;
+    const id = typeof raw.id === 'string' ? raw.id.trim() : '';
+    if (id === '') return reply.code(400).send({ error: 'id is required' });
+
+    const league =
+      typeof raw.league === 'string' && raw.league.trim() !== '' ? raw.league.trim() : deps.config.league;
+
+    const points = await deps.priceHistory.history(league, id);
+    return reply.send({ league, id, count: points.length, points });
   });
 }

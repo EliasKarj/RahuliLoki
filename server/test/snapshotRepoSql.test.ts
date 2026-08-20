@@ -18,7 +18,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PrismaClient } from '../generated/prisma/index.js';
 import { migrate } from '../src/lib/migrate.ts';
-import { PrismaSnapshotStore } from '../src/services/snapshotRepo.ts';
+import { PrismaPriceSetStore, PrismaSnapshotStore } from '../src/services/snapshotRepo.ts';
 import type { Breakdown } from '../src/services/valuationService.ts';
 
 const MIGRATIONS = fileURLToPath(new URL('../prisma/migrations', import.meta.url));
@@ -39,6 +39,12 @@ function store(): { store: PrismaSnapshotStore; prisma: PrismaClient; file: stri
   const prisma = new PrismaClient({ datasourceUrl: `file:${file}` });
   clients.push(prisma);
   return { store: new PrismaSnapshotStore(prisma), prisma, file };
+}
+
+/** The same, with the price-set store on top instead. */
+async function priceStore(): Promise<{ store: PrismaPriceSetStore; prisma: PrismaClient }> {
+  const { prisma } = store();
+  return { store: new PrismaPriceSetStore(prisma, 0), prisma };
 }
 
 async function add(
@@ -157,5 +163,67 @@ describe('listTabTotals', () => {
     const rows = await subject.listTabTotals({ league: 'Allflame' });
 
     expect(rows[0]?.tabs).toEqual({ Currency: 20 });
+  });
+});
+
+describe('price history, against a real database', () => {
+  it('reads one id out of every retained set, oldest first', async () => {
+    const { prisma, store } = await priceStore();
+    await prisma.priceSet.createMany({
+      data: [
+        { league: 'Settlers', fetchedAt: new Date('2026-01-01T02:00:00Z'), prices: { divine: 220, alt: 0.13 } },
+        { league: 'Settlers', fetchedAt: new Date('2026-01-01T00:00:00Z'), prices: { divine: 210, alt: 0.11 } },
+        { league: 'Settlers', fetchedAt: new Date('2026-01-01T01:00:00Z'), prices: { divine: 215, alt: 0.12 } },
+        { league: 'Standard', fetchedAt: new Date('2026-01-01T01:00:00Z'), prices: { divine: 999, alt: 9 } },
+      ],
+    });
+
+    const points = await store.history('Settlers', 'alt');
+
+    expect(points.map((point) => point.chaos)).toEqual([0.11, 0.12, 0.13]);
+    // The divine rate travels with each point so a chart can quote it in either unit without a
+    // second query — and it is the rate *at that moment*, not today's.
+    expect(points.map((point) => point.divineRate)).toEqual([210, 215, 220]);
+    expect(points[0]?.at).toBe('2026-01-01T00:00:00.000Z');
+  });
+
+  it('skips the sets that did not price it, rather than reading them as zero', async () => {
+    const { prisma, store } = await priceStore();
+    await prisma.priceSet.createMany({
+      data: [
+        { league: 'Settlers', fetchedAt: new Date('2026-01-01T00:00:00Z'), prices: { divine: 210 } },
+        { league: 'Settlers', fetchedAt: new Date('2026-01-01T01:00:00Z'), prices: { divine: 215, alt: 0.12 } },
+      ],
+    });
+
+    // An item poe.ninja stopped pricing has a gap in its history, not a crash to zero. A zero
+    // would draw a cliff on the chart and read as "it became worthless".
+    expect(await store.history('Settlers', 'alt')).toHaveLength(1);
+  });
+
+  it('keeps the recent end when there are more sets than the limit', async () => {
+    const { prisma, store } = await priceStore();
+    await prisma.priceSet.createMany({
+      data: Array.from({ length: 10 }, (_, index) => ({
+        league: 'Settlers',
+        fetchedAt: new Date(Date.UTC(2026, 0, 1, index)),
+        prices: { divine: 200, alt: index },
+      })),
+    });
+
+    const points = await store.history('Settlers', 'alt', 3);
+    expect(points.map((point) => point.chaos)).toEqual([7, 8, 9]);
+  });
+
+  it('does not let an id smuggle anything into the JSON path', async () => {
+    const { prisma, store } = await priceStore();
+    await prisma.priceSet.createMany({
+      data: [{ league: 'Settlers', fetchedAt: new Date('2026-01-01T00:00:00Z'), prices: { divine: 210 } }],
+    });
+
+    // The id goes into a json_extract path, which is a string this code builds. A quote in it
+    // must not be able to close that string — the answer is an empty history, not an error and
+    // certainly not a different query.
+    await expect(store.history('Settlers', 'alt", "$.divine') ).resolves.toEqual([]);
   });
 });

@@ -27,6 +27,7 @@
  */
 
 import { SHORT_CODES, ninjaId } from './ninjaId.ts';
+import type { LineMeta } from './ninjaPayload.ts';
 
 export type NameSource = 'stash' | 'alias' | 'slug';
 
@@ -42,6 +43,15 @@ export interface EconomyRow {
   /** Convenience for the client, which would otherwise divide in three places. */
   divine: number;
   icon: string | null;
+  /**
+   * What the price has been doing, as poe.ninja publishes it. Null when it publishes nothing —
+   * which is not the same claim as "it has not moved", and is why this is nullable rather than
+   * a zero.
+   */
+  change: number | null;
+  volume: number | null;
+  /** poe.ninja's own series, percentages from its own start. Empty when it published none. */
+  sparkline: number[];
 }
 
 /** Short code → display name. The table is written the other way round; this turns it over. */
@@ -99,6 +109,8 @@ export interface EconomyInput {
   divineRate: number;
   /** Names proved by the stash — see namesFromBreakdown. */
   known?: Map<string, string>;
+  /** Movement per id, as recorded at fetch time. Missing ids simply have none. */
+  meta?: Record<string, LineMeta>;
 }
 
 /** One row per priced id, most valuable first. */
@@ -116,6 +128,8 @@ export function buildEconomy(input: EconomyInput): EconomyRow[] {
     const nameSource: NameSource =
       fromStash !== undefined ? 'stash' : fromAlias !== undefined ? 'alias' : 'slug';
 
+    const meta = input.meta?.[id];
+
     rows.push({
       id,
       // An id that reads back as nothing at all is listed as itself rather than as an empty row.
@@ -125,6 +139,9 @@ export function buildEconomy(input: EconomyInput): EconomyRow[] {
       chaos,
       divine: input.divineRate > 0 ? chaos / input.divineRate : 0,
       icon: input.icons[name] ?? null,
+      change: meta?.change ?? null,
+      volume: meta?.volume ?? null,
+      sparkline: meta?.sparkline ?? [],
     });
   }
 

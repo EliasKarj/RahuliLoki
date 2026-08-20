@@ -7,6 +7,7 @@ import {
   divineRateFrom,
   iconUrl,
   mergeOverview,
+  overviewMeta,
   unmatchedIds,
 } from '../src/services/ninjaPayload.ts';
 import {
@@ -27,6 +28,7 @@ function memoryStore(initial: PriceSet | null = null) {
     save: async (set) => {
       saved.push(set);
     },
+    history: async () => [],
   };
   return { store, saved };
 }
@@ -284,6 +286,7 @@ describe('PriceService', () => {
       icons: {},
       uniques: {},
       categories: {},
+      meta: {},
     };
     const fetchFn = fixtureFetch();
     const subject = service({ fetchFn, store: memoryStore(stored).store, now: () => 60_000 });
@@ -306,6 +309,7 @@ describe('PriceService', () => {
       icons: {},
       uniques: {},
       categories: {},
+      meta: {},
     };
     const subject = service({ store: memoryStore(stale).store, now: () => 0 });
 
@@ -542,5 +546,46 @@ describe('categories', () => {
     const categories: Record<string, string> = {};
     mergeOverview(currencyOverview, {}, {}, categories);
     expect(categories).toEqual({});
+  });
+});
+
+describe('overviewMeta', () => {
+  it('reads the change, the volume and the series poe.ninja publishes', () => {
+    const meta = overviewMeta(currencyOverview);
+
+    expect(meta.chaos).toEqual({ change: 7.14, volume: 19156804, sparkline: [2.59, 6.65, 7.14] });
+  });
+
+  it('records a line that has only some of the three', () => {
+    const meta = overviewMeta(currencyOverview);
+
+    // `divine` carries a volume and no sparkline; `alt` carries a volume alone.
+    expect(meta.divine).toEqual({ change: null, volume: 19156804, sparkline: [] });
+    expect(meta.alt).toEqual({ change: null, volume: 97366, sparkline: [] });
+  });
+
+  it('leaves out a line that publishes none of it', () => {
+    // Absent movement has to stay absent. A row of zeroes would draw a flat sparkline and read
+    // as "this price has not moved", which is a different claim from "nothing was published".
+    expect(overviewMeta(currencyOverview).annul).toBeUndefined();
+  });
+
+  it('drops a series with something that is not a number in it', () => {
+    const meta = overviewMeta({
+      lines: [{ id: 'x', sparkline: { totalChange: 1, data: [1, 'two', null, 3] } }],
+    });
+
+    expect(meta.x?.sparkline).toEqual([1, 3]);
+  });
+
+  it('survives a payload with no lines, or nonsense where they should be', () => {
+    expect(overviewMeta({})).toEqual({});
+    expect(overviewMeta(null)).toEqual({});
+    expect(overviewMeta({ lines: 'nope' })).toEqual({});
+    expect(overviewMeta({ lines: [{ id: 'x', sparkline: 'nope' }] })).toEqual({});
+  });
+
+  it('refuses a negative volume rather than reporting one', () => {
+    expect(overviewMeta({ lines: [{ id: 'x', volumePrimaryValue: -5 }] })).toEqual({});
   });
 });

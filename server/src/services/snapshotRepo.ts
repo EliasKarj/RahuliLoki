@@ -14,8 +14,8 @@
 import type { PrismaClient } from '../../generated/prisma/index.js';
 import type { Breakdown } from './valuationService.ts';
 import { tabTotals } from './valuationService.ts';
-import { DIVINE_ID } from './ninjaPayload.ts';
-import type { PriceSet, PriceSetStore } from './priceService.ts';
+import { DIVINE_ID, type LineMeta } from './ninjaPayload.ts';
+import type { PricePoint, PriceSet, PriceSetStore } from './priceService.ts';
 import type { UniqueIndex } from './uniques.ts';
 
 export interface SnapshotMeta {
@@ -122,6 +122,31 @@ function asPrices(value: unknown): Record<string, number> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return out;
   for (const [name, price] of Object.entries(value as Record<string, unknown>)) {
     if (typeof price === 'number' && Number.isFinite(price)) out[name] = price;
+  }
+  return out;
+}
+
+/**
+ * The movement map, narrowed back out of the database.
+ *
+ * Every field is checked rather than trusted: this went in as JSON and could have been edited,
+ * truncated, or written by an older version of this program. A sparkline with a string in it
+ * would draw a broken path in a chart nobody would think to distrust.
+ */
+function asMeta(value: unknown): Record<string, LineMeta> {
+  const out: Record<string, LineMeta> = Object.create(null) as Record<string, LineMeta>;
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return out;
+
+  for (const [id, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) continue;
+    const entry = raw as { change?: unknown; volume?: unknown; sparkline?: unknown };
+    out[id] = {
+      change: typeof entry.change === 'number' && Number.isFinite(entry.change) ? entry.change : null,
+      volume: typeof entry.volume === 'number' && Number.isFinite(entry.volume) ? entry.volume : null,
+      sparkline: Array.isArray(entry.sparkline)
+        ? entry.sparkline.filter((point): point is number => typeof point === 'number' && Number.isFinite(point))
+        : [],
+    };
   }
   return out;
 }
@@ -358,6 +383,9 @@ export class PrismaPriceSetStore implements PriceSetStore {
       // Same narrowing as the icons, and the same reason for being nullable: a row written
       // before this column existed simply has no categories, and the next fetch fills it in.
       categories: asIcons(row.categories),
+      // Null on rows written before this column existed, which reads as "no movement was
+      // published" — the truth about those rows, and not the same claim as "it did not move".
+      meta: asMeta(row.meta),
       // Not persisted. A restored set exists so a restart does not refetch immediately, and
       // the very next poll refreshes it; carrying the unique index through the database would
       // multiply the row size for a window measured in minutes. Uniques go unpriced until
@@ -374,9 +402,43 @@ export class PrismaPriceSetStore implements PriceSetStore {
         prices: set.prices as object,
         icons: set.icons as object,
         categories: set.categories as object,
+        meta: set.meta as object,
       },
     });
     await this.#prune(set.league);
+  }
+
+  /**
+   * One id's price across every retained set, oldest first.
+   *
+   * Read with `json_extract` rather than by loading each set and picking a key out of it: a set
+   * is a few thousand entries and a couple of hundred kilobytes, and the answer is one number
+   * from each. Pulling the whole column across for that would be forty-eight blobs to produce
+   * forty-eight floats.
+   *
+   * `CAST(... AS REAL)` is not decoration. Without it Prisma infers the column type from the
+   * first row and throws on a fractional value — which is most prices.
+   */
+  async history(league: string, id: string, limit = 500): Promise<PricePoint[]> {
+    const rows = await this.#prisma.$queryRaw<Array<{ at: number | bigint; chaos: number | null; rate: number | null }>>`
+      SELECT fetchedAt AS at,
+             CAST(json_extract(prices, ${'$."' + id.replace(/"/g, '') + '"'}) AS REAL) AS chaos,
+             CAST(json_extract(prices, '$.divine') AS REAL) AS rate
+      FROM PriceSet
+      WHERE league = ${league}
+      ORDER BY fetchedAt DESC
+      LIMIT ${Math.max(1, Math.min(limit, 2000))}`;
+
+    return rows
+      .filter((row) => row.chaos !== null && Number.isFinite(row.chaos))
+      .map((row) => ({
+        at: new Date(Number(row.at)).toISOString(),
+        chaos: row.chaos as number,
+        divineRate: row.rate ?? 0,
+      }))
+      // Newest-first in SQL so the limit keeps the recent end; oldest-first out, because that is
+      // the direction a chart is drawn in.
+      .reverse();
   }
 
   /** Drop everything past the retention window for this league. */

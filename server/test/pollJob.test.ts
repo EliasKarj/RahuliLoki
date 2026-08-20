@@ -16,7 +16,7 @@ import { dumpTabResponse, mapTabResponse, stashResponse, tabListResponse } from 
 
 const HEADERS = { limit: '45:60:120', state: '1:60:0' };
 
-const priceStore: PriceSetStore = { latest: async () => null, save: async () => {} };
+const priceStore: PriceSetStore = { latest: async () => null, save: async () => {}, history: async () => [] };
 
 /** One fetch that answers both poe.ninja and GGG, so a poll can be driven end to end. */
 function worldFetch(overrides: { stash?: Record<string, () => Response>; ninjaDown?: boolean } = {}) {

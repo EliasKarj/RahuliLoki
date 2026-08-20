@@ -10,6 +10,9 @@ const row = (over: Partial<EconomyRow>): EconomyRow => ({
   chaos: 3,
   divine: 0.014,
   icon: null,
+  change: null,
+  volume: null,
+  sparkline: [],
   ...over,
 });
 

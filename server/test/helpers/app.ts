@@ -131,8 +131,19 @@ export async function makeApp(
           },
           uniques: {},
           categories: { chaos: 'Currency', divine: 'Currency' },
+          meta: {
+            divine: { change: 4.2, volume: 19156804, sparkline: [0, 2.1, 4.2] },
+            // Chaos deliberately has none, so a test can tell "no movement published" from
+            // "moved by zero" — the distinction the economy list has to keep.
+          },
         },
         isStale: () => false,
+      },
+      priceHistory: {
+        history: async () => [
+          { at: '2026-01-01T00:00:00.000Z', chaos: 210, divineRate: 210 },
+          { at: '2026-01-01T01:00:00.000Z', chaos: 218.4, divineRate: 218.4 },
+        ],
       },
       rateLimit: () => rateLimitView,
       nextPollAt: () => '2026-01-01T02:10:00.000Z',

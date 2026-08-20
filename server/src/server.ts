@@ -137,6 +137,7 @@ export async function startServer(options: StartOptions = {}): Promise<RunningSe
     get prices() {
       return prices;
     },
+    priceHistory: priceStore,
     rateLimit: () => limiter.view(),
     nextPollAt: () => nextPollAt(),
     // Reading the cached answer, and asking GitHub for a new one only once the old one is a day

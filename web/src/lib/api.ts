@@ -232,6 +232,32 @@ export interface EconomyRow {
   chaos: number;
   divine: number;
   icon: string | null;
+  /**
+   * What the price has been doing, as poe.ninja publishes it on the line.
+   *
+   * Null means it published nothing, which is not the same as "it did not move" — so the table
+   * leaves the cell empty rather than printing 0%.
+   */
+  change: number | null;
+  /** Volume traded, in chaos. Not a price: a measure of how much the price can be trusted. */
+  volume: number | null;
+  /** poe.ninja's own series, as percentages from its own start. Empty when it published none. */
+  sparkline: number[];
+}
+
+/** One point of an item's price, out of a price set this app stored. */
+export interface PricePoint {
+  at: string;
+  chaos: number;
+  /** The divine rate at that moment, so a point can be quoted in either unit honestly. */
+  divineRate: number;
+}
+
+export interface PriceHistoryResponse {
+  league: string;
+  id: string;
+  count: number;
+  points: PricePoint[];
 }
 
 export interface EconomyResponse {
@@ -349,6 +375,10 @@ export const api = {
   /** Everything poe.ninja prices. Fetched once when the tab opens; searching is local. */
   economy: (league: string | undefined, signal?: AbortSignal) =>
     get<EconomyResponse>(`/api/economy${query({ league })}`, signal),
+
+  /** One item's price across the price sets this app has kept — its own history, not poe.ninja's. */
+  priceHistory: (id: string, league: string | undefined, signal?: AbortSignal) =>
+    get<PriceHistoryResponse>(`/api/price-history${query({ id, league })}`, signal),
 
   leagueList: (signal?: AbortSignal) => get<LeagueListResponse>('/api/leagues', signal),
 

@@ -32,6 +32,29 @@
 interface OverviewLine {
   id?: unknown;
   primaryValue?: unknown;
+  /** Trade volume over poe.ninja's window, in the primary currency. */
+  volumePrimaryValue?: unknown;
+  /** poe.ninja's own recent history: a percentage series and its total move. */
+  sparkline?: { totalChange?: unknown; data?: unknown } | unknown;
+}
+
+/**
+ * What a line says about its own movement, beyond the number.
+ *
+ * poe.ninja publishes this and this app used to throw it away, which left the price list able
+ * to say what something costs and nothing about whether that is a normal price for it. A value
+ * with no trend beside it is the thing you check a second source for.
+ *
+ * All three are optional in the payload and null here when absent. Nothing is derived from
+ * nothing: an item poe.ninja gives no history for is shown without one.
+ */
+export interface LineMeta {
+  /** Percentage change across poe.ninja's own window. Null when it does not publish one. */
+  change: number | null;
+  /** Volume traded, in chaos. Not a price — a measure of how much the price is worth trusting. */
+  volume: number | null;
+  /** The series behind the change, as percentages from its own start. Empty when absent. */
+  sparkline: number[];
 }
 
 /** The pricing pair and the exchange rates between them. */
@@ -163,6 +186,45 @@ export function mergeOverview(
     merged += 1;
   }
   return merged;
+}
+
+/**
+ * The movement fields, per id.
+ *
+ * Separate from `mergeOverview` rather than a sixth and seventh output parameter of it: that
+ * function already takes four maps to fill, and a price is the thing it must never get wrong,
+ * while this is decoration around the price. They fail independently, so they are read
+ * independently — a payload with a broken sparkline still yields correct prices.
+ */
+export function overviewMeta(payload: unknown): Record<string, LineMeta> {
+  const out = Object.create(null) as Record<string, LineMeta>;
+  const lines = (payload as { lines?: unknown })?.lines;
+  if (!Array.isArray(lines)) return out;
+
+  for (const raw of lines as OverviewLine[]) {
+    const id = typeof raw?.id === 'string' && raw.id !== '' ? raw.id : null;
+    if (id === null || out[id] !== undefined) continue;
+
+    const spark = (raw.sparkline ?? null) as { totalChange?: unknown; data?: unknown } | null;
+    const data = Array.isArray(spark?.data)
+      ? (spark.data as unknown[]).filter((point): point is number => typeof point === 'number' && Number.isFinite(point))
+      : [];
+
+    const change = typeof spark?.totalChange === 'number' && Number.isFinite(spark.totalChange)
+      ? spark.totalChange
+      : null;
+    const volume =
+      typeof raw.volumePrimaryValue === 'number' && Number.isFinite(raw.volumePrimaryValue) && raw.volumePrimaryValue >= 0
+        ? raw.volumePrimaryValue
+        : null;
+
+    // A line that carries none of the three is not recorded at all, so the map stays the size of
+    // what poe.ninja actually published rather than of every id it priced.
+    if (change === null && volume === null && data.length === 0) continue;
+    out[id] = { change, volume, sparkline: data };
+  }
+
+  return out;
 }
 
 /**

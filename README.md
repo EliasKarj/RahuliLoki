@@ -54,10 +54,11 @@ pnpm desktop:package    # builds an installer for this platform
 ## Using it
 
 Two views, named by the rail on the left. **Dashboard** is what you own and what it is doing.
-**Economy** is every item poe.ninja prices — searchable by name, by poe.ninja's own id (`gcp`,
-`alt`) or by category — for the twenty times a league you want to know what something is worth
-without owning any of it. It uses the prices already fetched for the valuation, so opening it
-sends nothing anywhere.
+**Economy** is every item poe.ninja prices, with what it costs, how far it has moved and a trend
+line — searchable by name, by poe.ninja's own id (`gcp`, `alt`) or by category, for the twenty
+times a league you want to know what something is worth without owning any of it. Click a name
+for that item's price history as this app has watched it. It uses the prices already fetched for
+the valuation, so opening it sends nothing anywhere.
 
 Your account and settings live in the **top-right corner**: a small button showing the account
 name, with a dot that says whether a session is stored. There is exactly one button to press in

@@ -587,3 +587,18 @@ describe('GET /api/economy', () => {
     expect(allowed.statusCode).toBe(200);
   });
 });
+
+describe('GET /api/price-history', () => {
+  it('gives one item\'s price across the retained sets', async () => {
+    const { app } = await makeApp();
+    const body = (await app.inject({ method: 'GET', url: '/api/price-history?id=divine' })).json();
+
+    expect(body).toMatchObject({ id: 'divine', league: 'Settlers', count: 2 });
+    expect(body.points[0]).toEqual({ at: '2026-01-01T00:00:00.000Z', chaos: 210, divineRate: 210 });
+  });
+
+  it('refuses without an id rather than answering about nothing', async () => {
+    const { app } = await makeApp();
+    expect((await app.inject({ method: 'GET', url: '/api/price-history' })).statusCode).toBe(400);
+  });
+});

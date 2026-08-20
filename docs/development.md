@@ -31,7 +31,7 @@ All of it in `.env`; `.env.example` is the template.
 | `ALLOWED_HOSTS` | empty | Permitted `Host` headers in tokenless mode. |
 | `TRUST_PROXY` | empty | Whether to believe `X-Forwarded-*`. Only behind a real proxy. |
 | `UPDATE_CHECK` | on | Ask GitHub once a day whether there is a newer release. `off` stops it entirely. |
-| `PRICE_SET_RETENTION` | `48` | Price sets kept per league. `0` = all of them. Includes the icon map. |
+| `PRICE_SET_RETENTION` | `48` | Price sets kept per league. `0` = all of them. Includes the icon map, and sets how far back the Economy tab's price history reaches — 48 hourly fetches is two days. |
 | `REQUEST_TIMEOUT_MS` | `30000` | Ceiling for a single outbound request. |
 | `LOG_LEVEL` | `info` | pino's level. |
 
@@ -65,7 +65,8 @@ Everything under `/api`, everything JSON.
 | `GET /api/stats?league=&from=&to=` | Gain, c/h active and wall-clock, active hours, best hour, per-interval detail. |
 | `GET /api/changes?league=&from=&to=&minChaos=` | What moved between the ends of the range: per-item changes, the reason (`quantity`/`price`/`both`), gains and losses separately. |
 | `GET /api/item-history?name=&league=&from=` | One item's quantity and value in every snapshot in the range. |
-| `GET /api/economy?league=` | Every item poe.ninja prices, with a name, a category and a value. One response, searched in the browser. |
+| `GET /api/economy?league=` | Every item poe.ninja prices: name, category, value, percentage change, trade volume and poe.ninja's own sparkline. One response, searched in the browser. |
+| `GET /api/price-history?id=&league=` | What one item has cost across every price set still retained — this app's own record, oldest first. |
 | `GET /api/leagues` | The current leagues from GGG, for the desktop build's menu. Cached 6 h; the permanent leagues on failure. |
 | `GET /api/account` | Who GGG says the stored session belongs to, and whether that matches `POE_ACCOUNT_NAME`. 502 when GGG will not answer — which is itself an answer. |
 | `POST /api/poll` | Starts a poll and answers **202 immediately**, not when it finishes. 409 if one is already running, 503 if credentials are missing. The outcome is read from `/api/health`. |
@@ -91,6 +92,18 @@ change without one.
 > **▸ Why the economy list arrives whole:** a price set is a few thousand rows and the client
 > is on the same machine. Paging it would trade a few hundred kilobytes, once, for a search that
 > filters after you type instead of as you type — which is the entire value of the tab.
+
+> **▸ Why the movement fields are recorded rather than recomputed:** poe.ninja publishes a
+> percentage change, a trade volume and a short sparkline on every line, and this app read past
+> all three for months. They describe a window poe.ninja chose and has since moved past, so they
+> cannot be reconstructed later — the only moment they can be captured is the moment they arrive.
+> They are stored in `PriceSet.meta`, nullable, and not backfilled: inventing them for older rows
+> would put made-up history in the one place a person goes to check history.
+
+> **▸ Why an item with no published movement shows an empty cell and not 0%:** "poe.ninja said
+> nothing" and "it did not move" are different claims, and only the first is true. The same rule
+> puts those rows at the far end of a sort by change whichever way it points, rather than mixed
+> in among the ones that really held steady.
 
 > **▸ Why every economy row says where its name came from:** poe.ninja's redesigned payload
 > names exactly two items, chaos and divine. Everything else is an id. A name is therefore
@@ -182,7 +195,7 @@ unvalidated symlink path traversal during extraction. There **is no fixed versio
 pnpm test
 ```
 
-**581 tests**, not one network request:
+**593 tests**, not one network request:
 
 - **The rate limiter** — header parsing, pacing, serialisation, `Retry-After`, doubling up to the
   ceiling. The clock and sleep are faked, so testing a 30-minute backoff takes microseconds.
@@ -209,6 +222,13 @@ pnpm test
   it existed, that switching it off reaches the server as `UPDATE_CHECK=off`, and that the file
   holding the credential is written `0600` — that last one only where file modes exist, since
   Windows reports `0o666` for everything and the file is protected by an ACL there instead.
+- **The movement fields** — that a line publishing none of them is left out rather than recorded
+  as zeroes, that a sparkline with a string in it loses the string and not the series, and that a
+  negative volume is refused.
+- **Price history against a real database** — that it reads one id out of every retained set
+  oldest-first with the divine rate of each moment, that a set which did not price the item is a
+  gap rather than a zero, that the limit keeps the recent end, and that an id cannot smuggle
+  anything into the JSON path it is interpolated into.
 - **The economy list** — that a slug reads back as words without claiming the punctuation it
   lost, that a name the stash has proved beats the slug reading of it, that the short-code table
   reverses correctly, and that searching finds an item by its id as well as by its name.
@@ -244,7 +264,7 @@ pnpm test
   /src
     /components Hero, NetWorthChart, RatePerHourChart, TabBreakdown, SnapshotTable,
                 PollerStatus, TokenGate, ChangesTable, ItemHistory, ItemIcon, DesktopSetup,
-                UpdateNotice, TabAreaChart, ItemsTable, SideNav, Economy
+                UpdateNotice, TabAreaChart, ItemsTable, SideNav, Economy, PriceHistory
     /hooks      useSnapshots
     /lib        api, format, series, palette (chart colours), schedule (the countdown), spark,
                 update (the release notice and its dismissal), items (the item table's data)

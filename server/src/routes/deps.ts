@@ -2,7 +2,7 @@
 
 import type { AppConfig } from '../lib/config.ts';
 import type { RateLimitView } from '../lib/rateLimiter.ts';
-import type { PriceSet } from '../services/priceService.ts';
+import type { PricePoint, PriceSet } from '../services/priceService.ts';
 import type { SnapshotStore } from '../services/snapshotRepo.ts';
 import type { PollerHealth, PollOutcome } from '../jobs/pollJob.ts';
 import type { LeagueList } from '../services/leagueService.ts';
@@ -19,6 +19,11 @@ export interface PriceStateLike {
   isStale(): boolean;
 }
 
+/** What the economy tab needs beyond the current set: what a price used to be. */
+export interface PriceHistoryLike {
+  history(league: string, id: string, limit?: number): Promise<PricePoint[]>;
+}
+
 export interface ApiDeps {
   config: AppConfig;
   /** Required settings that are absent. Empty means the poller can run. */
@@ -26,6 +31,11 @@ export interface ApiDeps {
   store: SnapshotStore;
   poller: PollerLike;
   prices: PriceStateLike;
+  /**
+   * The stored price sets, for one item's history. Separate from `prices` because that is the
+   * live cache and this is the archive — different lifetimes, different failure modes.
+   */
+  priceHistory: PriceHistoryLike;
   rateLimit: () => RateLimitView;
   startedAt: Date;
   /** The league list for the setup dropdown. Cached and failure-tolerant — see leagueService. */

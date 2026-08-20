@@ -17,9 +17,20 @@ a row above the page instead.
 **Dashboard** is everything below — what you own, what it is worth, and what it has been doing.
 
 **Economy** is the same prices seen the other way round: every item poe.ninja prices, whether or
-not you hold any. Search by name, by poe.ninja's own id (`gcp`, `alt`), or by category; filter by
-category; sort by name or value. It costs one local request when the tab opens and nothing
-leaves the machine — these are the prices the valuation already fetched.
+not you hold any. Each row carries what it costs, **how much it has moved** as a percentage, and
+a small **trend** line — poe.ninja publishes all three on every price line, and this reads them.
+Search by name, by poe.ninja's own id (`gcp`, `alt`), or by category; filter by category; sort by
+name, value, change or volume. It costs one local request when the tab opens and nothing leaves
+the machine — these are the prices the valuation already fetched.
+
+Clicking a name opens **that item's price history**: what it actually cost at every price fetch
+this app has kept, in chaos or divine like everything else. That is a different thing from the
+trend line beside it — the trend is poe.ninja's percentage series over a window poe.ninja chose,
+this is the app's own record of the real number. It reaches back as far as `PRICE_SET_RETENTION`
+allows, two days at the default, and further if you raise it.
+
+An empty change cell means poe.ninja published no movement for that row. It does not mean the
+price held still.
 
 A `?` after a name means the name was read back from poe.ninja's id rather than known. The
 payload names only chaos and divine, so a name is either proved by your own stash, taken from the

@@ -1,0 +1,12 @@
+-- What each price has been doing, alongside what it is.
+--
+-- poe.ninja publishes a percentage change, a trade volume and a short sparkline on every line,
+-- and this app read past all three. They are what turns a list of numbers into a price list you
+-- can judge a number by, so they are recorded from now on.
+--
+-- Nullable and not backfilled: the values describe a moment poe.ninja has already moved past,
+-- and inventing them for older rows would put made-up history in the one place a person goes to
+-- check history. Rows written before this read as "no movement published", which is exactly
+-- what is true of them.
+-- AlterTable
+ALTER TABLE "PriceSet" ADD COLUMN "meta" JSONB;

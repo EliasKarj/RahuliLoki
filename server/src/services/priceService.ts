@@ -38,6 +38,8 @@ import {
   fromGameCdn,
   iconUrl,
   mergeOverview,
+  overviewMeta,
+  type LineMeta,
 } from './ninjaPayload.ts';
 import { mergeUniqueOverview, uniqueKey, type UniqueIndex } from './uniques.ts';
 
@@ -72,6 +74,14 @@ export interface PriceSet {
    */
   uniques: UniqueIndex;
   /**
+   * poe.ninja id → what its price has been doing: the percentage change, the volume behind it,
+   * and poe.ninja's own sparkline. See LineMeta.
+   *
+   * Empty for a set restored from a row written before the column existed, and for any id the
+   * payload published no movement for. Absent movement is shown as absent, never as flat.
+   */
+  meta: Record<string, LineMeta>;
+  /**
    * poe.ninja id → the category it was fetched under, e.g. `gilded-bestiary-scarab` → `Scarab`.
    *
    * Recorded here because this is the only moment it is known. The app asks poe.ninja one
@@ -82,9 +92,26 @@ export interface PriceSet {
   categories: Record<string, string>;
 }
 
+/** One item's price at one moment, out of a stored price set. */
+export interface PricePoint {
+  at: string;
+  chaos: number;
+  /** The divine rate at that moment, so the client can quote the point in either unit. */
+  divineRate: number;
+}
+
 export interface PriceSetStore {
   latest(league: string): Promise<PriceSet | null>;
   save(set: PriceSet): Promise<void>;
+  /**
+   * One item's price across the price sets still retained, oldest first.
+   *
+   * This is history the app has watched itself, rather than history poe.ninja reports. It goes
+   * back as far as PRICE_SET_RETENTION allows — two days at the default — and it is the only
+   * price history in this program that is not a percentage: poe.ninja's sparkline says how much
+   * something moved, this says what it actually cost.
+   */
+  history(league: string, id: string, limit?: number): Promise<PricePoint[]>;
 }
 
 
@@ -231,12 +258,18 @@ export class PriceService {
     const icons: Record<string, string> = Object.create(null) as Record<string, string>;
     const uniques: UniqueIndex = Object.create(null) as UniqueIndex;
     const categories: Record<string, string> = Object.create(null) as Record<string, string>;
+    const meta: Record<string, LineMeta> = Object.create(null) as Record<string, LineMeta>;
 
     let divineRate: number | null = null;
 
     for (const type of [...currencyCategories, ...itemCategories]) {
       const payload = await this.#getJson(league, type);
       const merged = mergeOverview(payload, prices, icons, categories, type);
+      // First category wins here too, matching the price: an id appearing under two types
+      // belongs to the earlier, more specific one.
+      for (const [id, line] of Object.entries(overviewMeta(payload))) {
+        if (meta[id] === undefined) meta[id] = line;
+      }
       divineRate ??= divineRateFrom(payload, prices);
       this.#log.debug({ type, merged }, 'merged overview');
 
@@ -288,6 +321,7 @@ export class PriceService {
       icons,
       uniques,
       categories,
+      meta,
     };
     this.#log.info(
       {

@@ -66,6 +66,11 @@ model PriceSet {
   // time, and the payload itself says nothing about which one it answered. Deriving it later
   // from an item's name would be guesswork over a fact we already had.
   categories Json?
+  // { [poeNinjaId]: { change, volume, sparkline } } — what the price has been doing, as
+  // poe.ninja publishes it on every line. Recorded because a number with no trend beside it is
+  // the number you go and check somewhere else. Nullable for the same reason as the two above:
+  // a row written before the column existed has none, and that is the honest reading of it.
+  meta       Json?
 
   @@index([league, fetchedAt])
 }
