@@ -183,6 +183,17 @@ change without one.
 > So `DEFAULT_NAMED_ITEM_CATEGORIES` is `['Vial']`, recorded rather than assumed, and the guess
 > that preceded it cost fourteen pointless requests an hour.
 >
+> That one category turned out to matter for a second reason. Vial is in the app's price
+> categories, the exchange endpoint answers it with **zero lines**, and an unpriced item is simply
+> absent from the breakdown — where absent looks exactly like owning none. Every Vial in every
+> stash was being counted at nothing. The item endpoint prices all nine, so a price from there
+> now fills the gap. Only the gap: the exchange endpoint stays the authority wherever it has an
+> answer, which is also what stops this from becoming a second, name-keyed valuation path.
+>
+> `core.items` was checked first and is a dead end — two entries, chaos and divine, on every
+> category's response. `probe.mjs --dump <type>` prints a category's whole payload and tries the
+> other URL shapes, which is what to run before guessing at this again.
+>
 > The runtime still guards both failures, because the list is a snapshot of someone else's
 > service. A category that answers with no lines is not asked again; a category that answers 404
 > is not asked again either — and that second half is the part that was missing. A 404 threw past

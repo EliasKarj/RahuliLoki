@@ -171,6 +171,17 @@ The index is stored in `UniquePriceSet`, one row per league, overwritten on ever
 times over. It has to be stored at all, though — without it the first poll after a restart values
 every unique at nothing and writes a collapse into the history that never happened.
 
+> **▸ Where names and artwork come from, and where they do not:** the priced endpoint sends
+> neither. `core.items` on that response holds exactly two entries — chaos and divine — on every
+> category, so it cannot help. The item endpoint has both fields but serves only uniques and
+> Vial; it answers 404 for DivinationCard, Essence, Fossil, Resonator, Scarab, Oil, DeliriumOrb,
+> Artifact, Omen, Tattoo and AllflameEmber, and empty for Currency and Fragment. Recorded by
+> `probe.mjs --names`.
+>
+> So for most categories the only name is the id read backwards, punctuation and all, and the
+> only artwork is what your own stash supplies for the items you actually hold. That is a real
+> gap, not a resolved question.
+
 > **▸ Why there are two kinds of id and what follows from it:** newer items use a slug derived from
 > the name (`accelerating-catalyst`, `awakeners-orb`), but older currency uses trade-site
 > shorthand (`alt`, `alch`, `gcp`, `chaos`). A rule produces the slug; no rule produces the

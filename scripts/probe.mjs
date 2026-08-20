@@ -22,6 +22,7 @@
  *   node scripts/probe.mjs --limits        just GGG's rate-limit policy (one request)
  *   node scripts/probe.mjs --ninja         just poe.ninja: dust fields, unique prices
  *   node scripts/probe.mjs --names         which categories carry names and icons
+ *   node scripts/probe.mjs --dump TYPE    one category's whole payload, and other URL shapes
  *   node scripts/probe.mjs --time-poll     read every tab and time it (costs a poll's budget)
  *   node scripts/probe.mjs --item Goldrim  dump one unique's raw fields
  *   node scripts/probe.mjs --item Goldrim --tab 3   look in tab 3 instead of the first
@@ -415,6 +416,93 @@ async function probeItemNames() {
   say('   3. A type where both are zero has no name source anywhere yet found.');
 }
 
+/**
+ * Everything one category's payload contains, and every other URL shape that might serve it.
+ *
+ * Two rounds of guessing where poe.ninja keeps its names have now been wrong, so this stops
+ * guessing. It prints the whole shape of the response the app already fetches — every key at
+ * every depth, a line verbatim, what `core` holds — and then tries the URL shapes a name might
+ * plausibly live under, reporting what each one answers.
+ *
+ * The point is to replace "it is probably at X" with a recorded list of what exists.
+ */
+async function probeDump(type) {
+  head(`poe.ninja: everything about ${type}`);
+
+  const priced = await ninja(type);
+  if (!priced.ok) {
+    say(`  the priced endpoint answered HTTP ${priced.status}; nothing to take apart`);
+  } else {
+    const body = priced.body;
+    const lines = Array.isArray(body?.lines) ? body.lines : [];
+    say(`  top-level keys: ${Object.keys(body ?? {}).sort().join(', ')}`);
+    say(`  lines: ${lines.length}`);
+    if (lines.length > 0) {
+      say(`  a line, verbatim: ${JSON.stringify(lines[0])}`);
+      const lineKeys = new Set();
+      for (const line of lines.slice(0, 200)) for (const key of Object.keys(line ?? {})) lineKeys.add(key);
+      say(`  every key seen on a line: ${[...lineKeys].sort().join(', ')}`);
+    }
+    say(`  core keys: ${Object.keys(body?.core ?? {}).sort().join(', ')}`);
+    const items = Array.isArray(body?.core?.items) ? body.core.items : [];
+    say(`  core.items: ${items.length}`);
+    for (const item of items.slice(0, 4)) say(`    ${JSON.stringify(item).slice(0, 200)}`);
+    say(`  every key anywhere in the payload:`);
+    say(`    ${[...allKeys(body)].sort().join(', ')}`);
+  }
+
+  say('');
+  say('  Other URL shapes, in case the names are served somewhere this app has not looked:');
+  say('');
+
+  const base = 'https://poe.ninja/poe1/api/economy';
+  const candidates = [
+    `${base}/stash/current/item/overview?type=${encodeURIComponent(type)}&league=${encodeURIComponent(LEAGUE)}`,
+    `${base}/stash/current/currency/overview?type=${encodeURIComponent(type)}&league=${encodeURIComponent(LEAGUE)}`,
+    `${base}/stash/current/overview?type=${encodeURIComponent(type)}&league=${encodeURIComponent(LEAGUE)}`,
+    `${base}/exchange/current/item/overview?type=${encodeURIComponent(type)}&league=${encodeURIComponent(LEAGUE)}`,
+    `${base}/item/current/overview?type=${encodeURIComponent(type)}&league=${encodeURIComponent(LEAGUE)}`,
+    `${base}/exchange/current/overview?league=${encodeURIComponent(LEAGUE)}&type=${encodeURIComponent(type)}&language=en`,
+    // The type vocabulary might simply differ on the item endpoint, the way it does between
+    // games. Uniques and Vial work there; these are the plausible spellings for the rest.
+    `${base}/stash/current/item/overview?type=${encodeURIComponent(type + 's')}&league=${encodeURIComponent(LEAGUE)}`,
+    `${base}/stash/current/item/overview?type=${encodeURIComponent(type.toLowerCase())}&league=${encodeURIComponent(LEAGUE)}`,
+    // The index the site itself must read to know which categories exist.
+    `${base}/index-state?league=${encodeURIComponent(LEAGUE)}`,
+    `${base}/overview-index?league=${encodeURIComponent(LEAGUE)}`,
+  ];
+
+  for (const url of candidates) {
+    const shown = url.replace(`${base}/`, '').replace(`league=${encodeURIComponent(LEAGUE)}`, 'league=…');
+    try {
+      const response = await fetch(url, {
+        headers: { accept: 'application/json', 'user-agent': USER_AGENT },
+      });
+      if (!response.ok) {
+        say(`  HTTP ${String(response.status).padEnd(4)} ${shown}`);
+      } else {
+        const body = await response.json();
+        const lines = Array.isArray(body?.lines) ? body.lines : null;
+        const named = lines === null ? 0 : lines.filter((l) => typeof l?.name === 'string' && l.name !== '').length;
+        const summary =
+          lines === null
+            ? `keys: ${Object.keys(body ?? {}).sort().slice(0, 8).join(', ')}`
+            : `${lines.length} lines, ${named} named`;
+        say(`  HTTP 200  ${shown}`);
+        say(`            ${summary}`);
+        if (named > 0) say(`            e.g. ${JSON.stringify(lines.find((l) => l?.name)).slice(0, 160)}`);
+      }
+    } catch (error) {
+      say(`  failed    ${shown} (${error?.cause?.code ?? error?.message ?? 'error'})`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 400));
+  }
+
+  say('');
+  say('  What matters: any line above that reports "named" above zero, or an index that lists');
+  say('  the categories this endpoint really has. Everything else is another dead end recorded.');
+}
+
 /** Every key anywhere in an object graph, so a field nobody expected still shows up. */
 function allKeys(node, into = new Set(), depth = 0) {
   if (depth > 6 || node === null || typeof node !== 'object') return into;
@@ -556,7 +644,9 @@ if (!onlyNinja) {
   }
 }
 
-if (flag('items')) await probeItemEndpoint();
+const dumpType = value('dump');
+if (dumpType) await probeDump(dumpType);
+else if (flag('items')) await probeItemEndpoint();
 else if (flag('names')) await probeItemNames();
 else if (flag('types')) await probeTypes();
 else if (!onlyLimits) {

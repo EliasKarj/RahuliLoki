@@ -306,6 +306,7 @@ export function unmatchedIds(
 interface ItemLine {
   name?: unknown;
   icon?: unknown;
+  chaosValue?: unknown;
 }
 
 /**
@@ -321,16 +322,18 @@ interface ItemLine {
  * and simply goes unused — the cost of a spare entry is nothing beside the cost of dropping a
  * name that a later league does price.
  */
-export function itemOverviewNames(payload: unknown): Array<{ name: string; icon: string | null }> {
+export function itemOverviewNames(
+  payload: unknown,
+): Array<{ name: string; icon: string | null; chaos: number | null }> {
   const lines = (payload as { lines?: unknown })?.lines;
   if (!Array.isArray(lines)) return [];
 
-  const out: Array<{ name: string; icon: string | null }> = [];
+  const out: Array<{ name: string; icon: string | null; chaos: number | null }> = [];
   for (const raw of lines as ItemLine[]) {
     const name = typeof raw?.name === 'string' ? raw.name.trim() : '';
     if (name === '') continue;
     // Validated, never trusted: this string ends up in an <img src>. See iconUrl.
-    out.push({ name, icon: iconUrl(raw?.icon) });
+    out.push({ name, icon: iconUrl(raw?.icon), chaos: finitePositive(raw?.chaosValue) });
   }
   return out;
 }

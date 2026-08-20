@@ -882,6 +882,32 @@ describe('PriceService and item names', () => {
     expect(itemTypeCalls(fetchFn, 'DivinationCard')).toBe(2);
   });
 
+  it('prices a category the exchange endpoint answers empty for', async () => {
+    // Vials are the real case: they are in the app's price categories, the exchange endpoint
+    // returns zero lines for them, and every Vial in a stash was therefore counted at nothing.
+    // An unpriced item is absent from the breakdown, and absent looks exactly like owning none.
+    const vials = { lines: [{ name: 'Vial of the Ghost', icon: 'https://web.poecdn.com/vial.png', chaosValue: 44 }] };
+    const set = await service({
+      fetchFn: withItemNames({ DivinationCard: vials }),
+      namedItemCategories: named,
+    }).getPrices();
+
+    expect(set.prices['vial-of-the-ghost']).toBe(44);
+    expect(set.categories['vial-of-the-ghost']).toBe('DivinationCard');
+  });
+
+  it('never overwrites a price the exchange endpoint gave', async () => {
+    // The priced endpoint stays the authority. This one only fills gaps — which is also what
+    // keeps it from quietly becoming a second, name-keyed valuation path.
+    const clash = { lines: [{ name: 'Divine Orb', icon: null, chaosValue: 1 }] };
+    const set = await service({
+      fetchFn: withItemNames({ DivinationCard: clash }),
+      namedItemCategories: named,
+    }).getPrices();
+
+    expect(set.prices.divine).toBeGreaterThan(1);
+  });
+
   it('loses names rather than prices when the endpoint is down', async () => {
     const exchange = fixtureFetch();
     const fetchFn = (async (url: string, init?: RequestInit) => {

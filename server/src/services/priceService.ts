@@ -398,6 +398,21 @@ export class PriceService {
           if (id === '') continue;
           if (names[id] === undefined) names[id] = line.name;
           if (line.icon !== null && icons[line.name] === undefined) icons[line.name] = line.icon;
+
+          // A price, but only into a gap. Vials are the case that made this necessary: the app
+          // asks the exchange endpoint for them, that endpoint answers with zero lines, and
+          // every Vial in a stash was therefore worth nothing — silently, because an unpriced
+          // item is simply absent from the breakdown and absent looks exactly like not owning
+          // any. It is the AllflameEmber failure again, found the same way.
+          //
+          // Never an overwrite. The exchange endpoint is the priced one and stays the authority
+          // wherever it has an answer; this only fills in where it had none. That also keeps
+          // the door shut on valuing uniques by name, which is a different endpoint, a
+          // different list, and a mistake this repository has already made once.
+          if (line.chaos !== null && prices[id] === undefined) {
+            prices[id] = line.chaos;
+            if (categories[id] === undefined) categories[id] = type;
+          }
         }
         this.#log.debug({ type, lines: lines.length }, 'merged item names and icons');
       } catch (error) {
