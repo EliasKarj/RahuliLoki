@@ -24,7 +24,7 @@ import { RateLimiter } from './lib/rateLimiter.ts';
 import { nextScheduledPoll } from './lib/schedule.ts';
 import { PriceService } from './services/priceService.ts';
 import { StashService } from './services/stashService.ts';
-import { PrismaPriceSetStore, PrismaSnapshotStore } from './services/snapshotRepo.ts';
+import { PrismaPriceSetStore, PrismaSnapshotStore, PrismaUniqueStore } from './services/snapshotRepo.ts';
 import { LeagueService } from './services/leagueService.ts';
 import { UpdateService } from './services/updateService.ts';
 import { fetchProfile } from './services/profileService.ts';
@@ -115,6 +115,7 @@ export async function startServer(options: StartOptions = {}): Promise<RunningSe
       : new PrismaClient({ datasourceUrl: config.databaseUrl });
   const store = new PrismaSnapshotStore(prisma);
   const priceStore = new PrismaPriceSetStore(prisma, config.priceSetRetention);
+  const uniqueStore = new PrismaUniqueStore(prisma);
   const startedAt = new Date();
   const webDist = options.webDist === undefined ? findWebDist(config.webDist) : options.webDist;
 
@@ -138,6 +139,7 @@ export async function startServer(options: StartOptions = {}): Promise<RunningSe
       return prices;
     },
     priceHistory: priceStore,
+    uniques: uniqueStore,
     rateLimit: () => limiter.view(),
     nextPollAt: () => nextPollAt(),
     // Reading the cached answer, and asking GitHub for a new one only once the old one is a day
@@ -209,6 +211,7 @@ export async function startServer(options: StartOptions = {}): Promise<RunningSe
     prices,
     stash,
     store,
+    uniques: uniqueStore,
     log,
     disabledReason:
       missing.length > 0 ? `polling disabled: ${missing.join(', ')} not set in the environment` : null,

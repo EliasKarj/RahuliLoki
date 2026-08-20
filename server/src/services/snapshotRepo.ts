@@ -16,6 +16,7 @@ import type { Breakdown } from './valuationService.ts';
 import { tabTotals } from './valuationService.ts';
 import { DIVINE_ID, type LineMeta } from './ninjaPayload.ts';
 import type { PricePoint, PriceSet, PriceSetStore } from './priceService.ts';
+import type { UniqueHolding } from './kingsmarch.ts';
 import type { UniqueIndex } from './uniques.ts';
 
 export interface SnapshotMeta {
@@ -462,4 +463,60 @@ export class PrismaPriceSetStore implements PriceSetStore {
       where: { league, id: { notIn: keep.map((row) => row.id) } },
     });
   }
+}
+
+/**
+ * What a poll last saw in the way of uniques, one row per league.
+ *
+ * Overwritten rather than appended: this answers "what is in the stash now", and there is no
+ * version of that question that wants Tuesday's answer as well.
+ */
+export interface UniqueStore {
+  save(league: string, holdings: UniqueHolding[], capturedAt: Date): Promise<void>;
+  latest(league: string): Promise<{ capturedAt: Date; holdings: UniqueHolding[] } | null>;
+}
+
+export class PrismaUniqueStore implements UniqueStore {
+  readonly #prisma: PrismaClient;
+
+  constructor(prisma: PrismaClient) {
+    this.#prisma = prisma;
+  }
+
+  async save(league: string, holdings: UniqueHolding[], capturedAt: Date): Promise<void> {
+    await this.#prisma.uniqueSet.upsert({
+      where: { league },
+      create: { league, capturedAt, holdings: holdings as object },
+      update: { capturedAt, holdings: holdings as object },
+    });
+  }
+
+  async latest(league: string): Promise<{ capturedAt: Date; holdings: UniqueHolding[] } | null> {
+    const row = await this.#prisma.uniqueSet.findUnique({ where: { league } });
+    if (row === null) return null;
+    // Narrowed rather than trusted: this went in as JSON and could have been written by an
+    // older version of this program or edited by hand.
+    return { capturedAt: row.capturedAt, holdings: asHoldings(row.holdings) };
+  }
+}
+
+function asHoldings(value: unknown): UniqueHolding[] {
+  if (!Array.isArray(value)) return [];
+  const out: UniqueHolding[] = [];
+  for (const raw of value) {
+    if (raw === null || typeof raw !== 'object') continue;
+    const row = raw as Record<string, unknown>;
+    if (typeof row.name !== 'string' || row.name === '') continue;
+    out.push({
+      name: row.name,
+      baseType: typeof row.baseType === 'string' ? row.baseType : '',
+      tab: typeof row.tab === 'string' ? row.tab : '',
+      ilvl: typeof row.ilvl === 'number' && Number.isFinite(row.ilvl) ? row.ilvl : null,
+      quality: typeof row.quality === 'number' && Number.isFinite(row.quality) ? row.quality : 0,
+      corrupted: row.corrupted === true,
+      icon: typeof row.icon === 'string' && row.icon !== '' ? row.icon : null,
+      count: typeof row.count === 'number' && row.count > 0 ? row.count : 1,
+    });
+  }
+  return out;
 }

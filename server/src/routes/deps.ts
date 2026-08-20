@@ -3,7 +3,7 @@
 import type { AppConfig } from '../lib/config.ts';
 import type { RateLimitView } from '../lib/rateLimiter.ts';
 import type { PricePoint, PriceSet } from '../services/priceService.ts';
-import type { SnapshotStore } from '../services/snapshotRepo.ts';
+import type { SnapshotStore, UniqueStore } from '../services/snapshotRepo.ts';
 import type { PollerHealth, PollOutcome } from '../jobs/pollJob.ts';
 import type { LeagueList } from '../services/leagueService.ts';
 import type { Profile } from '../services/profileService.ts';
@@ -36,6 +36,8 @@ export interface ApiDeps {
    * live cache and this is the archive — different lifetimes, different failure modes.
    */
   priceHistory: PriceHistoryLike;
+  /** The uniques a poll last saw — see services/kingsmarch.ts. */
+  uniques: UniqueStore;
   rateLimit: () => RateLimitView;
   startedAt: Date;
   /** The league list for the setup dropdown. Cached and failure-tolerant — see leagueService. */

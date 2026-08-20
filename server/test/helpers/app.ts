@@ -145,6 +145,24 @@ export async function makeApp(
           { at: '2026-01-01T01:00:00.000Z', chaos: 218.4, divineRate: 218.4 },
         ],
       },
+      uniques: {
+        save: async () => {},
+        latest: async () => ({
+          capturedAt: new Date(START),
+          holdings: [
+            {
+              name: 'Tabula Rasa',
+              baseType: 'Simple Robe',
+              tab: 'Uniques',
+              ilvl: 68,
+              quality: 0,
+              corrupted: false,
+              icon: null,
+              count: 3,
+            },
+          ],
+        }),
+      },
       rateLimit: () => rateLimitView,
       nextPollAt: () => '2026-01-01T02:10:00.000Z',
       leagues: async () => ({

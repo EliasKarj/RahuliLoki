@@ -67,6 +67,7 @@ Everything under `/api`, everything JSON.
 | `GET /api/item-history?name=&league=&from=` | One item's quantity and value in every snapshot in the range. |
 | `GET /api/economy?league=` | Every item poe.ninja prices: name, category, value, percentage change, trade volume and poe.ninja's own sparkline. One response, searched in the browser. |
 | `GET /api/price-history?id=&league=` | What one item has cost across every price set still retained — this app's own record, oldest first. |
+| `GET /api/uniques?league=` | The identified uniques a poll last saw, with item level, quality, corruption, tab and a by-name chaos price where one exists. |
 | `GET /api/leagues` | The current leagues from GGG, for the desktop build's menu. Cached 6 h; the permanent leagues on failure. |
 | `GET /api/account` | Who GGG says the stored session belongs to, and whether that matches `POE_ACCOUNT_NAME`. 502 when GGG will not answer — which is itself an answer. |
 | `POST /api/poll` | Starts a poll and answers **202 immediately**, not when it finishes. 409 if one is already running, 503 if credentials are missing. The outcome is read from `/api/health`. |
@@ -88,6 +89,28 @@ change without one.
 > had, and reported a net worth from weeks earlier as the current one, because "current" is read
 > off the last row of the series. Past about two weeks of a league at the old cap, both were
 > quietly wrong.
+
+> **▸ Why the uniques are stored instead of read on demand:** the tab needs item level and
+> quality, which are per item and which the snapshot breakdown does not keep — it aggregates by
+> name, which is right for a wealth chart and useless at a disenchanting bench. Reading the stash
+> when the tab opens would spend GGG's rate limit every time somebody clicked it. So a poll,
+> which has already read every tab, keeps what dust cares about in one row per league,
+> overwritten each time. The question is "what is in my stash now", and there is no version of it
+> that also wants Tuesday's answer.
+
+> **▸ Why there is no dust column:** dust scales with item level and quality, and this project
+> has no verified source for the actual numbers. A decision tool full of half-remembered
+> constants is worse than one that says what it does not know, so the fields a formula needs are
+> captured and named and the column is absent until there is something to base it on.
+
+> **▸ Why the price on that view is by name, and why it stops there:** poe.ninja's payload
+> carries no links and no corruption, so a six-linked Bronn's Lithe and a plain one are one line
+> to it — which is why uniques are unpriced in the wealth total, and why they must stay that
+> way. `resolvePrice` falls through to the flat price map for anything the variant index does not
+> resolve, so merging unique prices into that map would silently start valuing uniques by name in
+> everybody's net worth. The Kingsmarch view therefore reads prices the flat map already has and
+> marks them approximate; wiring unique prices in properly needs a separate map that valuation
+> never sees.
 
 > **▸ Why the economy list arrives whole:** a price set is a few thousand rows and the client
 > is on the same machine. Paging it would trade a few hundred kilobytes, once, for a search that
@@ -195,7 +218,7 @@ unvalidated symlink path traversal during extraction. There **is no fixed versio
 pnpm test
 ```
 
-**602 tests**, not one network request:
+**616 tests**, not one network request:
 
 - **The rate limiter** — header parsing, pacing, serialisation, `Retry-After`, doubling up to the
   ceiling. The clock and sleep are faked, so testing a 30-minute backoff takes microseconds. One
@@ -233,6 +256,10 @@ pnpm test
   oldest-first with the divine rate of each moment, that a set which did not price the item is a
   gap rather than a zero, that the limit keeps the recent end, and that an id cannot smuggle
   anything into the JSON path it is interpolated into.
+- **Uniques for the bench** — that quality is parsed out of a rendered tooltip string rather
+  than trusted, that an item level GGG did not send stays null instead of becoming zero, that
+  copies differing in anything dust reads stay separate rows, and that the same unique in two
+  tabs is two rows because a row promises you can find the item again.
 - **The economy list** — that a slug reads back as words without claiming the punctuation it
   lost, that a name the stash has proved beats the slug reading of it, that the short-code table
   reverses correctly, and that searching finds an item by its id as well as by its name.
@@ -248,7 +275,7 @@ pnpm test
 /server
   /src
     /services   priceService (fetching and caching), ninjaPayload (reading what comes back),
-                economy (naming every priced id),
+                economy (naming every priced id), kingsmarch (uniques as the bench sees them),
                 stashService, valuationService, uniques, snapshotRepo, leagueService,
                 profileService, updateService
     /routes     snapshots, health, config, economy
@@ -268,7 +295,7 @@ pnpm test
   /src
     /components Hero, NetWorthChart, RatePerHourChart, TabAreaChart, ItemsTable, SnapshotTable,
                 PollerStatus, TokenGate, ChangesTable, ItemHistory, ItemIcon, DesktopSetup,
-                UpdateNotice, SideNav, Economy, PriceHistory
+                UpdateNotice, SideNav, Economy, PriceHistory, Kingsmarch
     /hooks      useSnapshots
     /lib        api, format, series, palette (chart colours), schedule (the countdown), spark,
                 update (the release notice and its dismissal), items (the item table's data),

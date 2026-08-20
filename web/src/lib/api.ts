@@ -270,6 +270,31 @@ export interface EconomyResponse {
   rows: EconomyRow[];
 }
 
+/** One row of the Kingsmarch view — see the server's services/kingsmarch.ts. */
+export interface UniqueRow {
+  name: string;
+  baseType: string;
+  tab: string;
+  /** Item level. Null when GGG sent none; zero is a real level and not the same thing. */
+  ilvl: number | null;
+  quality: number;
+  corrupted: boolean;
+  icon: string | null;
+  count: number;
+  /** Chaos value by name, or null when nothing in the price set names it. */
+  chaos: number | null;
+  /** True when a price was found — and by name only, so a variant may move it. */
+  priceIsApproximate: boolean;
+}
+
+export interface UniquesResponse {
+  league: string;
+  /** When the poll that saw these ran. Null before the first one. */
+  capturedAt: string | null;
+  count: number;
+  rows: UniqueRow[];
+}
+
 export class ApiError extends Error {
   readonly status: number;
   constructor(message: string, status: number) {
@@ -375,6 +400,10 @@ export const api = {
   /** Everything poe.ninja prices. Fetched once when the tab opens; searching is local. */
   economy: (league: string | undefined, signal?: AbortSignal) =>
     get<EconomyResponse>(`/api/economy${query({ league })}`, signal),
+
+  /** The uniques a poll last saw, with item level and quality. */
+  uniques: (league: string | undefined, signal?: AbortSignal) =>
+    get<UniquesResponse>(`/api/uniques${query({ league })}`, signal),
 
   /** One item's price across the price sets this app has kept — its own history, not poe.ninja's. */
   priceHistory: (id: string, league: string | undefined, signal?: AbortSignal) =>

@@ -18,6 +18,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { ApiDeps } from './deps.ts';
 import { buildEconomy, namesFromBreakdown } from '../services/economy.ts';
+import { ninjaId } from '../services/ninjaId.ts';
 
 export async function economyRoutes(app: FastifyInstance, deps: ApiDeps): Promise<void> {
   app.get('/economy', async (request: FastifyRequest, reply: FastifyReply) => {
@@ -73,5 +74,48 @@ export async function economyRoutes(app: FastifyInstance, deps: ApiDeps): Promis
 
     const points = await deps.priceHistory.history(league, id);
     return reply.send({ league, id, count: points.length, points });
+  });
+
+  /**
+   * GET /api/uniques — the uniques a poll last saw, for the disenchanting bench.
+   *
+   * Item level and quality per item, which the snapshot breakdown does not keep, plus a chaos
+   * price looked up by name where the price set has one.
+   *
+   * That price is **by name only**, and the response says so on every row that could be wrong
+   * about it. poe.ninja's redesigned payload carries no links and no corruption, so a six-linked
+   * Bronn's Lithe and a plain one are the same line to it — the reason uniques go unpriced in
+   * the wealth total. For a disenchanting decision a name-level figure is the right ballpark,
+   * because what goes to the bench is the cheap end where the variant barely moves the price.
+   * The distinction is kept in the data rather than argued about in the interface.
+   */
+  app.get('/uniques', async (request: FastifyRequest, reply: FastifyReply) => {
+    const raw = request.query as Record<string, unknown>;
+    const league =
+      typeof raw.league === 'string' && raw.league.trim() !== '' ? raw.league.trim() : deps.config.league;
+
+    const stored = await deps.uniques.latest(league);
+    if (stored === null) {
+      return reply.send({ league, capturedAt: null, count: 0, rows: [] });
+    }
+
+    const prices = deps.prices.cached?.prices ?? {};
+    const rows = stored.holdings.map((holding) => {
+      const chaos = prices[ninjaId(holding.name)] ?? null;
+      return {
+        ...holding,
+        chaos,
+        // A corrupted or linked item is where a name-level price stops being a ballpark. The
+        // row carries the caveat so the table can mark it rather than quietly averaging it in.
+        priceIsApproximate: chaos !== null,
+      };
+    });
+
+    return reply.send({
+      league,
+      capturedAt: stored.capturedAt.toISOString(),
+      count: rows.length,
+      rows,
+    });
   });
 }

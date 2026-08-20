@@ -17,6 +17,8 @@ import type { PriceService } from '../services/priceService.ts';
 import type { StashService } from '../services/stashService.ts';
 import type { SnapshotMeta, SnapshotStore } from '../services/snapshotRepo.ts';
 import { valueTabs } from '../services/valuationService.ts';
+import { uniqueHoldings } from '../services/kingsmarch.ts';
+import type { UniqueStore } from '../services/snapshotRepo.ts';
 
 export interface PollDependencies {
   league: string;
@@ -24,6 +26,13 @@ export interface PollDependencies {
   prices: PriceService;
   stash: StashService;
   store: SnapshotStore;
+  /**
+   * Where the uniques a poll saw are kept, for the Kingsmarch view.
+   *
+   * Optional: this is a side product of a poll and not part of what makes one succeed. A store
+   * that throws must not cost a snapshot the poll already paid GGG's rate limit for.
+   */
+  uniques?: UniqueStore;
   log?: Logger;
   now?: () => number;
 }
@@ -94,6 +103,15 @@ export async function runPoll(deps: PollDependencies): Promise<PollOutcome> {
     breakdown: valuation.breakdown,
     priceSetAt: priceSet.fetchedAt,
   });
+
+  // After the snapshot, and never in front of it. The uniques are for a view; the snapshot is
+  // the record. A failure here is logged and dropped rather than allowed to lose the poll.
+  if (deps.uniques !== undefined) {
+    const holdings = uniqueHoldings(tabs);
+    await deps.uniques.save(deps.league, holdings, new Date(now())).catch((error: unknown) => {
+      log.warn({ err: error }, 'could not record the uniques this poll saw');
+    });
+  }
 
   const outcome: PollOutcome = {
     snapshot,

@@ -74,3 +74,22 @@ model PriceSet {
 
   @@index([league, fetchedAt])
 }
+
+/// The uniques a poll last saw, one row per league.
+///
+/// Not history: this is overwritten every poll, because the question it answers is "what is in
+/// my stash right now" and an answer from Tuesday is not an answer. It is stored rather than
+/// held in memory so the tab has something to show the moment the app opens, instead of nothing
+/// until the next poll comes round.
+///
+/// It lives outside Snapshot deliberately. A snapshot's breakdown is keyed by item name and
+/// aggregated, which is the right shape for a wealth chart and the wrong one here: item level
+/// and quality are per item, and putting them in every snapshot would multiply the largest
+/// column in the database to record what does not change between polls.
+model UniqueSet {
+  id         Int      @id @default(autoincrement())
+  league     String   @unique
+  capturedAt DateTime @default(now())
+  /// UniqueHolding[] — see services/kingsmarch.ts.
+  holdings   Json
+}

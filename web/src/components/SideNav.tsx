@@ -9,11 +9,12 @@
  * Below `lg` it folds into a row, because there the width is the scarce thing instead.
  */
 
-export type View = 'dashboard' | 'economy';
+export type View = 'dashboard' | 'economy' | 'kingsmarch';
 
 const VIEWS: Array<{ id: View; label: string; hint: string }> = [
   { id: 'dashboard', label: 'Dashboard', hint: 'What you own and what it is doing' },
   { id: 'economy', label: 'Economy', hint: 'What everything is worth, held or not' },
+  { id: 'kingsmarch', label: 'Kingsmarch', hint: 'Your uniques, with the item level and quality dust reads' },
 ];
 
 export function SideNav({ value, onChange }: { value: View; onChange: (next: View) => void }) {

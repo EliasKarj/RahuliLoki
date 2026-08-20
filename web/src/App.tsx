@@ -16,6 +16,7 @@ import { DesktopSetup } from './components/DesktopSetup.tsx';
 import { UpdateNotice } from './components/UpdateNotice.tsx';
 import { SideNav, type View } from './components/SideNav.tsx';
 import { Economy } from './components/Economy.tsx';
+import { Kingsmarch } from './components/Kingsmarch.tsx';
 import { hasToken } from './lib/api.ts';
 import { rangeStart } from './lib/series.ts';
 import { describeSchedule } from './lib/schedule.ts';
@@ -131,6 +132,8 @@ export default function App() {
 
       {view === 'economy' ? (
         <Economy league={league ?? config?.league} />
+      ) : view === 'kingsmarch' ? (
+        <Kingsmarch league={league ?? config?.league} />
       ) : loading && snapshots.length === 0 ? (
         <Empty>Loading…</Empty>
       ) : snapshots.length === 0 ? (

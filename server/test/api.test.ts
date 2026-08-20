@@ -602,3 +602,31 @@ describe('GET /api/price-history', () => {
     expect((await app.inject({ method: 'GET', url: '/api/price-history' })).statusCode).toBe(400);
   });
 });
+
+describe('GET /api/uniques', () => {
+  it('gives what a poll last saw, with a price looked up by name', async () => {
+    const { app } = await makeApp();
+    const body = (await app.inject({ method: 'GET', url: '/api/uniques' })).json();
+
+    expect(body).toMatchObject({ league: 'Settlers', count: 1 });
+    expect(body.rows[0]).toMatchObject({ name: 'Tabula Rasa', ilvl: 68, quality: 0, count: 3 });
+  });
+
+  it('says the price is missing rather than zero when nothing prices it', async () => {
+    // The fake price set holds chaos and divine, not Tabula Rasa. A zero here would read as
+    // "worthless", which is a different claim from "poe.ninja does not price this".
+    const { app } = await makeApp();
+    const body = (await app.inject({ method: 'GET', url: '/api/uniques' })).json();
+
+    expect(body.rows[0].chaos).toBeNull();
+    expect(body.rows[0].priceIsApproximate).toBe(false);
+  });
+
+  it('answers empty rather than erroring before the first poll', async () => {
+    const { app } = await makeApp({ uniques: { save: async () => {}, latest: async () => null } });
+    const response = await app.inject({ method: 'GET', url: '/api/uniques' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ capturedAt: null, count: 0, rows: [] });
+  });
+});

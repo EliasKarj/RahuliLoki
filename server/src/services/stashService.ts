@@ -37,6 +37,20 @@ export interface StashItem {
   icon?: string;
   /** Sockets sharing a `group` are linked. Five or six of them prices a unique — see uniques.ts. */
   sockets?: Array<{ group?: unknown }>;
+  /**
+   * The item's level. Read for Kingsmarch: dust scales with it — see services/kingsmarch.ts.
+   *
+   * Deliberately absent from valuation, which keys everything by name. Two copies of the same
+   * unique at different item levels are one line on a wealth chart and two different decisions
+   * at the disenchanting bench.
+   */
+  ilvl?: number;
+  /**
+   * GGG's display properties. Quality lives in here as `{ name: 'Quality', values: [['+20%', 1]] }`,
+   * and map tier as `{ name: 'Map Tier', ... }`. A display list rather than a data structure,
+   * which is why everything that reads it parses defensively.
+   */
+  properties?: Array<{ name?: unknown; values?: unknown }>;
 }
 
 export interface StashTabInfo {
