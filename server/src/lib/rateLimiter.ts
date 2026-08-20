@@ -3,16 +3,31 @@
  *
  * Every response carries the policy in force and our current position in it:
  *
- *   X-Rate-Limit-Account:       45:60:120,180:3600:3600
+ *   X-Rate-Limit-Account:       45:60:120,200:3600:3600
  *   X-Rate-Limit-Account-State:  2:60:0,  17:3600:0
  *
  * Each triple is `hits:period:restrictTime`. In the limit header it is the allowance; in the
  * state header it is what we have already spent, and a non-zero `restrictTime` means we are
  * being timed out right now. There can be several policies at once — the tightest wins.
  *
+ * ## The numbers above are an example, not a specification
+ *
+ * Nothing in this file assumes them. `#limits` starts empty: until a response arrives this class
+ * knows no policy at all, which is why it opens with a single request and widens only once the
+ * headers have told it what the allowance is. Every figure it paces by is read from the headers
+ * of the response in front of it.
+ *
+ * That is deliberate and it is the only defensible design, because GGG changes these numbers,
+ * varies them per endpoint, and does not promise them anywhere this project has verified. Any
+ * constant compiled in here would be a guess that goes stale silently. The example above is
+ * illustrative — an earlier version of this comment said `180:3600:3600` a few lines from a
+ * comment saying `200`, which is exactly what an unverified constant looks like once two people
+ * have edited around it.
+ *
  * Rules this class enforces, all of them non-negotiable:
- *   - one request at a time, never in parallel;
- *   - pace at the tightest bucket's natural rate (period / hits) rather than bursting;
+ *   - one admission decision at a time, each seeing what the previous one spent;
+ *   - never more requests in the air than the observed window has room for;
+ *   - pace toward the tightest bucket's natural rate (period / hits) as that bucket empties;
  *   - hard-wait a full period when a bucket is spent, and the stated time when restricted;
  *   - on 429, honour Retry-After and then double, capped at 30 minutes.
  *

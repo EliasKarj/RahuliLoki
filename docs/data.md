@@ -63,6 +63,18 @@ The triple is `hits:period:penalty`. The limiter
 > forty-five requests a minute, and the second half of a sixty-tab stash waits for the window to
 > roll. No client can read that account faster.
 
+> **▸ Where the numbers in these tables come from, and where they do not:** they are measured
+> against a *simulated* GGG whose policy is assumed to be `45:60:120,200:3600:3600`. That string
+> is not quoted from GGG's developer documentation, which this project has not verified against.
+> It is a plausible policy, and the speed-ups are real *relative to it* — but if GGG's real
+> allowance for the stash endpoint is tighter, the wall-clock figures move.
+>
+> What does not depend on it: the app never uses those numbers. `RateLimiter` starts with no
+> policy at all and paces by whatever `X-Rate-Limit-Account` and `X-Rate-Limit-Account-State`
+> say on the response in front of it. That is why the first request of a poll goes alone — there
+> is nothing to be inside yet — and why every constant in this file is a comment rather than a
+> value. A compiled-in limit would be a guess that goes stale without saying so.
+
 > **▸ Why several requests are in the air at once:** the limiter used to hold its queue for the
 > whole round trip, so a stash was read one network latency at a time — twenty-four tabs at two
 > hundred milliseconds each is five seconds of *waiting*, against a policy that would have
