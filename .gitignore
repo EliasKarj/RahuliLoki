@@ -16,8 +16,13 @@ release/
 
 # SQLite database + backups. The -wal and -shm sidecars hold committed rows that have not
 # been checkpointed back into the main file yet, so they are as sensitive as the .db itself.
+#
+# Anchored to the repository root, and no bare `data/` beside it. A bare rule matches a
+# directory of that name at *any* depth, and it silently swallowed server/src/data — the
+# vendored dust table and its licence notice — so they were never committed and CI could not
+# build. Nothing is lost by dropping it: every deployment puts the database at /data/, and the
+# file patterns below catch a stray .db wherever it lands.
 /data/
-data/
 *.db
 *.db-journal
 *.db-wal
