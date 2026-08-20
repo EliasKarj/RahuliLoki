@@ -38,25 +38,29 @@ export const DEFAULT_ITEM_CATEGORIES = [
 ] as const;
 
 /**
- * Unique categories fetched through the **exchange** endpoint, priced per variant rather than by
- * name — see services/uniques.ts.
+ * Unique categories, priced per variant rather than by name — see services/uniques.ts.
  *
- * Empty, and it stays empty: every unique type that endpoint serves — UniqueArmour,
- * UniqueWeapon, UniqueAccessory, UniqueFlask, UniqueJewel, UniqueMap, UniqueRelic and a bare
- * Unique — answers 200 with zero lines. Recorded by scripts/probe.mjs.
+ * These are **item**-endpoint types. The exchange endpoint this app fetches everything else
+ * from serves no uniques at all: UniqueArmour, UniqueWeapon, UniqueAccessory, UniqueFlask,
+ * UniqueJewel, UniqueMap, UniqueRelic and a bare Unique all answer 200 with zero lines, which
+ * is why this list sat empty for months and uniques were left out of every net worth.
  *
- * That is not the whole story, and this comment used to imply it was. poe.ninja's **item**
- * endpoint does serve uniques, with names, prices and `links` on them; PriceService reads it
- * into `PriceSet.uniquePrices` and the Kingsmarch view uses it. What that map does not do is
- * reach the wealth total, because a name-keyed price cannot tell a plain Bronn's Lithe from a
- * six-linked one — about 5 chaos against about 210 — and quietly picking one would be wrong by
- * up to fortyfold in a number nobody can see inside. Uniques stay in the snapshot's
- * `unresolved` list, where the omission is at least visible.
+ * `stash/current/item` serves them: 986 unique armours, 667 weapons, 364 accessories, 167
+ * jewels and 39 flasks, each line carrying `links` — the field whose absence made a unique
+ * unpriceable here, because by name alone a plain Bronn's Lithe and a six-linked one are the
+ * same row at about 5 chaos and about 210. UniqueMap and UniqueRelic answer empty on this
+ * endpoint too and are left out rather than asked for nothing. Recorded by scripts/probe.mjs.
  *
- * Valuing them properly is now possible and is a change of its own: match each stash item to a
- * priced variant by its links, and only then let it into the total.
+ * Set PRICE_UNIQUE_CATEGORIES to an empty value to switch unique pricing off — the totals then
+ * read the way every snapshot before this did, which is what makes the old ones comparable.
  */
-export const DEFAULT_UNIQUE_CATEGORIES = [] as const;
+export const DEFAULT_UNIQUE_CATEGORIES = [
+  'UniqueArmour',
+  'UniqueWeapon',
+  'UniqueAccessory',
+  'UniqueJewel',
+  'UniqueFlask',
+] as const;
 
 export interface AppConfig {
   /** Full account credential. Never logged, never sent to the frontend. */

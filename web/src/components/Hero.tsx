@@ -127,6 +127,12 @@ export function Hero({
           label="Gain in range"
           value={prices.signed(gain)}
           tone={gain === 0 ? 'flat' : gain > 0 ? 'up' : 'down'}
+          // Marked rather than adjusted. Subtracting the step would mean this code deciding
+          // what the player actually earned, and it does not know; saying the figure has one
+          // in it costs a word and leaves the judgement where it belongs.
+          {...(stats?.uniquesArrived === true
+            ? { note: 'includes uniques becoming countable' }
+            : {})}
         />
         <Figure
           label="Rate while moving"

@@ -160,9 +160,16 @@ weapons and armour `links` and `variant`. Five types return anything: `UniqueArm
 `UniqueWeapon` (667), `UniqueAccessory` (364), `UniqueJewel` (167), `UniqueFlask` (39). Recorded
 by `scripts/probe.mjs --items`.
 
-The cheapest line per name lands in `PriceSet.uniquePrices`, which the Kingsmarch view reads and
-the valuation never touches. See `PRICE_UNIQUE_CATEGORIES` in the settings for the exchange-side
-switch, and `docs/development.md` for why a name-level price must not reach a net worth.
+Every line goes into a variant index keyed by name, holding one entry per `(links, corrupted)`
+combination, and a stash item is matched to one of them by its own sockets before it is counted.
+See `services/uniques.ts`, and `docs/development.md` for what that matching still cannot resolve
+— corruption, which these lines do not publish, and variants, which nothing in a stash payload
+lines up with.
+
+The index is stored in `UniquePriceSet`, one row per league, overwritten on every fetch. Not on
+`PriceSet`: only the newest is ever read, and at 273 KB it would otherwise be kept forty-eight
+times over. It has to be stored at all, though — without it the first poll after a restart values
+every unique at nothing and writes a collapse into the history that never happened.
 
 > **▸ Why there are two kinds of id and what follows from it:** newer items use a slug derived from
 > the name (`accelerating-catalyst`, `awakeners-orb`), but older currency uses trade-site

@@ -129,9 +129,15 @@ export async function makeApp(
             'The Doctor': 'https://web.poecdn.com/doctor.png',
             'Divine Orb': 'https://web.poecdn.com/divine.png',
           },
-          uniques: {},
+          // The variant index, which is what prices uniques everywhere now — keyed by name,
+          // holding one line per (links, corrupted) combination poe.ninja published.
+          uniques: {
+            'Tabula Rasa': [
+              { name: 'Tabula Rasa', links: 0, corrupted: false, variant: null, chaos: 12.5, icon: null },
+              { name: 'Tabula Rasa', links: 6, corrupted: false, variant: null, chaos: 14.5, icon: null },
+            ],
+          },
           categories: { chaos: 'Currency', divine: 'Currency' },
-          uniquePrices: { 'Tabula Rasa': 12.5 },
           meta: {
             divine: { change: 4.2, volume: 19156804, sparkline: [0, 2.1, 4.2] },
             // Chaos deliberately has none, so a test can tell "no movement published" from
@@ -158,6 +164,7 @@ export async function makeApp(
               ilvl: 68,
               quality: 0,
               corrupted: false,
+              links: 6,
               icon: null,
               count: 3,
             },

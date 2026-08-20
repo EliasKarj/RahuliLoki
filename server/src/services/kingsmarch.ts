@@ -19,6 +19,7 @@
  */
 
 import { FRAME_UNIQUE, stripNameMarkup } from './valuationService.ts';
+import { linkCount } from './uniques.ts';
 import type { StashItem, TabContents } from './stashService.ts';
 
 export interface UniqueHolding {
@@ -33,12 +34,21 @@ export interface UniqueHolding {
   /** Quality as a percentage. Zero, not null, when the item simply has none. */
   quality: number;
   corrupted: boolean;
+  /**
+   * Largest linked socket group, or 0 when links are not what prices this item.
+   *
+   * Dust does not care about links. The price does — a six-linked Bronn's Lithe is forty times
+   * a plain one — and this view divides one by the other, so the number it ranks on is only as
+   * good as the price behind it.
+   */
+  links: number;
   icon: string | null;
   /**
    * How many identical copies this row stands for.
    *
-   * Identical means the same name, base, level, quality and corruption — everything dust reads.
-   * A hundred Tabula Rasas of the same level are one decision, not a hundred rows of it.
+   * Identical means the same name, base, level, quality, corruption and links: everything dust
+   * reads and everything the price reads. A hundred Tabula Rasas of the same level are one
+   * decision, not a hundred rows of it.
    */
   count: number;
 }
@@ -80,6 +90,7 @@ function holdingKey(holding: Omit<UniqueHolding, 'count'>): string {
     holding.ilvl ?? '',
     holding.quality,
     holding.corrupted,
+    holding.links,
   ].join(' ');
 }
 
@@ -115,6 +126,7 @@ export function uniqueHoldings(tabs: TabContents[]): UniqueHolding[] {
         ilvl: typeof item.ilvl === 'number' && Number.isFinite(item.ilvl) ? item.ilvl : null,
         quality: qualityOf(item),
         corrupted: item.corrupted === true,
+        links: linkCount(item.sockets),
         icon: typeof item.icon === 'string' && item.icon !== '' ? item.icon : null,
       };
 

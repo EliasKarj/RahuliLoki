@@ -23,11 +23,10 @@
  *           fill the gap: an item with no icon simply shows none.
  *
  *   Uniques.  Not on this endpoint at all: every unique type answers 200 with zero lines. They
- *           live on the item endpoint instead — see DEFAULT_NINJA_ITEM_URL below, which does
- *           carry names, prices and links, and which this module reads separately.
- *
- * Both shapes are parsed here because they are the same service and the same failure modes; the
- * two are kept apart everywhere downstream, since one is keyed by id and the other by name.
+ *           live on the item endpoint instead, whose URL is DEFAULT_NINJA_ITEM_URL below. That
+ *           payload is the old shape — names, prices, icons, and `links` — and it is parsed in
+ *           services/uniques.ts rather than here, because reading it is inseparable from
+ *           deciding which line prices a given item, which is that file's whole subject.
  */
 
 /** One priced line. `id` is poe.ninja's identifier; there is no name on it any more. */
@@ -125,8 +124,10 @@ export const DEFAULT_NINJA_URL = 'https://poe.ninja/poe1/api/economy/exchange/cu
  * endpoint. It is not true of this one.
  *
  * `stash/current/item` serves items, and its lines carry `name`, `baseType`, `chaosValue`,
- * `icon`, `listingCount` — and, on weapons, `links`. Recorded by scripts/probe.mjs: 986 unique
- * armours, 667 weapons, 364 accessories, 167 jewels and 39 flasks, every one of them named.
+ * `icon`, `listingCount` — and, on weapons and armour, `links`, the field whose absence made a
+ * unique unpriceable here. Recorded by scripts/probe.mjs: 986 unique armours, 667 weapons, 364
+ * accessories, 167 jewels and 39 flasks, every one of them named. No `corrupted` anywhere; see
+ * services/uniques.ts for what follows from that.
  *
  * The conclusion in this repository was not wrong about what it saw. It was wrong about how much
  * it had looked at.
@@ -284,85 +285,4 @@ export function unmatchedIds(
     missing.push(id);
   }
   return missing.sort().slice(0, limit);
-}
-
-/** One line of an item overview. Named, unlike anything the exchange endpoint returns. */
-interface ItemLine {
-  name?: unknown;
-  baseType?: unknown;
-  chaosValue?: unknown;
-  icon?: unknown;
-  listingCount?: unknown;
-  links?: unknown;
-  variant?: unknown;
-}
-
-export interface UniquePrice {
-  name: string;
-  baseType: string;
-  chaos: number;
-  icon: string | null;
-  /** How many are listed. A price behind two listings is a different fact from one behind four hundred. */
-  listingCount: number;
-  /**
-   * Linked sockets, when the payload says. Present on weapons and armour, absent elsewhere.
-   *
-   * Kept because it is the field whose absence from the *other* endpoint made uniques unpriceable
-   * here: the same Bronn's Lithe is about 5 chaos plain and 210 as a six-link, and a price with
-   * no links on it cannot tell you which one it is.
-   */
-  links: number | null;
-  /** poe.ninja's variant tag, e.g. a specific roll. Null when the line carries none. */
-  variant: string | null;
-}
-
-/**
- * Read an item overview into one price per line.
- *
- * Nothing is merged or deduplicated here. The same unique appears several times when poe.ninja
- * prices several variants of it, and deciding which one an item in a stash is counts as
- * valuation rather than parsing — so every line is returned and the choosing happens where the
- * item is known.
- */
-export function itemOverview(payload: unknown): UniquePrice[] {
-  const lines = (payload as { lines?: unknown })?.lines;
-  if (!Array.isArray(lines)) return [];
-
-  const out: UniquePrice[] = [];
-  for (const raw of lines as ItemLine[]) {
-    const name = typeof raw?.name === 'string' ? raw.name.trim() : '';
-    const chaos = typeof raw?.chaosValue === 'number' && Number.isFinite(raw.chaosValue) ? raw.chaosValue : 0;
-    if (name === '' || chaos <= 0) continue;
-
-    out.push({
-      name,
-      baseType: typeof raw.baseType === 'string' ? raw.baseType.trim() : '',
-      chaos,
-      icon: iconUrl(raw.icon),
-      listingCount:
-        typeof raw.listingCount === 'number' && Number.isFinite(raw.listingCount) && raw.listingCount >= 0
-          ? raw.listingCount
-          : 0,
-      links: typeof raw.links === 'number' && Number.isFinite(raw.links) ? raw.links : null,
-      variant: typeof raw.variant === 'string' && raw.variant !== '' ? raw.variant : null,
-    });
-  }
-  return out;
-}
-
-/**
- * The cheapest line per name, which is the honest answer when the variant is unknown.
- *
- * poe.ninja prices several variants of one unique — six-linked, Foulborn, a specific roll — and
- * a stash item this app has not matched to one of them could be any of the cheap ones. Taking
- * the lowest means an item is never valued above what it might be worth, which is the direction
- * to err in when the number is about to be shown next to a decision to destroy the thing.
- */
-export function cheapestByName(prices: UniquePrice[]): Record<string, number> {
-  const out = Object.create(null) as Record<string, number>;
-  for (const price of prices) {
-    const seen = out[price.name];
-    if (seen === undefined || price.chaos < seen) out[price.name] = price.chaos;
-  }
-  return out;
 }

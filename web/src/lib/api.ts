@@ -76,6 +76,14 @@ export interface ChangesResponse {
   gainedChaos: number;
   lostChaos: number;
   netChaos: number;
+  /**
+   * True when uniques entered the total inside this range.
+   *
+   * They were not counted at all until poe.ninja's item endpoint turned out to price them, so
+   * the first poll after that shows every unique already in the stash arriving at once. It is a
+   * step in what the application can see, not in what the player has.
+   */
+  uniquesArrived?: boolean;
   /** Present only when there was nothing to diff. */
   reason?: string;
 }
@@ -146,6 +154,14 @@ export interface StatsResponse {
   chaosPerHourActive: number;
   bestHour: { from: string; to: string; gainChaos: number } | null;
   intervals: SeriesInterval[];
+  /**
+   * True when uniques entered the total inside this range.
+   *
+   * They were not counted at all until poe.ninja's item endpoint turned out to price them, so
+   * the first poll after that shows every unique already in the stash arriving at once. It is a
+   * step in what the application can see, not in what the player has.
+   */
+  uniquesArrived?: boolean;
 }
 
 export interface ConfigResponse {
@@ -279,12 +295,21 @@ export interface UniqueRow {
   ilvl: number | null;
   quality: number;
   corrupted: boolean;
+  /** Largest linked socket group, or 0 when links are not what prices this item. */
+  links: number;
   icon: string | null;
   count: number;
-  /** Chaos value by name, or null when nothing in the price set names it. */
+  /** Chaos value for this item's own variant, or null when poe.ninja prices no such unique. */
   chaos: number | null;
-  /** True when a price was found — and by name only, so a variant may move it. */
+  /**
+   * True when the price is a stand-in rather than an exact match.
+   *
+   * Usually true for a corrupted item — poe.ninja publishes no corruption on its unique lines —
+   * and for any unique it prices in several variants, where the cheapest is taken.
+   */
   priceIsApproximate: boolean;
+  /** poe.ninja's label for the line that priced it, where it gave one. */
+  variant: string | null;
   /**
    * Thaumaturgic Dust for **one** of these, at this item's level and quality. Null when the
    * dust table has never heard of the unique — a new one, most likely.
@@ -296,7 +321,7 @@ export interface UniqueRow {
   goldCost: number | null;
   /** Inventory slots one takes up, for comparing items of different sizes. */
   slots: number | null;
-  /** Null until unique prices are available from somewhere. */
+  /** Dust per chaos: the column this view is ranked on. Null when either half is missing. */
   dustPerChaos: number | null;
 }
 

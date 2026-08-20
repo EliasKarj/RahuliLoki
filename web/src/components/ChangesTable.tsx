@@ -31,20 +31,46 @@ const REASON_TITLE: Record<ItemChange['reason'], string> = {
   both: 'The amount and the unit price both moved.',
 };
 
+/**
+ * The one difference this table cannot explain by itself.
+ *
+ * Uniques were not counted in any total until poe.ninja's item endpoint turned out to price
+ * them. The poll after that shows every unique already sitting in the stash arriving at once,
+ * as ordinary gains, indistinguishable from a good afternoon. Nothing in the numbers can say
+ * which it was, so it is said here.
+ */
+function UniquesArrived() {
+  return (
+    <p className="rounded border border-cool-500/40 bg-cool-500/10 px-3 py-2 text-xs text-cool-300">
+      Uniques started being counted during this range. Every unique you already owned shows up
+      here as if it arrived, and the gain for the range includes all of it — that part is the app
+      learning to see them, not you earning them.
+    </p>
+  );
+}
+
 export function ChangesTable({
   changes,
   emptyReason,
+  uniquesArrived = false,
   onSelect,
 }: {
   changes: ItemChange[];
   emptyReason?: string | undefined;
+  /** See UniquesArrived: the range straddles the moment uniques entered the total. */
+  uniquesArrived?: boolean;
   onSelect?: (name: string) => void;
 }) {
   const prices = usePrices();
   const [filter, setFilter] = useState<Filter>('all');
 
   if (changes.length === 0) {
-    return <Empty>{emptyReason ?? 'Nothing moved by more than a chaos over this range.'}</Empty>;
+    return (
+      <div className="space-y-3">
+        {uniquesArrived ? <UniquesArrived /> : null}
+        <Empty>{emptyReason ?? 'Nothing moved by more than a chaos over this range.'}</Empty>
+      </div>
+    );
   }
 
   const rows = changes
@@ -55,6 +81,11 @@ export function ChangesTable({
 
   return (
     <div>
+      {uniquesArrived ? (
+        <div className="mb-3">
+          <UniquesArrived />
+        </div>
+      ) : null}
       <div className="mb-3 flex gap-1 text-xs">
         {(['all', 'gains', 'losses'] as const).map((key) => (
           <button

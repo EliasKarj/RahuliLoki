@@ -17,7 +17,7 @@ import { tabTotals } from './valuationService.ts';
 import { DIVINE_ID, type LineMeta } from './ninjaPayload.ts';
 import type { PricePoint, PriceSet, PriceSetStore } from './priceService.ts';
 import type { UniqueHolding } from './kingsmarch.ts';
-import type { UniqueIndex } from './uniques.ts';
+import type { UniqueIndex, UniquePrice } from './uniques.ts';
 
 export interface SnapshotMeta {
   id: number;
@@ -28,6 +28,13 @@ export interface SnapshotMeta {
   divineRate: number;
   itemCount: number;
   priceSetAt: Date;
+  /**
+   * Whether uniques are counted in `totalChaos` — see the column's comment in schema.prisma.
+   *
+   * Anything comparing two snapshots has to check it: the first poll after unique pricing
+   * arrived shows a step up worth every unique the player owns, and none of it is a gain.
+   */
+  pricedUniques: boolean;
 }
 
 export interface SnapshotWithBreakdown extends SnapshotMeta {
@@ -62,6 +69,7 @@ export interface CreateSnapshotInput {
   itemCount: number;
   breakdown: Breakdown;
   priceSetAt: Date;
+  pricedUniques: boolean;
 }
 
 export interface SnapshotStore {
@@ -86,6 +94,7 @@ const META_SELECT = {
   divineRate: true,
   itemCount: true,
   priceSetAt: true,
+  pricedUniques: true,
 } as const;
 
 const TABS_SELECT = { ...META_SELECT, tabs: true } as const;
@@ -130,6 +139,55 @@ function asPrices(value: unknown): Record<string, number> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return out;
   for (const [name, price] of Object.entries(value as Record<string, unknown>)) {
     if (typeof price === 'number' && Number.isFinite(price)) out[name] = price;
+  }
+  return out;
+}
+
+/**
+ * The index as it goes to disk: every line, with its icon dropped.
+ *
+ * The icon is ~180 characters of poecdn URL and it is already stored, once, in PriceSet.icons
+ * under the same key anything reads it by. Carrying it here as well would take the row from
+ * 273 KB to 690 KB to say the same thing twice.
+ */
+function withoutIcons(index: UniqueIndex): Record<string, Array<Omit<UniquePrice, 'icon'>>> {
+  const out: Record<string, Array<Omit<UniquePrice, 'icon'>>> = {};
+  for (const [name, lines] of Object.entries(index)) {
+    out[name] = lines.map(({ icon: _icon, ...rest }) => rest);
+  }
+  return out;
+}
+
+/**
+ * The unique variant index, narrowed back out of the database.
+ *
+ * Every field is checked, and a line that fails any of them is dropped rather than repaired.
+ * These numbers go straight into a net worth: a `chaos` that came back as a string would value
+ * a stash at NaN, and a `links` that came back as 7 would match nothing and silently reprice a
+ * six-link as a plain one.
+ */
+function asUniqueIndex(value: unknown): UniqueIndex {
+  const out: UniqueIndex = Object.create(null) as UniqueIndex;
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return out;
+
+  for (const [name, lines] of Object.entries(value as Record<string, unknown>)) {
+    if (!Array.isArray(lines)) continue;
+    const kept: UniquePrice[] = [];
+    for (const line of lines as Array<Record<string, unknown>>) {
+      const chaos = line?.chaos;
+      const links = line?.links;
+      if (typeof chaos !== 'number' || !Number.isFinite(chaos) || chaos <= 0) continue;
+      kept.push({
+        name,
+        links: typeof links === 'number' && links >= 5 ? links : 0,
+        corrupted: line?.corrupted === true,
+        variant: typeof line?.variant === 'string' && line.variant !== '' ? line.variant : null,
+        chaos,
+        // Stripped on the way in — PriceSet.icons carries them, keyed by the same uniqueKey.
+        icon: null,
+      });
+    }
+    if (kept.length > 0) out[name] = kept;
   }
   return out;
 }
@@ -334,6 +392,7 @@ export class PrismaSnapshotStore implements SnapshotStore {
         // Derived here rather than on every read. See the column's comment in schema.prisma.
         tabs: tabTotals(input.breakdown),
         priceSetAt: input.priceSetAt,
+        pricedUniques: input.pricedUniques,
       },
       select: META_SELECT,
     });
@@ -370,10 +429,10 @@ export class PrismaPriceSetStore implements PriceSetStore {
   }
 
   async latest(league: string): Promise<PriceSet | null> {
-    const row = await this.#prisma.priceSet.findFirst({
-      where: { league },
-      orderBy: { fetchedAt: 'desc' },
-    });
+    const [row, uniqueRow] = await Promise.all([
+      this.#prisma.priceSet.findFirst({ where: { league }, orderBy: { fetchedAt: 'desc' } }),
+      this.#prisma.uniquePriceSet.findUnique({ where: { league } }),
+    ]);
     if (row === null) return null;
     const prices = asPrices(row.prices);
     return {
@@ -394,13 +453,11 @@ export class PrismaPriceSetStore implements PriceSetStore {
       // Null on rows written before this column existed, which reads as "no movement was
       // published" — the truth about those rows, and not the same claim as "it did not move".
       meta: asMeta(row.meta),
-      // Name-keyed, from the item endpoint. Null on rows written before the column existed.
-      uniquePrices: asPrices(row.uniques),
-      // Not persisted. A restored set exists so a restart does not refetch immediately, and
-      // the very next poll refreshes it; carrying the unique index through the database would
-      // multiply the row size for a window measured in minutes. Uniques go unpriced until
-      // then, which the unresolved log makes visible rather than silent.
-      uniques: Object.create(null) as UniqueIndex,
+      // From its own table, and it has to survive the restart: without it the first poll after
+      // a reboot values every unique at nothing and writes a snapshot showing a collapse that
+      // never happened. That is worse than a stale price, because it goes into the history and
+      // stays there.
+      uniques: asUniqueIndex(uniqueRow?.lines),
     };
   }
 
@@ -413,9 +470,18 @@ export class PrismaPriceSetStore implements PriceSetStore {
         icons: set.icons as object,
         categories: set.categories as object,
         meta: set.meta as object,
-        uniques: set.uniquePrices as object,
       },
     });
+
+    // One row per league, overwritten. The index answers "what does a unique cost now", so
+    // keeping yesterday's copies would be storage spent on an answer nothing asks for.
+    const lines = withoutIcons(set.uniques);
+    await this.#prisma.uniquePriceSet.upsert({
+      where: { league: set.league },
+      create: { league: set.league, fetchedAt: set.fetchedAt, lines },
+      update: { fetchedAt: set.fetchedAt, lines },
+    });
+
     await this.#prune(set.league);
   }
 
@@ -517,6 +583,9 @@ function asHoldings(value: unknown): UniqueHolding[] {
       ilvl: typeof row.ilvl === 'number' && Number.isFinite(row.ilvl) ? row.ilvl : null,
       quality: typeof row.quality === 'number' && Number.isFinite(row.quality) ? row.quality : 0,
       corrupted: row.corrupted === true,
+      // Zero for a row written before this field existed, which is what "links do not price
+      // this item" means anyway — and the price lookup falls back to the unlinked line.
+      links: typeof row.links === 'number' && row.links >= 5 ? row.links : 0,
       icon: typeof row.icon === 'string' && row.icon !== '' ? row.icon : null,
       count: typeof row.count === 'number' && row.count > 0 ? row.count : 1,
     });

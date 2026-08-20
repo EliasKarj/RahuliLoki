@@ -173,6 +173,14 @@ export async function snapshotRoutes(app: FastifyInstance, deps: ApiDeps): Promi
       league: query.league,
       from: ends.first.takenAt.toISOString(),
       to: ends.last.takenAt.toISOString(),
+      /**
+       * True when uniques entered the total somewhere inside this range.
+       *
+       * Every unique the player already owned then appears as an item that arrived, worth its
+       * full price, and the net for the range is inflated by all of it. None of that is a gain
+       * and the view has to say so, because the numbers themselves cannot.
+       */
+      uniquesArrived: !ends.first.pricedUniques && ends.last.pricedUniques,
       ...summary,
       changes: summary.changes.slice(0, 200).map((change) => {
         const icon = Object.hasOwn(icons, change.name) ? icons[change.name] : undefined;
@@ -227,6 +235,17 @@ export async function snapshotRoutes(app: FastifyInstance, deps: ApiDeps): Promi
     const { full: _full, tabs: _tabs, ...storeQuery } = query;
     const snapshots = await deps.store.list(storeQuery);
     const stats = computeStats(snapshots);
-    return reply.send({ league: query.league, ...stats });
+
+    // The same boundary the changes view reports, and it matters more here: gain, chaos an
+    // hour and "best hour" are all differences between totals, and the one interval where
+    // uniques arrived contributes a jump nobody earned. Left in the numbers rather than
+    // silently smoothed away — smoothing would be this code deciding what the player did — but
+    // said out loud so the figure is read as what it is.
+    const uniquesArrived =
+      snapshots.length > 1 &&
+      snapshots.some((snapshot) => !snapshot.pricedUniques) &&
+      snapshots.some((snapshot) => snapshot.pricedUniques);
+
+    return reply.send({ league: query.league, uniquesArrived, ...stats });
   });
 }

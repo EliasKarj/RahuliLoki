@@ -6,12 +6,11 @@ import {
   coreItems,
   divineRateFrom,
   iconUrl,
-  cheapestByName,
-  itemOverview,
   mergeOverview,
   overviewMeta,
   unmatchedIds,
 } from '../src/services/ninjaPayload.ts';
+import { mergeUniqueOverview, pickCandidate, type UniqueIndex } from '../src/services/uniques.ts';
 import {
   bareOverview,
   core,
@@ -64,13 +63,13 @@ function service(options: {
   ttlMs?: number;
   maxBytes?: number;
   /** Off by default: these tests are about the exchange endpoint, and it is a separate service. */
-  uniqueItemCategories?: string[];
+  uniqueCategories?: string[];
 } = {}) {
   return new PriceService({
     league: 'Allflame',
     currencyCategories: ['Currency', 'Fragment'],
     itemCategories: ['DivinationCard', 'Scarab'],
-    uniqueItemCategories: options.uniqueItemCategories ?? [],
+    uniqueCategories: options.uniqueCategories ?? [],
     ttlMs: options.ttlMs ?? 3_600_000,
     store: options.store ?? memoryStore().store,
     fetchFn: options.fetchFn ?? fixtureFetch(),
@@ -292,7 +291,6 @@ describe('PriceService', () => {
       uniques: {},
       categories: {},
       meta: {},
-      uniquePrices: {},
     };
     const fetchFn = fixtureFetch();
     const subject = service({ fetchFn, store: memoryStore(stored).store, now: () => 60_000 });
@@ -316,7 +314,6 @@ describe('PriceService', () => {
       uniques: {},
       categories: {},
       meta: {},
-      uniquePrices: {},
     };
     const subject = service({ store: memoryStore(stale).store, now: () => 0 });
 
@@ -597,9 +594,12 @@ describe('overviewMeta', () => {
   });
 });
 
-describe('itemOverview', () => {
-  // Shaped exactly as scripts/probe.mjs recorded it from stash/current/item — names on every
-  // line, which is the thing the exchange endpoint does not have.
+describe('the item endpoint, read into the variant index', () => {
+  // Shaped exactly as scripts/probe.mjs recorded it from stash/current/item. The full key list
+  // it saw was: baseType, chaosValue, count, detailsId, divineValue, exaltedValue,
+  // explicitModifiers, flavourText, icon, id, implicitModifiers, itemClass, itemType,
+  // levelRequired, links, listingCount, name, sparkLine, and on some types mutatedModifiers,
+  // tradeInfo, variant. Note what is absent: corruption.
   const payload = {
     lines: [
       {
@@ -626,42 +626,47 @@ describe('itemOverview', () => {
     ],
   };
 
-  it('reads the named lines and drops the unusable ones', () => {
-    const prices = itemOverview(payload);
+  function index(): UniqueIndex {
+    const into: UniqueIndex = Object.create(null) as UniqueIndex;
+    mergeUniqueOverview(payload, into, iconUrl);
+    return into;
+  }
 
-    expect(prices).toHaveLength(3);
-    expect(prices.map((price) => price.name)).toEqual(['Bronn’s Lithe', 'Bronn’s Lithe', 'Progenesis']);
-  });
-
-  it('keeps the links, which is the field the other endpoint does not have', () => {
+  it('keeps a line per variant rather than one per name', () => {
     // The whole reason uniques went unpriced: a price with no links on it cannot say whether it
     // is the five-chaos one or the two-hundred-and-ten-chaos one.
-    expect(itemOverview(payload).map((price) => price.links)).toEqual([0, 6, null]);
+    expect(index()['Bronn’s Lithe']?.map((line) => [line.links, line.chaos])).toEqual([
+      [0, 5.2],
+      [6, 210],
+    ]);
+  });
+
+  it('drops the unusable lines rather than storing a zero', () => {
+    expect(Object.keys(index()).sort()).toEqual(['Bronn’s Lithe', 'Progenesis']);
+  });
+
+  it('prices a six-link as a six-link and a plain one as plain', () => {
+    const lines = index()['Bronn’s Lithe'] ?? [];
+
+    expect(pickCandidate(lines, 6, false)?.price.chaos).toBe(210);
+    expect(pickCandidate(lines, 0, false)?.price.chaos).toBe(5.2);
+  });
+
+  it('says a corrupted item was approximated, because the payload has no corruption on it', () => {
+    // Not a shortcoming of this code: poe.ninja publishes no `corrupted` field on these lines
+    // at all. The item is priced as the uncorrupted six-link, and the caller is told so rather
+    // than left to assume the number is exact.
+    const picked = pickCandidate(index()['Bronn’s Lithe'] ?? [], 6, true);
+
+    expect(picked?.price.chaos).toBe(210);
+    expect(picked?.exact).toBe(false);
   });
 
   it('validates the icon like every other URL out of a remote payload', () => {
-    const prices = itemOverview({
-      lines: [{ name: 'X', chaosValue: 1, icon: 'javascript:alert(1)' }],
-    });
+    const into: UniqueIndex = Object.create(null) as UniqueIndex;
+    mergeUniqueOverview({ lines: [{ name: 'X', chaosValue: 1, icon: 'javascript:alert(1)' }] }, into, iconUrl);
 
-    expect(prices[0]?.icon).toBeNull();
-  });
-
-  it('does not merge the variants, because choosing between them is not parsing', () => {
-    expect(itemOverview(payload).filter((price) => price.name === 'Bronn’s Lithe')).toHaveLength(2);
-  });
-
-  it('survives a payload with no lines', () => {
-    expect(itemOverview({})).toEqual([]);
-    expect(itemOverview(null)).toEqual([]);
-    expect(itemOverview({ lines: 'nope' })).toEqual([]);
-  });
-
-  it('takes the cheapest per name, so an unmatched item is never valued above what it may be', () => {
-    const cheapest = cheapestByName(itemOverview(payload));
-
-    expect(cheapest['Bronn’s Lithe']).toBe(5.2);
-    expect(cheapest.Progenesis).toBe(12518);
+    expect(into.X?.[0]?.icon).toBeNull();
   });
 });
 
@@ -689,44 +694,44 @@ describe('PriceService and the item endpoint', () => {
     ],
   };
 
-  it('reads unique prices into a map of their own, cheapest variant per name', async () => {
+  it('fills the variant index the valuation reads', async () => {
     const set = await service({
       fetchFn: bothEndpoints(itemBody),
-      uniqueItemCategories: ['UniqueArmour'],
+      uniqueCategories: ['UniqueArmour'],
     }).getPrices();
 
-    expect(set.uniquePrices['Tabula Rasa']).toBe(12.5);
-    expect(set.uniquePrices.Headhunter).toBe(90000);
+    expect(set.uniques['Tabula Rasa']).toHaveLength(2);
+    expect(pickCandidate(set.uniques['Tabula Rasa'] ?? [], 6, false)?.price.chaos).toBe(12.5);
+    expect(pickCandidate(set.uniques['Tabula Rasa'] ?? [], 0, false)?.price.chaos).toBe(40);
   });
 
-  it('keeps them out of the map the valuation reads', async () => {
+  it('leaves the id-keyed map alone', async () => {
     const set = await service({
       fetchFn: bothEndpoints(itemBody),
-      uniqueItemCategories: ['UniqueArmour'],
+      uniqueCategories: ['UniqueArmour'],
     }).getPrices();
 
-    // The whole point of the separate column. `prices` is keyed by poe.ninja id and is what
-    // resolvePrice falls through to, so a unique in there would start counting towards net worth
-    // by name — a change to make deliberately, not as a side effect of fetching prices.
+    // `prices` is keyed by poe.ninja id and is what resolvePrice falls through to. A unique in
+    // there would be priced by name, which is the whole thing the variant index exists to avoid.
     expect(set.prices['tabula-rasa']).toBeUndefined();
     expect(Object.keys(set.prices)).not.toContain('Tabula Rasa');
   });
 
   it('still produces a price set when the item endpoint is down', async () => {
-    // Uniques are decoration on the wealth total; the exchange prices are the total. One must
-    // not be able to take the other with it.
+    // Losing uniques costs the total its uniques. Losing the exchange prices costs it
+    // everything, so one must not be able to take the other with it.
     const set = await service({
       fetchFn: bothEndpoints(itemBody, { failItems: true }),
-      uniqueItemCategories: ['UniqueArmour'],
+      uniqueCategories: ['UniqueArmour'],
     }).getPrices();
 
-    expect(set.uniquePrices).toEqual({});
+    expect(set.uniques).toEqual({});
     expect(set.prices.chaos).toBe(1);
   });
 
   it('asks for nothing when the category list is empty', async () => {
     const fetchFn = vi.fn(bothEndpoints(itemBody) as never) as unknown as typeof fetch;
-    await service({ fetchFn, uniqueItemCategories: [] }).getPrices();
+    await service({ fetchFn, uniqueCategories: [] }).getPrices();
 
     const urls = (fetchFn as unknown as { mock: { calls: unknown[][] } }).mock.calls.map((call) => String(call[0]));
     expect(urls.some((url) => url.includes('/stash/current/item/'))).toBe(false);

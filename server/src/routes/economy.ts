@@ -19,6 +19,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { ApiDeps } from './deps.ts';
 import { buildEconomy, namesFromBreakdown } from '../services/economy.ts';
 import { dustFor } from '../services/dust.ts';
+import { pickCandidate } from '../services/uniques.ts';
 
 export async function economyRoutes(app: FastifyInstance, deps: ApiDeps): Promise<void> {
   app.get('/economy', async (request: FastifyRequest, reply: FastifyReply) => {
@@ -79,15 +80,15 @@ export async function economyRoutes(app: FastifyInstance, deps: ApiDeps): Promis
   /**
    * GET /api/uniques — the uniques a poll last saw, for the disenchanting bench.
    *
-   * Item level and quality per item, which the snapshot breakdown does not keep, plus a chaos
-   * price from poe.ninja's item endpoint where it has one.
+   * Item level and quality per item, which the snapshot breakdown does not keep, and a chaos
+   * price out of the same variant index the wealth total is valued against — matched on the
+   * item's own links, not on its name. One price path for uniques in the whole application, so
+   * this view and the dashboard cannot disagree about what a thing is worth.
    *
-   * That price is **by name only**, and the response says so on every row. poe.ninja prices
-   * several variants of one unique — six-linked, a particular roll — and the cheapest of them is
-   * what `uniquePrices` carries, because a stash item this app has not matched to a variant
-   * could be any of them. For a disenchanting decision that is the right ballpark: what goes to
-   * the bench is the cheap end, where the variant barely moves the price. It is not good enough
-   * for a net worth, which is why the wealth total still leaves uniques out.
+   * `priceIsApproximate` says whether the match was exact. It usually is not, and for reasons
+   * worth knowing rather than hiding: poe.ninja publishes no corruption on these lines, so a
+   * corrupted item never matches exactly, and a unique it prices in several variants cannot be
+   * pinned to one from stash data. See services/uniques.ts.
    */
   app.get('/uniques', async (request: FastifyRequest, reply: FastifyReply) => {
     const raw = request.query as Record<string, unknown>;
@@ -99,11 +100,12 @@ export async function economyRoutes(app: FastifyInstance, deps: ApiDeps): Promis
       return reply.send({ league, capturedAt: null, count: 0, rows: [] });
     }
 
-    // Name-keyed, and not the `prices` map: that one is keyed by poe.ninja id and is what the
-    // valuation reads. See PriceSet.uniquePrices for why the two are kept apart.
-    const uniquePrices = deps.prices.cached?.uniquePrices ?? {};
+    const uniques = deps.prices.cached?.uniques ?? {};
     const rows = stored.holdings.map((holding) => {
-      const chaos = uniquePrices[holding.name] ?? null;
+      const picked = Object.hasOwn(uniques, holding.name)
+        ? pickCandidate(uniques[holding.name] ?? [], holding.links, holding.corrupted)
+        : null;
+      const chaos = picked?.price.chaos ?? null;
       // Per item, not per row: the row may stand for twelve copies, but the decision at the
       // bench is about one of them and multiplying is the reader's business.
       const dust = dustFor(holding.name, {
@@ -115,9 +117,10 @@ export async function economyRoutes(app: FastifyInstance, deps: ApiDeps): Promis
       return {
         ...holding,
         chaos,
-        // A corrupted or linked item is where a name-level price stops being a ballpark. The
-        // row carries the caveat so the table can mark it rather than quietly averaging it in.
-        priceIsApproximate: chaos !== null,
+        /** True when the price is a stand-in: the exact combination was not on offer. */
+        priceIsApproximate: picked !== null && !picked.exact,
+        /** poe.ninja's label for the line that priced it, where it gave one. */
+        variant: picked?.price.variant ?? null,
         dust: dust?.dust ?? null,
         /** True when the dust figure is a floor: corrupted, or an item level GGG did not send. */
         dustAtLeast: dust?.atLeast ?? false,

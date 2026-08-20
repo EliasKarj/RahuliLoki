@@ -63,10 +63,30 @@ describe('uniqueHoldings', () => {
         ilvl: 68,
         quality: 20,
         corrupted: true,
+        links: 0,
         icon: null,
         count: 1,
       },
     ]);
+  });
+
+  it('reads the largest linked group, because that is what the price turns on', () => {
+    // GGG expresses links through `group`: sockets sharing a number are linked. Four in a row
+    // is worth nothing extra on the market and normalises to 0, the same as poe.ninja's own
+    // "links do not price this" — so a four-link and a plain item are one row here.
+    const six = [0, 0, 0, 0, 0, 0].map((group) => ({ group }));
+    const four = [0, 0, 0, 0].map((group) => ({ group }));
+
+    expect(uniqueHoldings([tab('Uniques', [unique({ sockets: six })])])[0]?.links).toBe(6);
+    expect(uniqueHoldings([tab('Uniques', [unique({ sockets: four })])])[0]?.links).toBe(0);
+  });
+
+  it('keeps a six-link apart from a plain one, because they are not the same decision', () => {
+    const six = [0, 0, 0, 0, 0, 0].map((group) => ({ group }));
+    const rows = uniqueHoldings([tab('Uniques', [unique(), unique({ sockets: six })])]);
+
+    expect(rows).toHaveLength(2);
+    expect(rows.map((row) => row.links).sort()).toEqual([0, 6]);
   });
 
   it('groups copies that are identical to the bench', () => {

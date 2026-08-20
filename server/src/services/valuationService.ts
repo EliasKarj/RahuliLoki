@@ -196,7 +196,10 @@ export function resolveUnique(
   const picked = pickCandidate(uniques[name] ?? [], links, corrupted);
   if (picked === null) return null;
 
-  return { key: uniqueKey(name, links, corrupted), chaos: picked.chaos };
+  // The key describes the *item*, not the line that priced it. A corrupted 6-link is its own
+  // row in the breakdown even when the line behind the number was an uncorrupted one, because
+  // the row is the player's holding and the approximation belongs to the price, not the item.
+  return { key: uniqueKey(name, links, corrupted), chaos: picked.price.chaos };
 }
 
 export function valueTabs(tabs: ValuationInput[], options: ValuationOptions): ValuationResult {

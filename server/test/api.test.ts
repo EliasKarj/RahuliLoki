@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { clearSecrets, registerSecret } from '../src/lib/logger.ts';
 import { QueryError, parseQuery } from '../src/routes/snapshots.ts';
 import { dustFor } from '../src/services/dust.ts';
+import { MemorySnapshotStore } from './helpers/memoryStore.ts';
 import { SESSION, START, idleHealth, makeApp } from './helpers/app.ts';
 
 afterEach(() => clearSecrets());
@@ -169,6 +170,51 @@ describe('GET /api/snapshots/latest', () => {
     const { app } = await makeApp();
     const response = await app.inject({ method: 'GET', url: '/api/snapshots/latest?league=Ancestor' });
     expect(response.statusCode).toBe(404);
+  });
+});
+
+describe('the moment uniques entered the total', () => {
+  /**
+   * A store whose snapshots straddle the change: the older ones written before unique prices
+   * existed, the newest one after.
+   */
+  async function straddling() {
+    const store = new MemorySnapshotStore();
+    store.seed({ takenAt: new Date(START), totalChaos: 1000, pricedUniques: false });
+    store.seed({ takenAt: new Date(START + 3_600_000), totalChaos: 1000, pricedUniques: false });
+    store.seed({
+      takenAt: new Date(START + 7_200_000),
+      totalChaos: 90_000,
+      pricedUniques: true,
+      breakdown: { Dump: { Headhunter: { qty: 1, chaosEach: 89_000, chaosTotal: 89_000 } } },
+    });
+    return makeApp({ store });
+  }
+
+  it('tells the changes view that the jump is not a gain', async () => {
+    const { app } = await straddling();
+    const body = (await app.inject({ method: 'GET', url: '/api/changes' })).json();
+
+    // The player did not acquire a Headhunter; the application started being able to see it.
+    // Without this flag the two are the same event as far as any number here can tell.
+    expect(body.uniquesArrived).toBe(true);
+  });
+
+  it('tells the stats view the same, because gain and c/h are differences too', async () => {
+    const { app } = await straddling();
+    const body = (await app.inject({ method: 'GET', url: '/api/stats' })).json();
+
+    expect(body.uniquesArrived).toBe(true);
+  });
+
+  it('says nothing once every snapshot in the range counts them', async () => {
+    const store = new MemorySnapshotStore();
+    store.seed({ takenAt: new Date(START), totalChaos: 90_000, pricedUniques: true });
+    store.seed({ takenAt: new Date(START + 3_600_000), totalChaos: 91_000, pricedUniques: true });
+    const { app } = await makeApp({ store });
+
+    expect((await app.inject({ method: 'GET', url: '/api/changes' })).json().uniquesArrived).toBe(false);
+    expect((await app.inject({ method: 'GET', url: '/api/stats' })).json().uniquesArrived).toBe(false);
   });
 });
 
@@ -615,10 +661,69 @@ describe('GET /api/uniques', () => {
       ilvl: 68,
       quality: 0,
       count: 3,
-      // The name-keyed map, not `prices`, which is keyed by poe.ninja id and would never match.
-      chaos: 12.5,
-      priceIsApproximate: true,
+      links: 6,
+      // The six-link line, not the cheaper plain one. The fake index holds both, which is the
+      // whole point: priced by what the item is, not by what it is called.
+      chaos: 14.5,
+      priceIsApproximate: false,
     });
+  });
+
+  it('prices a plain copy off the plain line, not off the six-link', async () => {
+    const { app } = await makeApp({
+      uniques: {
+        save: async () => {},
+        latest: async () => ({
+          capturedAt: new Date(START),
+          holdings: [
+            {
+              name: 'Tabula Rasa',
+              baseType: 'Simple Robe',
+              tab: 'Uniques',
+              ilvl: 68,
+              quality: 0,
+              corrupted: false,
+              links: 0,
+              icon: null,
+              count: 1,
+            },
+          ],
+        }),
+      },
+    });
+    const body = (await app.inject({ method: 'GET', url: '/api/uniques' })).json();
+
+    expect(body.rows[0].chaos).toBe(12.5);
+  });
+
+  it('marks the price approximate for a corrupted item, which never matches exactly', async () => {
+    // poe.ninja publishes no corruption on these lines at all, so the best available answer is
+    // the uncorrupted line for the same links. Said out loud rather than passed off as exact.
+    const { app } = await makeApp({
+      uniques: {
+        save: async () => {},
+        latest: async () => ({
+          capturedAt: new Date(START),
+          holdings: [
+            {
+              name: 'Tabula Rasa',
+              baseType: 'Simple Robe',
+              tab: 'Uniques',
+              ilvl: 68,
+              quality: 0,
+              corrupted: true,
+              links: 6,
+              icon: null,
+              count: 1,
+            },
+          ],
+        }),
+      },
+    });
+    const body = (await app.inject({ method: 'GET', url: '/api/uniques' })).json();
+
+    expect(body.rows[0].chaos).toBe(14.5);
+    expect(body.rows[0].priceIsApproximate).toBe(true);
   });
 
   it('answers the question the view exists for: dust per chaos', async () => {
@@ -629,7 +734,7 @@ describe('GET /api/uniques', () => {
     // Level 68 rather than 84, so this is also a check that the row's own item level reaches the
     // formula: a Tabula at 68 is worth a fraction of one at the ceiling.
     expect(row.dust).toBe(dustFor('Tabula Rasa', { ilvl: 68, quality: 0 })?.dust);
-    expect(row.dustPerChaos).toBeCloseTo(row.dust / 12.5, 9);
+    expect(row.dustPerChaos).toBeCloseTo(row.dust / 14.5, 9);
     expect(row.dustAtLeast).toBe(false);
     expect(row.goldCost).toBeGreaterThan(0);
   });
@@ -650,6 +755,7 @@ describe('GET /api/uniques', () => {
               ilvl: 84,
               quality: 0,
               corrupted: false,
+              links: 0,
               icon: null,
               count: 1,
             },

@@ -89,22 +89,22 @@ describe('pickCandidate', () => {
   const bronns = () => index()["Bronn's Lithe"] as UniquePrice[];
 
   it('matches links and corruption exactly when it can', () => {
-    expect(pickCandidate(bronns(), 6, false)?.chaos).toBe(210.5);
-    expect(pickCandidate(bronns(), 5, false)?.chaos).toBe(41);
-    expect(pickCandidate(bronns(), 0, false)?.chaos).toBe(5.2);
-    expect(pickCandidate(bronns(), 6, true)?.chaos).toBe(180);
+    expect(pickCandidate(bronns(), 6, false)?.price.chaos).toBe(210.5);
+    expect(pickCandidate(bronns(), 5, false)?.price.chaos).toBe(41);
+    expect(pickCandidate(bronns(), 0, false)?.price.chaos).toBe(5.2);
+    expect(pickCandidate(bronns(), 6, true)?.price.chaos).toBe(180);
   });
 
   it('falls back to the unlinked line rather than pricing at zero', () => {
     // No 5-link corrupted line exists; the 5-link one is the closer answer than nothing.
-    expect(pickCandidate(bronns(), 5, true)?.chaos).toBe(41);
+    expect(pickCandidate(bronns(), 5, true)?.price.chaos).toBe(41);
   });
 
   it('takes the cheapest when only an untellable variant separates the lines', () => {
     // Nothing in a stash payload says which Shavronne's this is. Overstating wealth shows up
     // as profit that was never made, so the low one wins.
     const shavs = index()["Shavronne's Wrappings"] as UniquePrice[];
-    expect(pickCandidate(shavs, 0, false)?.chaos).toBe(30);
+    expect(pickCandidate(shavs, 0, false)?.price.chaos).toBe(30);
   });
 
   it('is null for a name with no lines', () => {

@@ -47,6 +47,19 @@ model Snapshot {
   // falls back to the breakdown for any row where it is still null.
   tabs        Json?
   priceSetAt  DateTime // when the poe.ninja price set was fetched
+  /// Whether uniques are counted in `totalChaos`.
+  ///
+  /// They were not, for every snapshot written before poe.ninja's item endpoint was found: it
+  /// is the only place unique prices exist, and this application had only ever asked the
+  /// exchange one. So the total steps up the first time a poll runs with them, by however much
+  /// the player's uniques are worth, and nothing about that step is a gain.
+  ///
+  /// Recorded rather than inferred, because it cannot be worked out afterwards — a snapshot
+  /// with no uniques in it looks exactly like a stash with no uniques in it. Anything that
+  /// compares two snapshots reads this and says so when the two disagree.
+  ///
+  /// Defaults false, which is the truth about every row that predates the column.
+  pricedUniques Boolean @default(false)
 
   @@index([league, takenAt])
 }
@@ -71,14 +84,26 @@ model PriceSet {
   // the number you go and check somewhere else. Nullable for the same reason as the two above:
   // a row written before the column existed has none, and that is the honest reading of it.
   meta       Json?
-  /// { [uniqueName]: chaosValue }, from poe.ninja's *item* endpoint rather than its exchange
-  /// one. Kept apart from `prices` on purpose: that map is keyed by poe.ninja id and feeds the
-  /// valuation, and letting unique prices into it would start valuing uniques by name in every
-  /// net worth this app has ever reported. This map is name-keyed and read only by the views
-  /// that ask for it.
-  uniques    Json?
 
   @@index([league, fetchedAt])
+}
+
+/// Every unique line poe.ninja published, for the newest fetch in a league.
+///
+/// A table of its own rather than a column on PriceSet, because only the newest set is ever
+/// restored and the index is 273 KB: on PriceSet it would be kept forty-eight times over at the
+/// default retention, 12.8 MB of the same data, for a row that is read once at boot. Overwritten
+/// on every fetch, the same shape as UniqueSet below and for the same reason — the question it
+/// answers is "what does a unique cost now", and an answer from Tuesday is not an answer.
+///
+/// Icons are stripped before writing. They are already in PriceSet.icons, keyed by the same
+/// `uniqueKey`, and that map is what anything actually reads them from.
+model UniquePriceSet {
+  id        Int      @id @default(autoincrement())
+  league    String   @unique
+  fetchedAt DateTime @default(now())
+  /// UniqueIndex — `{ [name]: UniquePrice[] }`, see services/uniques.ts.
+  lines     Json
 }
 
 /// The uniques a poll last saw, one row per league.

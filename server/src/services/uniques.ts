@@ -8,17 +8,31 @@
  *   Bronn's Lithe, 6-linked            ~200c
  *   Bronn's Lithe, corrupted 6-linked  different again
  *
- * poe.ninja knows this and returns one line per combination, carrying `links` and `corrupted`
- * alongside the name. The previous behaviour — take the first line matching the name — picked
- * whichever combination poe.ninja happened to list first, which is why uniques were left out
- * of the default categories entirely.
+ * poe.ninja returns one line per combination, and the line carries `links` and `variant`
+ * alongside the name. Taking the first line matching the name — the behaviour this replaced —
+ * picked whichever combination poe.ninja happened to list first.
  *
- * So the key is (name, links, corrupted), and the stash item's real socket layout and
- * corruption decide which line it matches.
+ * So the key is (name, links, corrupted), and the stash item's real socket layout decides most
+ * of it.
  *
- * `variant` is the case this still cannot fully resolve. poe.ninja distinguishes e.g. a
- * pre-3.0 Shavronne's from a current one, and nothing in the stash payload says which the
- * player holds. Where variants collide the cheapest is used — see `pickCandidate`.
+ * ## What the payload does not say, recorded rather than assumed
+ *
+ * **`corrupted` is not published.** The full key list of a line, from `scripts/probe.mjs
+ * --items`, is: baseType, chaosValue, count, detailsId, divineValue, exaltedValue,
+ * explicitModifiers, flavourText, icon, id, implicitModifiers, itemClass, itemType,
+ * levelRequired, links, listingCount, name, sparkLine — and on some types mutatedModifiers,
+ * tradeInfo and variant. No corruption anywhere.
+ *
+ * So `corrupted` on a line is always false, and a corrupted item in a stash never matches
+ * exactly. It falls to the next tier and is priced as the uncorrupted item with its link count,
+ * which for most uniques is close and for a few — a corrupted item with a good implicit — is
+ * an understatement. Understating is the direction this file errs in everywhere else too, and
+ * `pickCandidate` reports whether the match was exact so a caller can say which it got.
+ *
+ * **`variant`** is published and still cannot be resolved: poe.ninja distinguishes a pre-3.0
+ * Shavronne's from a current one, a Watcher's Eye by which mods rolled, an Impresence by
+ * influence — and nothing in the stash payload lines up with those labels. Where variants
+ * collide the cheapest is used.
  */
 
 export interface UniquePrice {
@@ -78,12 +92,26 @@ export function uniqueKey(name: string, links: number, corrupted: boolean): stri
   return parts.length === 1 ? name : `${parts[0]} (${parts.slice(1).join(', ')})`;
 }
 
+/** What a pick is worth, and how well it actually matched the item. */
+export interface PickedPrice {
+  price: UniquePrice;
+  /**
+   * True only when the line matched on both links and corruption, and was the only line for
+   * that combination — so nothing was approximated to get here.
+   *
+   * In practice a corrupted item is never exact, because the payload publishes no corruption;
+   * neither is any unique poe.ninja prices in several variants. Reported rather than buried so
+   * the interface can mark the rows whose number is a stand-in.
+   */
+  exact: boolean;
+}
+
 /**
  * Choose the line that prices this item.
  *
  * Exact (links, corrupted) first. Failing that, fall back along the axes that lose the least:
- * an unlinked match for a linked item understates rather than invents value, and a
- * corruption mismatch is a smaller error than pricing the item at zero.
+ * an unlinked match for a linked item understates rather than invents value, and a corruption
+ * mismatch is a smaller error than pricing the item at zero.
  *
  * Where several lines still tie — the variant case — the cheapest wins. Both directions are
  * wrong, but overstating wealth is the one that shows up as profit that was never made.
@@ -92,7 +120,7 @@ export function pickCandidate(
   candidates: UniquePrice[],
   links: number,
   corrupted: boolean,
-): UniquePrice | null {
+): PickedPrice | null {
   if (candidates.length === 0) return null;
 
   const tiers = [
@@ -103,9 +131,10 @@ export function pickCandidate(
     candidates,
   ];
 
-  for (const tier of tiers) {
-    if (tier.length === 0) continue;
-    return tier.reduce((cheapest, current) => (current.chaos < cheapest.chaos ? current : cheapest));
+  for (const [tier, lines] of tiers.entries()) {
+    if (lines.length === 0) continue;
+    const price = lines.reduce((cheapest, current) => (current.chaos < cheapest.chaos ? current : cheapest));
+    return { price, exact: tier === 0 && lines.length === 1 };
   }
   return null;
 }

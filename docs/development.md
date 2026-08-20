@@ -21,7 +21,7 @@ All of it in `.env`; `.env.example` is the template.
 | `PRICE_TTL_MINUTES` | `60` | How old a price set may be before a new one is fetched. |
 | `PRICE_CURRENCY_CATEGORIES` | `Currency,Fragment` | poe.ninja currency-overview types. |
 | `PRICE_ITEM_CATEGORIES` | see below | poe.ninja item-overview types. |
-| `PRICE_UNIQUE_CATEGORIES` | empty | Unique categories to price. Empty on purpose — see below. |
+| `PRICE_UNIQUE_CATEGORIES` | the five item-endpoint unique types | Unique categories to price. Set it empty to leave uniques out of the total, as every version before 1.4.0 did. |
 | `POE_NINJA_URL` | `https://poe.ninja/poe1/api/economy/exchange/current` | poe.ninja's API root. Only needed if it moves again. |
 | `POE_CONTACT` | — | Contact details appended to the `User-Agent`. |
 | `DATABASE_URL` | `file:./data/what-remains.db` | The SQLite file. |
@@ -51,23 +51,27 @@ DeliriumOrb, Incubator, Artifact, Vial, Omen, Tattoo, AllflameEmber`.
 > on it. Valuing them by name would give them *a* number, and that number would be wrong in a way
 > the chart cannot show.
 
-> **▸ Why uniques are not in the wealth total:** not for want of prices — that was this
-> project's conclusion for months and it was half wrong. The **exchange** endpoint serves no
-> uniques: `UniqueArmour`, `UniqueWeapon`, `UniqueAccessory`, `UniqueFlask`, `UniqueJewel`,
-> `UniqueMap`, `UniqueRelic` and a bare `Unique` all answer 200 with zero lines, recorded by
-> `scripts/probe.mjs`. The **item** endpoint, `stash/current/item`, serves 2,223 of them across
-> five types, every one named and priced, and `probe.mjs --items` is what found it.
+> **▸ How uniques are priced, and why it took so long:** the **exchange** endpoint serves none.
+> `UniqueArmour`, `UniqueWeapon`, `UniqueAccessory`, `UniqueFlask`, `UniqueJewel`, `UniqueMap`,
+> `UniqueRelic` and a bare `Unique` all answer 200 with zero lines, recorded by
+> `scripts/probe.mjs`. For months that read as "poe.ninja does not price uniques any more", and
+> the conclusion was wrong about how much had been looked at rather than about what it saw.
 >
-> Those prices are fetched, into `PriceSet.uniquePrices`, keyed by display name. They stay out of
-> the valuation deliberately. `resolvePrice` falls through to the flat price map for anything the
-> variant index does not resolve, so merging them in would start valuing uniques by name in
-> everybody's net worth — and by name a plain Bronn's Lithe and a six-linked one are the same
-> row, ~5 chaos against ~210.
+> The **item** endpoint, `stash/current/item`, serves 2,223 of them across five types, every one
+> named and priced, and carrying `links`. That last field is the one that matters: by name alone
+> a plain Bronn's Lithe and a six-linked one are the same row at ~5 chaos and ~210, which is why
+> uniques were left out of every total rather than valued at whichever the payload listed first.
 >
-> The item endpoint does carry `links` and `variant`, which the exchange endpoint never did, so
-> valuing uniques properly is now a real possibility rather than a blocked one: match each stash
-> item to a priced variant by its links, then let it into the total. That is a change of its own,
-> because it moves every reported net worth.
+> So each stash item is matched to a line by its own links and corruption — `pickCandidate` in
+> `services/uniques.ts` — and only then counted. The breakdown keys a six-link separately from a
+> plain one, so a chart cannot merge them.
+>
+> Two things it still cannot resolve, both recorded rather than assumed. **Corruption is not
+> published**: the full key list of a line has no `corrupted` on it anywhere, so a corrupted item
+> falls back to the uncorrupted line for its links. **Variants are published and unmatchable**:
+> nothing in the stash payload lines up with "Pre 2.0" or a Watcher's Eye's rolled mods, so where
+> variants collide the cheapest wins. Both understate rather than overstate, and both are
+> reported — the API returns `priceIsApproximate` per row.
 
 ---
 
@@ -84,7 +88,7 @@ Everything under `/api`, everything JSON.
 | `GET /api/item-history?name=&league=&from=` | One item's quantity and value in every snapshot in the range. |
 | `GET /api/economy?league=` | Every item poe.ninja prices: name, category, value, percentage change, trade volume and poe.ninja's own sparkline. One response, searched in the browser. |
 | `GET /api/price-history?id=&league=` | What one item has cost across every price set still retained — this app's own record, oldest first. |
-| `GET /api/uniques?league=` | The identified uniques a poll last saw, with item level, quality, corruption, tab, the dust each yields, a by-name chaos price where one exists, and dust per chaos. |
+| `GET /api/uniques?league=` | The identified uniques a poll last saw, with item level, quality, corruption, links, tab, the dust each yields, the chaos price for that variant, and dust per chaos. |
 | `GET /api/leagues` | The current leagues from GGG, for the desktop build's menu. Cached 6 h; the permanent leagues on failure. |
 | `GET /api/account` | Who GGG says the stored session belongs to, and whether that matches `POE_ACCOUNT_NAME`. 502 when GGG will not answer — which is itself an answer. |
 | `POST /api/poll` | Starts a poll and answers **202 immediately**, not when it finishes. 409 if one is already running, 503 if credentials are missing. The outcome is read from `/api/health`. |
@@ -127,14 +131,10 @@ change without one.
 > The check is the test, not the paragraph: every row goes back through the formula and both
 > published columns have to come out again.
 
-> **▸ Where the chaos half comes from:** `PriceSet.uniquePrices`, the item endpoint above. Where
-> poe.ninja lists several variants of one unique the **cheapest** is taken, because a stash item
-> this app has not matched to a variant could be any of them, and a figure sitting next to a
-> decision to destroy something should not flatter it.
->
-> That map is deliberately its own thing rather than part of `prices`: name-keyed, read by this
-> view and by nothing else, so it cannot leak into a net worth by accident. Every priced row
-> carries `priceIsApproximate` and the view says so in a sentence at the top.
+> **▸ Where the chaos half comes from:** the same variant index the wealth total is valued
+> against, matched on the item's own links. One price path for uniques in the whole application,
+> so this view and the dashboard cannot disagree about what a thing is worth. A `~` in the price
+> column marks a row whose match was not exact.
 
 > **▸ Why the economy list arrives whole:** a price set is a few thousand rows and the client
 > is on the same machine. Paging it would trade a few hundred kilobytes, once, for a search that

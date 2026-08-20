@@ -1,0 +1,12 @@
+-- Whether a snapshot's total counts uniques.
+--
+-- It cannot be worked out after the fact: a total written before unique prices existed looks
+-- exactly like a stash with no uniques in it. So it is recorded from here on, and every row
+-- that predates the column is false — which is the truth about all of them.
+--
+-- A plain ADD COLUMN rather than the table rebuild `prisma migrate diff` emits for a NOT NULL
+-- column with a default. The rebuild copies every row of the largest table in the database —
+-- a month of snapshots is hundreds of megabytes of breakdown JSON — to add one boolean, and
+-- SQLite has supported ADD COLUMN with a constant default since 3.2. The resulting schema is
+-- the same one, which `pnpm verify:migrator` checks against the Prisma CLI rather than assumes.
+ALTER TABLE "Snapshot" ADD COLUMN "pricedUniques" BOOLEAN NOT NULL DEFAULT false;

@@ -85,6 +85,7 @@ export class MemorySnapshotStore implements SnapshotStore {
       divineRate: input.divineRate,
       itemCount: input.itemCount,
       priceSetAt: input.priceSetAt,
+      pricedUniques: input.pricedUniques,
       breakdown: input.breakdown,
     };
     this.#nextId += 1;
@@ -112,6 +113,7 @@ export class MemorySnapshotStore implements SnapshotStore {
       divineRate: input.divineRate ?? 200,
       itemCount: input.itemCount ?? 0,
       priceSetAt: input.priceSetAt ?? input.takenAt,
+      pricedUniques: input.pricedUniques ?? false,
       breakdown,
     });
   }

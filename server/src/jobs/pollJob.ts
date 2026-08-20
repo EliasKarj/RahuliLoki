@@ -103,6 +103,10 @@ export async function runPoll(deps: PollDependencies): Promise<PollOutcome> {
     itemCount: valuation.itemCount,
     breakdown: valuation.breakdown,
     priceSetAt: priceSet.fetchedAt,
+    // Whether there were unique prices to value with, not whether this stash had any uniques.
+    // The distinction is the whole point: a total of zero uniques because you own none is a
+    // real zero, and a total of zero uniques because nothing priced them is a hole.
+    pricedUniques: Object.keys(priceSet.uniques).length > 0,
   });
 
   // After the snapshot, and never in front of it. The uniques are for a view; the snapshot is
@@ -119,14 +123,15 @@ export async function runPoll(deps: PollDependencies): Promise<PollOutcome> {
     // stopped matching at once, and only the second is a bug.
     const names = new Set(holdings.map((holding) => holding.name));
     const withDust = [...names].filter((name) => DUST_TABLE.has(name)).length;
-    const withPrice = [...names].filter((name) => priceSet.uniquePrices[name] !== undefined).length;
+    const withPrice = [...names].filter((name) => Object.hasOwn(priceSet.uniques, name)).length;
     log.debug({ uniques: names.size, withDust, withPrice }, 'uniques recorded');
 
     // Names on both sides, and not one of them matched. That is a mismatch rather than an
     // absence, and it is the one shape of this failure worth waking somebody for.
-    if (names.size > 0 && withPrice === 0 && Object.keys(priceSet.uniquePrices).length > 0) {
+    const priced = Object.keys(priceSet.uniques).length;
+    if (names.size > 0 && withPrice === 0 && priced > 0) {
       log.warn(
-        { uniques: names.size, priced: Object.keys(priceSet.uniquePrices).length },
+        { uniques: names.size, priced },
         'poe.ninja priced uniques but none of them by a name in this stash',
       );
     }

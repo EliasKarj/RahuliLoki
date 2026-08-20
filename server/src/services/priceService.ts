@@ -28,13 +28,12 @@
 
 import { describeError, silentLogger, type Logger } from '../lib/logger.ts';
 import { readJsonCapped, timeoutSignal } from '../lib/http.ts';
+import { DEFAULT_UNIQUE_CATEGORIES } from '../lib/config.ts';
 import { verifyAliases } from './ninjaId.ts';
 import {
   CHAOS_ID,
   DEFAULT_NINJA_ITEM_URL,
   DEFAULT_NINJA_URL,
-  cheapestByName,
-  itemOverview,
   PriceFetchError,
   coreItems,
   divineRateFrom,
@@ -45,19 +44,6 @@ import {
   type LineMeta,
 } from './ninjaPayload.ts';
 import { mergeUniqueOverview, uniqueKey, type UniqueIndex } from './uniques.ts';
-
-/**
- * The item-endpoint categories that return anything, recorded by scripts/probe.mjs: 986 unique
- * armours, 667 weapons, 364 accessories, 167 jewels, 39 flasks. UniqueMap and UniqueRelic answer
- * empty and are left out rather than asked for nothing.
- */
-export const DEFAULT_UNIQUE_ITEM_CATEGORIES = [
-  'UniqueArmour',
-  'UniqueWeapon',
-  'UniqueAccessory',
-  'UniqueJewel',
-  'UniqueFlask',
-] as const;
 
 export interface PriceSet {
   league: string;
@@ -97,19 +83,6 @@ export interface PriceSet {
    * payload published no movement for. Absent movement is shown as absent, never as flat.
    */
   meta: Record<string, LineMeta>;
-  /**
-   * Unique display name → chaos, from poe.ninja's item endpoint.
-   *
-   * Deliberately name-keyed and deliberately separate from `prices`. That map is keyed by
-   * poe.ninja id and is what the valuation reads, so merging these into it would begin counting
-   * uniques by name in every net worth this app reports — a change to make on purpose, in its
-   * own commit, with the links now available to do it properly. Until then this is read by the
-   * views that ask for it and by nothing else.
-   *
-   * The cheapest variant per name: an item this app has not matched to a variant could be any of
-   * them, and the low one is the direction to err in.
-   */
-  uniquePrices: Record<string, number>;
   /**
    * poe.ninja id → the category it was fetched under, e.g. `gilded-bestiary-scarab` → `Scarab`.
    *
@@ -153,7 +126,12 @@ export interface PriceServiceOptions {
    */
   currencyCategories: string[];
   itemCategories: string[];
-  /** Unique types on the exchange endpoint, which serves none. See lib/config.ts. */
+  /**
+   * Item-endpoint `type=` values to price uniques from.
+   *
+   * The five that return anything, recorded by scripts/probe.mjs. An empty list turns unique
+   * pricing off entirely, which is what the tests that are not about it do.
+   */
   uniqueCategories?: string[];
   ttlMs: number;
   store: PriceSetStore;
@@ -164,13 +142,6 @@ export interface PriceServiceOptions {
   baseUrl?: string;
   /** poe.ninja's item endpoint. Separate from `baseUrl`; it is a different service shape. */
   itemBaseUrl?: string;
-  /**
-   * Item-endpoint `type=` values to fetch unique prices from.
-   *
-   * The five that return anything, recorded by scripts/probe.mjs. An empty list turns the whole
-   * thing off, which is what the tests do when they are not about it.
-   */
-  uniqueItemCategories?: string[];
   /** Ceiling on one overview request. Without it a hung poe.ninja never releases the poll. */
   timeoutMs?: number;
   maxBytes?: number;
@@ -325,30 +296,18 @@ export class PriceService {
       }
     }
 
-    // The item endpoint, which is a different service with a different shape and a different
-    // failure mode. A price set is worth having without it — this is decoration on the wealth
-    // total and the whole of the Kingsmarch view — so it is allowed to fail without taking the
-    // fetch down with it.
-    const uniquePrices: Record<string, number> = Object.create(null) as Record<string, number>;
-    for (const type of this.#options.uniqueItemCategories ?? DEFAULT_UNIQUE_ITEM_CATEGORIES) {
+    // Uniques, from the item endpoint. A different service with a different shape and a
+    // different failure mode from the exchange one above, and it is allowed to fail on its own:
+    // losing unique prices costs the wealth total its uniques, which is where this application
+    // stood for months, and is not worth losing every other price over.
+    for (const type of this.#options.uniqueCategories ?? DEFAULT_UNIQUE_CATEGORIES) {
       try {
         const payload = await this.#getItemJson(league, type);
-        const lines = itemOverview(payload);
-        Object.assign(uniquePrices, cheapestByName(lines));
-        this.#log.debug({ type, lines: lines.length }, 'merged unique item overview');
+        const merged = mergeUniqueOverview(payload, uniques, iconUrl);
+        this.#log.debug({ type, merged }, 'merged unique item overview');
       } catch (error) {
         this.#log.warn({ type, err: error }, 'could not read unique prices; continuing without them');
       }
-    }
-
-    // Uniques still go through the variant-aware path rather than the flat map. The exchange
-    // endpoint serves no unique lines at all, so this yields nothing and uniques stay out of the
-    // wealth total — the intended outcome, not a bug. `uniquePrices` above is a different thing
-    // for a different consumer: name-level, and never merged into the valuation.
-    for (const type of this.#options.uniqueCategories ?? []) {
-      const payload = await this.#getJson(league, type);
-      const merged = mergeUniqueOverview(payload, uniques, iconUrl);
-      this.#log.debug({ type, merged }, 'merged unique overview');
     }
 
     for (const entries of Object.values(uniques)) {
@@ -379,7 +338,6 @@ export class PriceService {
       uniques,
       categories,
       meta,
-      uniquePrices,
     };
     this.#log.info(
       {

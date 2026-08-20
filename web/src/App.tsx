@@ -191,6 +191,7 @@ export default function App() {
             <ChangesTable
               changes={changes?.changes ?? []}
               emptyReason={changes?.reason}
+              uniquesArrived={changes?.uniquesArrived ?? false}
               onSelect={setSelected}
             />
           </Panel>

@@ -15,15 +15,23 @@ A rail down the left names them: **Dashboard**, **Economy** and **Kingsmarch**. 
 window it folds into a row above the page instead.
 
 **Kingsmarch** is your uniques as the disenchanting bench sees them: one row per item level,
-quality and tab, because those are what dust reads and what the dashboard's item table folds
-away, with the dust each one yields at its own level and quality. Item level dominates: the same
-unique at level 65 gives a twentieth of what it gives at 84. A `≥` marks a figure that is a
-floor — a corrupted item may carry implicits the stash payload does not list, each worth half
-again. The column it exists for is **dust per chaos** — what is worth destroying rather than
-selling, which dust alone cannot say. The price behind it is by name, and the cheapest variant
-of that name, so a six-link or a good roll is worth more than the column shows.
+quality, links and tab, because those are what dust and price read and what the dashboard's item
+table folds away, with the dust each one yields at its own level and quality. Item level
+dominates: the same unique at level 65 gives a twentieth of what it gives at 84. A `≥` marks a
+dust figure that is a floor — a corrupted item may carry implicits the stash payload does not
+list, each worth half again. The column it exists for is **dust per chaos** — what is worth
+destroying rather than selling, which dust alone cannot say. A `~` on a price means poe.ninja
+had no line for exactly this item and the closest cheap one was used.
 
 **Dashboard** is everything below — what you own, what it is worth, and what it has been doing.
+
+> **▸ The one step in the chart that is not a gain.** Uniques were not counted in any total
+> until 1.4.0, because there were no prices for them that could tell a six-link from a plain
+> item. The first poll after upgrading counts every unique you already owned, all at once, and
+> the line jumps by whatever they are worth. Nothing about that is earnings, so the range
+> containing it says so: "What moved" shows a notice, and the gain figure carries a note. Every
+> snapshot records whether uniques were in its total, which is the only way the two can be told
+> apart afterwards.
 
 **Economy** is the same prices seen the other way round: every item poe.ninja prices, whether or
 not you hold any. Each row carries what it costs, **how much it has moved** as a percentage, and

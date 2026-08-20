@@ -20,12 +20,18 @@ const HEADERS = { limit: '30:60:60', state: '1:60:0' };
 const priceStore: PriceSetStore = { latest: async () => null, save: async () => {}, history: async () => [] };
 
 /** One fetch that answers both poe.ninja and GGG, so a poll can be driven end to end. */
-function worldFetch(overrides: { stash?: Record<string, () => Response>; ninjaDown?: boolean } = {}) {
+function worldFetch(
+  overrides: { stash?: Record<string, () => Response>; ninjaDown?: boolean; uniqueLines?: unknown[] } = {},
+) {
   return vi.fn(async (input: string | URL | Request) => {
     const url = new URL(String(input));
 
     if (url.hostname.includes('poe.ninja')) {
       if (overrides.ninjaDown) return jsonResponse({}, 503);
+      // The item endpoint. A different path on the same host, and the only place uniques are.
+      if (url.pathname.includes('/stash/current/item/')) {
+        return jsonResponse({ lines: overrides.uniqueLines ?? [] });
+      }
       switch (url.searchParams.get('type')) {
         case 'Currency':
           return jsonResponse(currencyOverview);
@@ -68,6 +74,9 @@ function world(overrides: Parameters<typeof worldFetch>[0] = {}) {
         league: 'Settlers',
         currencyCategories: ['Currency', 'Fragment'],
         itemCategories: ['DivinationCard', 'Scarab'],
+        // On for every world, so a test that does not set `uniqueLines` proves uniques stay out
+        // when poe.ninja has none rather than proving nothing because the fetch was disabled.
+        uniqueCategories: ['UniqueAccessory'],
         ttlMs: 3_600_000,
         store: priceStore,
         fetchFn,
@@ -118,6 +127,43 @@ describe('runPoll', () => {
 
     expect(Object.keys(store.rows[0]?.breakdown ?? {})).toEqual(['Currency', 'Dump', 'Maps']);
     expect(store.rows[0]?.breakdown.Currency?.['Chaos Orb']?.qty).toBe(250);
+  });
+
+  it('counts a unique towards the total, at the price for its links', async () => {
+    // The fixture's Headhunter is unlinked, so the belt line is the one that prices it. This is
+    // the whole change: before the item endpoint there was no unique line to match at all, and
+    // every unique in every stash was worth nothing to this application.
+    const plain = await runPoll(world().deps);
+    const { deps } = world({
+      uniqueLines: [{ name: 'Headhunter', baseType: 'Leather Belt', chaosValue: 90000, listingCount: 12 }],
+    });
+    const withUniques = await runPoll(deps);
+
+    expect(withUniques.snapshot.totalChaos - plain.snapshot.totalChaos).toBe(90000);
+  });
+
+  it('does not let a six-link line price an unlinked item', async () => {
+    // The failure the variant index exists to prevent: by name alone this Headhunter would be
+    // worth 400,000 chaos, and the number would be wrong with nothing on screen to say so.
+    const plain = await runPoll(world().deps);
+    const { deps } = world({
+      uniqueLines: [
+        { name: 'Headhunter', baseType: 'Leather Belt', chaosValue: 400000, links: 6 },
+        { name: 'Headhunter', baseType: 'Leather Belt', chaosValue: 90000, links: 0 },
+      ],
+    });
+    const withUniques = await runPoll(deps);
+
+    expect(withUniques.snapshot.totalChaos - plain.snapshot.totalChaos).toBe(90000);
+  });
+
+  it('keeps the unique out of the unresolved list once it has a price', async () => {
+    const { deps } = world({
+      uniqueLines: [{ name: 'Headhunter', baseType: 'Leather Belt', chaosValue: 90000 }],
+    });
+
+    // Down to one: the made-up fossil, which nothing prices on purpose.
+    expect((await runPoll(deps)).unresolvedCount).toBe(1);
   });
 
   it('reports unresolved names in the outcome', async () => {
@@ -335,7 +381,9 @@ describe('runPoll and the uniques it records', () => {
     const { deps } = world();
     const recorder = recordingLog();
     const prices = await deps.prices.getPrices();
-    (prices as { uniquePrices: Record<string, number> }).uniquePrices = { 'Not A Thing You Own': 5 };
+    prices.uniques['Not A Thing You Own'] = [
+      { name: 'Not A Thing You Own', links: 0, corrupted: false, variant: null, chaos: 5, icon: null },
+    ];
 
     await runPoll({ ...deps, uniques: memoryUniques().store, log: recorder.log });
 

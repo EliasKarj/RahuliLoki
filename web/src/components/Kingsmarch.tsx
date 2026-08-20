@@ -14,8 +14,9 @@
  * repository re-derives and tests against (`services/dust.ts`), the price from poe.ninja's item
  * endpoint, which does carry names.
  *
- * The price is by name, and the cheapest variant of that name. A row says so rather than
- * pretending otherwise — see `priceIsApproximate` on the response.
+ * The price comes from the same variant index the wealth total is valued against, matched on
+ * the item's own links — so this view and the dashboard cannot disagree about what a thing is
+ * worth. Where the match is not exact the row says so; see `priceIsApproximate`.
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -138,8 +139,11 @@ export function Kingsmarch({ league }: { league: string | undefined }) {
           A ≥ means the figure is a floor — a corrupted item may carry implicits the stash payload
           does not list, and each is worth half again.
         </span>{' '}
-        Prices are per name — poe.ninja lists several variants of one unique and this takes the
-        cheapest, so a six-link or a good roll is worth more than the column says.
+        <span className="text-ink-500">
+          A ~ on a price means poe.ninja had no line for exactly this item — it publishes no
+          corruption, and prices some uniques in several variants — so the cheapest near match
+          was used.
+        </span>
       </p>
 
       <div className="max-h-[min(70vh,56rem)] max-w-6xl overflow-auto">
@@ -205,6 +209,11 @@ export function Kingsmarch({ league }: { league: string | undefined }) {
                         <span className="ml-2 text-xs text-ink-500">{row.baseType}</span>
                       )}
                     </span>
+                    {row.links >= 5 ? (
+                      <span className="text-[0.65rem] text-cool-400" title="Linked sockets">
+                        {row.links}L
+                      </span>
+                    ) : null}
                     {row.corrupted ? (
                       <span className="text-[0.65rem] text-cool-400" title="Corrupted">
                         corrupted
@@ -232,8 +241,11 @@ export function Kingsmarch({ league }: { league: string | undefined }) {
                   </td>
                 ) : null}
                 {anyPriced ? (
-                  <td className="num py-2 pr-3 text-ink-200">
-                    {row.chaos === null ? '' : prices.price(row.chaos)}
+                  <td
+                    className="num py-2 pr-3 text-ink-200"
+                    title={row.variant === null ? undefined : `poe.ninja variant: ${row.variant}`}
+                  >
+                    {row.chaos === null ? '' : `${row.priceIsApproximate ? '~' : ''}${prices.price(row.chaos)}`}
                   </td>
                 ) : null}
                 {anyPriced ? (

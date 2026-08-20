@@ -19,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { PrismaClient } from '../generated/prisma/index.js';
 import { migrate } from '../src/lib/migrate.ts';
 import { PrismaPriceSetStore, PrismaSnapshotStore } from '../src/services/snapshotRepo.ts';
+import type { PriceSet } from '../src/services/priceService.ts';
 import type { Breakdown } from '../src/services/valuationService.ts';
 
 const MIGRATIONS = fileURLToPath(new URL('../prisma/migrations', import.meta.url));
@@ -63,6 +64,7 @@ async function add(
     divineRate: 200,
     itemCount: 1,
     breakdown,
+    pricedUniques: false,
     priceSetAt: new Date(takenAt),
   });
 }
@@ -225,5 +227,82 @@ describe('price history, against a real database', () => {
     // must not be able to close that string — the answer is an empty history, not an error and
     // certainly not a different query.
     await expect(store.history('Settlers', 'alt", "$.divine') ).resolves.toEqual([]);
+  });
+});
+
+describe('the unique index, across a save and a restore', () => {
+  function set(lines: Record<string, unknown[]>): PriceSet {
+    return {
+      league: 'Settlers',
+      fetchedAt: new Date('2026-01-01T00:00:00Z'),
+      prices: { chaos: 1, divine: 200 },
+      divineRate: 200,
+      icons: {},
+      categories: {},
+      meta: {},
+      uniques: lines as PriceSet['uniques'],
+    };
+  }
+
+  const bronns = [
+    { name: "Bronn's Lithe", links: 0, corrupted: false, variant: null, chaos: 5.2, icon: 'https://web.poecdn.com/b.png' },
+    { name: "Bronn's Lithe", links: 6, corrupted: false, variant: null, chaos: 210, icon: 'https://web.poecdn.com/b.png' },
+  ];
+
+  it('comes back with every variant intact', async () => {
+    // Without this the first poll after a restart values every unique at nothing and writes a
+    // collapse into the history that never happened — and history is the one thing this
+    // application cannot correct later.
+    const { store } = await priceStore();
+    await store.save(set({ "Bronn's Lithe": bronns }));
+
+    const restored = await store.latest('Settlers');
+
+    expect(restored?.uniques["Bronn's Lithe"]?.map((line) => [line.links, line.chaos])).toEqual([
+      [0, 5.2],
+      [6, 210],
+    ]);
+  });
+
+  it('drops the icons, which are already stored once in the icons map', async () => {
+    const { store } = await priceStore();
+    await store.save(set({ "Bronn's Lithe": bronns }));
+
+    // 273 KB against 690 KB for the same index. The icon is read from PriceSet.icons, under the
+    // same key, and storing it twice buys nothing.
+    expect((await store.latest('Settlers'))?.uniques["Bronn's Lithe"]?.[0]?.icon).toBeNull();
+  });
+
+  it('keeps one row per league, overwritten, rather than one per fetch', async () => {
+    const { prisma, store } = await priceStore();
+    await store.save(set({ "Bronn's Lithe": bronns }));
+    await store.save({ ...set({ Progenesis: [{ name: 'Progenesis', links: 0, corrupted: false, variant: null, chaos: 12518, icon: null }] }), fetchedAt: new Date('2026-01-01T01:00:00Z') });
+
+    expect(await prisma.uniquePriceSet.count()).toBe(1);
+    const restored = await store.latest('Settlers');
+    expect(Object.keys(restored?.uniques ?? {})).toEqual(['Progenesis']);
+  });
+
+  it('refuses a line the database cannot be trusted about', async () => {
+    // This column is JSON on disk and could have been edited or written by an older build. A
+    // chaos value that came back as a string would value a whole stash at NaN.
+    const { prisma, store } = await priceStore();
+    await prisma.uniquePriceSet.create({
+      data: {
+        league: 'Settlers',
+        fetchedAt: new Date('2026-01-01T00:00:00Z'),
+        lines: {
+          Good: [{ links: 6, chaos: 10 }],
+          Stringy: [{ links: 0, chaos: 'lots' }],
+          Negative: [{ links: 0, chaos: -5 }],
+          NotAnArray: { links: 0, chaos: 10 },
+        },
+      },
+    });
+    await prisma.priceSet.create({
+      data: { league: 'Settlers', fetchedAt: new Date('2026-01-01T00:00:00Z'), prices: { chaos: 1, divine: 200 } },
+    });
+
+    expect(Object.keys((await store.latest('Settlers'))?.uniques ?? {})).toEqual(['Good']);
   });
 });
