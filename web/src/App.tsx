@@ -30,6 +30,7 @@ import type { RangeKey } from './lib/series.ts';
 export default function App() {
   const [range, setRange] = useState<RangeKey>('24h');
   const [view, setView] = useState<View>('dashboard');
+  const [navOpen, setNavOpen] = useState(false);
   const [league, setLeague] = useState<string | undefined>(undefined);
   /** The item whose history is open, if any. Clicking a name anywhere sets it. */
   const [selected, setSelected] = useState<string | null>(null);
@@ -78,18 +79,16 @@ export default function App() {
      *
      * There is still a cap, because a row three thousand pixels wide puts an item's name and
      * its value at opposite ends of the desk. 108rem is about where that starts. */}
-    {/* A column on a narrow window, a rail beside the content on a wide one. The outer flex has
-        to change direction too, or the nav becomes a stripe down the middle of a phone. */}
-    <div className="page mx-auto flex w-full max-w-[108rem] flex-col gap-6 px-4 py-6 sm:px-8 lg:flex-row lg:gap-10 lg:px-10">
-      <SideNav value={view} onChange={setView} />
-
+    {/* One column at every width now that the nav slides in over the page instead of sitting
+        beside it. Nothing has to change direction, and the tables get the whole window. */}
+    <div className="page mx-auto flex w-full max-w-[108rem] flex-col gap-6 px-4 py-6 sm:px-8 lg:px-10">
       <div className="min-w-0 flex-1">
       <header className="mb-8">
-        <div className="flex flex-wrap items-baseline justify-between gap-3">
-          <div className="flex items-baseline gap-3">
-            {/* Carved, not typeset — see .wordmark. In the wide layout the wordmark sits at the
-                top of the rail instead, so this one is only here for narrow windows. */}
-            <h1 className="wordmark text-base font-semibold lg:hidden">What Remains</h1>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <SideNav value={view} onChange={setView} open={navOpen} onOpenChange={setNavOpen} />
+            {/* Carved, not typeset — see .wordmark. */}
+            <h1 className="wordmark text-base font-semibold">What Remains</h1>
             {leagues.length > 1 ? (
               <select
                 value={activeLeague}

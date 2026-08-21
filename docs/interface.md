@@ -9,10 +9,16 @@ The look, the views, and how the numbers are computed.
 The page is a **ledger, not a card wall**. No boxes and no frames: hairlines separate the
 sections, and the only things with edges are the numbers themselves.
 
-## The two views
+## The three views
 
-A rail down the left names them: **Dashboard**, **Economy** and **Kingsmarch**. On a narrow
-window it folds into a row above the page instead.
+**Dashboard**, **Economy** and **Kingsmarch**, chosen from a panel that slides in from the left
+edge. The button at the top-left opens it, and wears the name of the view you are in — so a shut
+panel still says where you are, which is the one thing the permanent rail it replaced did better.
+Choosing a view closes it, as does Escape or clicking the dimmed page behind it.
+
+The rail was honest about your position at all times, and charged thirteen rems of every window
+for it, on a page whose whole point is wide tables. Switching views is something you do a few
+times an hour; the width is wanted continuously.
 
 **Kingsmarch** is your uniques as the disenchanting bench sees them: one row per item level,
 quality, links and tab, because those are what dust and price read and what the dashboard's item
