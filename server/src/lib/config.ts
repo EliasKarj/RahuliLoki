@@ -140,7 +140,7 @@ export interface ConfigResult {
  * manifests and fails if this line disagrees with any of them, and the release workflow fails
  * if the tag being built disagrees with the manifests.
  */
-export const VERSION = '1.4.2';
+export const VERSION = '1.5.0';
 
 export class ConfigError extends Error {}
 

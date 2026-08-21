@@ -1,6 +1,6 @@
 {
   "name": "@whatremains/desktop",
-  "version": "1.4.2",
+  "version": "1.5.0",
   "productName": "What Remains",
   "desktopName": "what-remains.desktop",
   "private": true,
